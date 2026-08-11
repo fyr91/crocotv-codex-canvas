@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build and test output
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+.vite-temp/
+.cache/
+.turbo/
+
+# Local runtime data and generated production assets
+/data/
+/refs/
+/characters/
+/Projects/
+/.codex/tmp/
+/.codex/config.toml
+
+# Local environment and credentials. Keep templates in Git.
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Logs and process state
+*.log
+*.pid
+*.pid.lock
+
+# OS and editor metadata
+.DS_Store
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Continuous Learning"
+  short_description: "将有证据的任务反馈重构进既有体系，并完成审核、验证与回滚"
+  default_prompt: "使用 $continuous-learning 复盘当前任务，并将已确认的改进重构进目标的既有体系。"

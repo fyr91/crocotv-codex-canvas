@@ -1,0 +1,28 @@
+{
+  "name": "croco-video-factory",
+  "version": "0.1.0",
+  "description": "Run the CrocoTV local canvas and its P1-P10 educational video production workflow from Codex.",
+  "author": {
+    "name": "fyr91",
+    "url": "https://github.com/fyr91"
+  },
+  "homepage": "https://github.com/fyr91/crocotv-codex-canvas",
+  "repository": "https://github.com/fyr91/crocotv-codex-canvas",
+  "keywords": ["crocotv", "canvas", "video", "mcp", "local-generation"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Croco Video Factory",
+    "shortDescription": "Operate CrocoTV and produce educational videos locally.",
+    "longDescription": "Bundles the CrocoTV Canvas MCP server with the Croco Video Factory P1-P10 workflow, character sync, speech, prompt optimization, content review, and continuous-learning skills.",
+    "developerName": "fyr91",
+    "category": "Productivity",
+    "capabilities": ["Canvas", "Local Generation", "Video Production"],
+    "websiteURL": "https://github.com/fyr91/crocotv-codex-canvas",
+    "defaultPrompt": [
+      "用 Croco Video Factory 制作一条知识视频。",
+      "打开并检查我的 CrocoTV 本地画布。",
+      "检查 CrocoTV 与 Plugin 的版本兼容性。"
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

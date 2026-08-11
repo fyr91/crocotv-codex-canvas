@@ -1,0 +1,20 @@
+{
+  "name": "croco",
+  "interface": {
+    "displayName": "Croco"
+  },
+  "plugins": [
+    {
+      "name": "croco-video-factory",
+      "source": {
+        "source": "local",
+        "path": "./plugins/croco-video-factory"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

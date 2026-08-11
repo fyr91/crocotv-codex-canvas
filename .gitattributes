@@ -1,0 +1,3 @@
+# Generated distributable bundles are reviewed through their source files.
+plugins/croco-video-factory/mcp/runtime/** binary
+plugins/croco-video-factory/skills/character-speaking/runtime/** binary

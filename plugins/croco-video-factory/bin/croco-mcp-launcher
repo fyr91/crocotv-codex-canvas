@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
+
+const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const configPath = path.join(homedir(), ".config", "crocotv", "config.json");
+const configured = readConfig(configPath);
+const crocoHome = path.resolve(process.env.CROCOTV_HOME || configured.home || "");
+
+if (!isCrocoHome(crocoHome)) {
+  console.error("CrocoTV 本地项目未配置。请在 CrocoTV 仓库中运行 npm run setup，或设置 CROCOTV_HOME。");
+  process.exit(2);
+}
+
+const envFile = path.resolve(process.env.CROCO_ENV_FILE || configured.envFile || path.join(crocoHome, ".codex", ".env"));
+const server = path.join(pluginRoot, "mcp", "runtime", "server.mjs");
+if (!existsSync(server)) {
+  console.error(`Plugin 缺少已构建的 MCP：${server}`);
+  process.exit(2);
+}
+
+const child = spawn(process.execPath, [server], {
+  cwd: pluginRoot,
+  env: { ...process.env, CROCOTV_HOME: crocoHome, CROCO_ENV_FILE: envFile },
+  stdio: "inherit",
+});
+child.once("error", (error) => { console.error(error.message); process.exit(1); });
+child.once("exit", (code, signal) => process.exitCode = code ?? (signal ? 1 : 0));
+
+function readConfig(file) {
+  try { return JSON.parse(readFileSync(file, "utf8")); } catch { return {}; }
+}
+
+function isCrocoHome(directory) {
+  if (!directory || directory === path.parse(directory).root) return false;
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(directory, "package.json"), "utf8"));
+    return pkg.name === "croco-canvas-local" && existsSync(path.join(directory, "server", "index.ts"));
+  } catch { return false; }
+}

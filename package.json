@@ -1,0 +1,39 @@
+{
+  "name": "croco-canvas-local",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c cyan,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx watch server/bootstrap.ts",
+    "dev:web": "npm --prefix web run dev",
+    "mcp": "tsx plugins/croco-video-factory/mcp/bootstrap.ts",
+    "build:mcp": "esbuild plugins/croco-video-factory/mcp/bootstrap.ts --bundle --platform=node --format=esm --target=node20 --outfile=plugins/croco-video-factory/mcp/runtime/server.mjs",
+    "build:skills": "esbuild plugins/croco-video-factory/skills/character-speaking/scripts/generate-speech.mjs --bundle --platform=node --format=esm --target=node20 --outfile=plugins/croco-video-factory/skills/character-speaking/runtime/generate-speech.mjs",
+    "build:manifest": "node scripts/generate-bundle-manifest.mjs",
+    "build": "npm run build:mcp && npm run build:skills && npm run build:manifest && tsc --noEmit && npm --prefix web run build",
+    "setup": "node scripts/configure-local.mjs",
+    "check:compatibility": "node plugins/croco-video-factory/scripts/check-compatibility.mjs",
+    "start": "concurrently -k -n server,web -c cyan,green \"tsx server/bootstrap.ts\" \"npm --prefix web run start\""
+  },
+  "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "sharp": "^0.35.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.10.2",
+    "concurrently": "^9.1.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.120.0"
+  }
+}

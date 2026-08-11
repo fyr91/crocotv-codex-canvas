@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "crocotv": {
+      "command": "./bin/croco-mcp-launcher",
+      "args": [],
+      "cwd": ".",
+      "env_vars": ["CROCOTV_HOME", "CROCO_ENV_FILE", "CODEX_HOME"],
+      "startup_timeout_sec": 70,
+      "tool_timeout_sec": 900
+    }
+  }
+}

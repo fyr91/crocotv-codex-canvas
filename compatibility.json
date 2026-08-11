@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "suiteVersion": "0.1.0",
+  "components": {
+    "crocoTV": "0.1.0",
+    "mcp": "0.1.0",
+    "plugin": "0.1.0",
+    "skillsBundle": "0.1.0"
+  },
+  "contracts": {
+    "canvasApi": 1,
+    "projectSchema": 1,
+    "environmentSchema": 1
+  },
+  "compatibility": {
+    "crocoTV": ">=0.1.0 <0.2.0",
+    "plugin": ">=0.1.0 <0.2.0",
+    "mcp": ">=0.1.0 <0.2.0",
+    "skillsBundle": ">=0.1.0 <0.2.0"
+  }
+}

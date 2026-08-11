@@ -1,0 +1,2 @@
+export type SpeechVoice = { speakerId: string; alias: string; state: string };
+export async function getSpeechVoices() { const response = await fetch("/api/characters"); if (!response.ok) throw new Error("读取本地角色目录失败"); return ((await response.json()) as Array<{ voiceId: string; chineseName: string; name: string }>).map((item) => ({ speakerId: item.voiceId, alias: item.chineseName || item.name, state: "active" })); }

@@ -1,0 +1,11 @@
+{
+  "name": "character-speaking",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "dependencies": {
+    "@breezystack/lamejs": "1.2.7"
+  }
+}

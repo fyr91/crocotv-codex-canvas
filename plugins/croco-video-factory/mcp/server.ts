@@ -1,0 +1,584 @@
+#!/usr/bin/env node
+import { closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
+import { readFile, realpath } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod/v4";
+
+const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+const pluginRoot = findPluginRoot(moduleDirectory);
+const bundleManifest = JSON.parse(readFileSync(path.join(pluginRoot, "bundle-manifest.json"), "utf8"));
+const workspaceRoot = path.resolve(process.env.CROCOTV_HOME || process.cwd());
+const apiOrigin = process.env.CROCO_LOCAL_API_ORIGIN || "http://127.0.0.1:4399";
+const webOrigin = process.env.CROCO_LOCAL_WEB_ORIGIN || "http://localhost:3000";
+const mcpClientId = `mcp-${process.pid}`;
+
+const server = new McpServer({ name: "crocotv", version: bundleManifest.mcpVersion }, {
+  instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic multi-node changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Use canvas_create_project when a new canvas is requested. For new generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. Generated or imported files must enter the local resource library before being placed on a canvas.",
+});
+
+const positionSchema = z.object({ x: z.number(), y: z.number() });
+const metadataSchema = z.record(z.string(), z.unknown());
+const generationParamsSchema = z.object({
+  duration: z.number().int().min(3).max(15).optional(),
+  quality: z.string().max(40).optional(),
+  ratio: z.string().max(20).optional(),
+  imageResourceIds: z.array(z.string().min(1).max(180)).max(9).optional(),
+  audioResourceIds: z.array(z.string().min(1).max(180)).max(3).optional(),
+}).catchall(z.unknown());
+const connectionPortSchema = z.enum(["node", "workflow-input", "workflow-output"]);
+const generationCapabilitySchema = z.enum(["text", "image", "video", "speech", "music"]);
+const generationTaskSchema = z.object({
+  taskId: z.string().min(1).max(80).optional(),
+  targetNodeId: z.string().min(1).max(80).optional(),
+  capability: generationCapabilitySchema,
+  prompt: z.string().min(1),
+  model: z.string().optional(),
+  title: z.string().max(180).optional(),
+  position: positionSchema.optional(),
+  voiceId: z.string().optional(),
+  params: generationParamsSchema.optional(),
+});
+const nodeSchema = z.object({
+  id: z.string().min(1).max(80).optional(),
+  type: z.enum(["text", "image", "video", "audio", "music", "config", "split", "group", "comment"]),
+  title: z.string().max(180).optional(),
+  position: positionSchema.optional(),
+  width: z.number().positive().optional(),
+  height: z.number().positive().optional(),
+  locked: z.boolean().optional(),
+  metadata: metadataSchema.optional(),
+});
+const operationSchema = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("add_node"), ref: z.string().min(1).max(80).optional(), node: nodeSchema }),
+  z.object({ op: z.literal("update_node"), nodeId: z.string().min(1), patch: z.object({ title: z.string().max(180).optional(), position: positionSchema.optional(), width: z.number().positive().optional(), height: z.number().positive().optional(), locked: z.boolean().optional(), metadata: metadataSchema.optional() }) }),
+  z.object({ op: z.literal("delete_node"), nodeId: z.string().min(1) }),
+  z.object({ op: z.literal("connect"), ref: z.string().min(1).max(80).optional(), from: z.string().min(1), to: z.string().min(1), fromPort: connectionPortSchema.optional(), toPort: connectionPortSchema.optional() }),
+  z.object({ op: z.literal("disconnect"), connectionId: z.string().optional(), from: z.string().optional(), to: z.string().optional() }),
+  z.object({ op: z.literal("rename_project"), title: z.string().min(1).max(180) }),
+  z.object({ op: z.literal("set_viewport"), viewport: z.object({ x: z.number(), y: z.number(), k: z.number().positive() }) }),
+]);
+const shotColumnLayoutSchema = z.object({
+  origin: positionSchema.optional(),
+  groupPadding: z.number().min(24).max(120).optional(),
+  nodeGap: z.number().min(16).max(200).optional(),
+  sectionGap: z.number().min(16).max(280).optional(),
+  columnGap: z.number().min(48).max(400).optional(),
+  preserveManualLayout: z.boolean().default(true),
+});
+
+server.registerTool("canvas_start_local_service", {
+  description: "Start the local CrocoTV API and web app if they are not already running. Safe to call repeatedly.",
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async () => toolResult(await ensureLocalService(true)));
+
+server.registerTool("canvas_get_service_status", {
+  description: "Check whether the local CrocoTV API and web app are running.",
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async () => toolResult(await serviceStatus()));
+
+server.registerTool("canvas_create_project", {
+  description: "Create a new local CrocoTV canvas. Each canvas gets its own project folder.",
+  inputSchema: { title: z.string().min(1).max(80).default("未命名画布") },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async ({ title }) => {
+  const project = await api<Record<string, unknown>>("/api/projects", { method: "POST", body: { title } });
+  return toolResult({ project, canvasUrl: `${webOrigin}/canvas/${project.id}` });
+});
+
+server.registerTool("canvas_list_projects", {
+  description: "List all local CrocoTV canvases with IDs, names, update times, and node counts.",
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async () => toolResult(await api("/api/projects")));
+
+server.registerTool("canvas_get_project", {
+  description: "Read a complete local canvas snapshot before changing nodes or connections.",
+  inputSchema: { projectId: z.string().uuid() },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ projectId }) => toolResult(await api(`/api/projects/${encodeURIComponent(projectId)}`)));
+
+server.registerTool("canvas_query_nodes", {
+  description: "Read a bounded subset of Canvas nodes by ID, node type, artifactType, or production stage without loading the complete project document.",
+  inputSchema: {
+    projectId: z.string().uuid(), nodeIds: z.array(z.string().min(1).max(80)).max(100).optional(),
+    types: z.array(z.enum(["text", "image", "video", "audio", "music", "config", "split", "group", "comment"])).max(9).optional(),
+    artifactTypes: z.array(z.string().min(1).max(80)).max(30).optional(), stages: z.array(z.string().min(1).max(80)).max(30).optional(),
+  },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ projectId, ...filters }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/nodes/query`, { method: "POST", body: filters })));
+
+server.registerTool("canvas_apply_operations", {
+  description: "Atomically add, update, delete, connect, or disconnect canvas nodes. Temporary refs let one call create and connect a whole graph.",
+  inputSchema: { projectId: z.string().uuid(), expectedVersion: z.number().int().positive().optional(), operations: z.array(operationSchema).min(1).max(100) },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+}, async ({ projectId, expectedVersion, operations }) => {
+  await assertOperationsDoNotTouchClaimedNodes(projectId, operations);
+  return toolResult(await applyOperations(projectId, operations, expectedVersion));
+});
+
+server.registerTool("canvas_upsert_shot_column", {
+  description: "Atomically create or update one Croco Video Factory shot as a vertical Group column, bind its nodes to the shot, and collision-free layout every shot column before one complete project update is published. Nodes never overlap; manually positioned nodes can be preserved.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    factoryRunId: z.string().min(1).max(80),
+    shotId: z.string().min(1).max(80),
+    columnIndex: z.number().int().min(0).max(999),
+    title: z.string().min(1).max(180).optional(),
+    operations: z.array(operationSchema).max(100).default([]),
+    layout: shotColumnLayoutSchema.optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+}, async ({ projectId, shotId, ...body }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/shot-columns/${encodeURIComponent(shotId)}`, { method: "POST", body })));
+
+server.registerTool("canvas_relayout_shot_columns", {
+  description: "Atomically reflow existing Croco Video Factory shot Groups into left-to-right columns with top-to-bottom non-overlapping nodes. Use after size changes, manual edits, inserting shots, or removing shots.",
+  inputSchema: { projectId: z.string().uuid(), factoryRunId: z.string().min(1).max(80), shotIds: z.array(z.string().min(1).max(80)).max(100).optional(), layout: shotColumnLayoutSchema.optional() },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ projectId, ...body }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/shot-columns/layout`, { method: "POST", body })));
+
+server.registerTool("canvas_list_resources", {
+  description: "List local user, generated, and pulled-character resources that can be placed on a canvas.",
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async () => toolResult(await api("/api/resources")));
+
+server.registerTool("canvas_list_characters", {
+  description: "List the synchronized pull-characters catalog, including character IDs, names, Voice IDs, and local assets.",
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async () => toolResult(await api("/api/characters")));
+
+server.registerTool("canvas_sync_characters", {
+  description: "Synchronize pull-characters and ingest its image, video, audio, and voice resources into the unified local resource library.",
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+}, async () => toolResult(await api("/api/characters/sync", { method: "POST" })));
+
+server.registerTool("canvas_import_resource", {
+  description: "Copy a file from this repository into the unified local resource library. The source file must be inside the CrocoTV workspace.",
+  inputSchema: { filePath: z.string().min(1), title: z.string().max(180).optional() },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async ({ filePath, title }) => {
+  await ensureLocalService();
+  const source = await allowedWorkspaceFile(filePath);
+  const bytes = await readFile(source);
+  const form = new FormData();
+  form.append("file", new Blob([bytes], { type: mimeFromPath(source) }), title || path.basename(source));
+  const response = await fetch(`${apiOrigin}/api/resources`, { method: "POST", headers: { "X-Croco-Client-Id": mcpClientId }, body: form });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(payload.error || `资源导入失败（${response.status}）`));
+  return toolResult(payload);
+});
+
+server.registerTool("canvas_run_nodes", {
+  description: "Submit one or more existing Canvas generation-module nodes as an asynchronous run job through the same local execution path used by the UI. Video config nodes use MiniMax H3. The claimed config nodes are immediately locked and glow green while MCP owns them; generated results retain ordinary Canvas connections to the exact referenced input nodes. Poll canvas_get_run_status with the returned jobId.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    nodeIds: z.array(z.string().min(1).max(80)).min(1).max(20),
+    concurrency: z.number().int().min(1).max(5).optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+}, async ({ projectId, nodeIds, concurrency }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/run-nodes`, {
+  method: "POST",
+  body: { nodeIds, concurrency, async: true },
+})));
+
+server.registerTool("canvas_get_run_status", {
+  description: "Read an asynchronous canvas_run_nodes job. Completed results include every config node's output node IDs and final project version.",
+  inputSchema: { jobId: z.string().uuid() },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ jobId }) => toolResult(await api(`/api/canvas/run-jobs/${encodeURIComponent(jobId)}`)));
+
+server.registerTool("canvas_cancel_run", {
+  description: "Cancel a queued or running Canvas MCP job, abort remaining provider work when possible, and release claimed-node locks through the canonical runtime.",
+  inputSchema: { jobId: z.string().uuid() },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+}, async ({ jobId }) => toolResult(await api(`/api/canvas/run-jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" })));
+
+server.registerTool("canvas_rerun_outputs", {
+  description: "Rerun existing generated result nodes in place through their original connected Config nodes. Node IDs and graph positions are preserved; poll canvas_get_run_status with the returned jobId.",
+  inputSchema: { projectId: z.string().uuid(), outputNodeIds: z.array(z.string().min(1).max(80)).min(1).max(20), concurrency: z.number().int().min(1).max(5).optional() },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+}, async ({ projectId, outputNodeIds, concurrency }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/rerun-outputs`, { method: "POST", body: { outputNodeIds, concurrency } })));
+
+server.registerTool("canvas_verify_video_asr", {
+  description: "Verify a generated Canvas video against its expected storyboard narration with Volcano Engine BigModel ASR. The video is temporarily MCP-locked and glows green without changing its normal video UI; a nearby unconnected Comment node records transcript, similarity, threshold, and pass/fail for visible review. Comment nodes never participate in Canvas connections.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    videoNodeId: z.string().min(1).max(80),
+    expectedText: z.string().min(1).max(2000),
+    threshold: z.number().min(0.5).max(1).optional(),
+    title: z.string().max(180).optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+}, async ({ projectId, videoNodeId, expectedText, threshold, title }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/verify-video-asr`, {
+  method: "POST",
+  body: { videoNodeId, expectedText, threshold, title },
+})));
+
+server.registerTool("canvas_use_video_frames", {
+  description: "Use the Canvas video-frame shortcut runtime to materialize first, middle, and/or last frames as normal local Image nodes connected to the source Video. Middle uses the existing duration/2 picker behavior.",
+  inputSchema: { projectId: z.string().uuid(), videoNodeId: z.string().min(1).max(80), frames: z.array(z.enum(["first", "middle", "last"])).min(1).max(3).default(["first", "middle", "last"]), replaceExisting: z.boolean().default(true) },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async ({ projectId, videoNodeId, frames, replaceExisting }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/video-frames`, { method: "POST", body: { videoNodeId, frames, replaceExisting } })));
+
+server.registerTool("canvas_verify_video_visual", {
+  description: "Record an evidence-backed H3 visual verdict after inspecting the current first/middle/last Image nodes. PASS requires every hard visual and continuity check. The result is an unconnected green Comment.",
+  inputSchema: { projectId: z.string().uuid(), videoNodeId: z.string().min(1).max(80), verdict: z.enum(["pass", "fail"]), reviewer: z.string().min(1).max(120), checks: z.array(z.enum(["no-readable-text", "no-storyboard-marks", "style-consistent", "character-consistent", "clean-realistic-scenes", "scene-reference-consistent", "cross-shot-continuity"])).max(7).optional(), issues: z.array(z.string().min(1).max(500)).max(30).optional() },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async ({ projectId, ...body }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/visual-review`, { method: "POST", body })));
+
+server.registerTool("canvas_merge_videos", {
+  description: "Merge ordered local Canvas Video nodes into one verified MP4 resource and Video node. By default every input must have current passing ASR and visual-review records.",
+  inputSchema: { projectId: z.string().uuid(), videoNodeIds: z.array(z.string().min(1).max(80)).min(2).max(50), title: z.string().min(1).max(180).default("完整视频"), requireVerification: z.boolean().default(true) },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async ({ projectId, ...body }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/merge-videos`, { method: "POST", body })));
+
+server.registerTool("canvas_generate", {
+  description: "Legacy direct generation that does not construct a reproducible generation-module graph. Prefer canvas_run_nodes. Video generation supports MiniMax H3 only.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    targetNodeId: z.string().min(1).max(80).optional(),
+    capability: generationCapabilitySchema,
+    prompt: z.string().min(1),
+    model: z.string().optional(),
+    title: z.string().max(180).optional(),
+    position: positionSchema.optional(),
+    voiceId: z.string().optional(),
+    params: generationParamsSchema.optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+}, async ({ projectId, targetNodeId, capability, prompt, model, title, position, voiceId, params }) => {
+  const prepared = await prepareGenerationNodes(projectId, [{ targetNodeId, capability, prompt, model, title, position, voiceId, params: params || {} }]);
+  const task = prepared.tasks[0];
+  const nodeId = prepared.nodeIds[0];
+  try {
+    await markGenerationNodeRunning(projectId, nodeId, task, prepared.toneNodeIds[0]);
+    const completed = await completeGenerationNode(projectId, nodeId, task, prepared.toneNodeIds[0]);
+    return toolResult({ projectId, nodeId, toneNodeId: prepared.toneNodeIds[0], result: completed.generated, projectVersion: completed.projectVersion });
+  } catch (error) {
+    await failGenerationNode(projectId, nodeId, error);
+    throw error;
+  }
+});
+
+server.registerTool("canvas_generate_batch", {
+  description: "Legacy direct batch generation that does not construct reproducible generation-module graphs. Prefer creating connected Config nodes and calling canvas_run_nodes. This tool remains only for compatibility with existing result-node regeneration.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    concurrency: z.number().int().min(1).max(5).optional(),
+    tasks: z.array(generationTaskSchema).min(1).max(20),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+}, async ({ projectId, concurrency, tasks }) => {
+  const prepared = await prepareGenerationNodes(projectId, tasks);
+  const limit = Math.min(prepared.tasks.length, concurrency || generationConcurrency());
+  const results = await runWithConcurrency(prepared.tasks, limit, async (task, index) => {
+    const nodeId = prepared.nodeIds[index];
+    try {
+      await markGenerationNodeRunning(projectId, nodeId, task, prepared.toneNodeIds[index]);
+      const completed = await completeGenerationNode(projectId, nodeId, { ...task, params: task.params || {} }, prepared.toneNodeIds[index]);
+      return { taskId: task.taskId || String(index + 1), nodeId, toneNodeId: prepared.toneNodeIds[index], status: "success", result: completed.generated, projectVersion: completed.projectVersion };
+    } catch (error) {
+      await failGenerationNode(projectId, nodeId, error);
+      return { taskId: task.taskId || String(index + 1), nodeId, toneNodeId: prepared.toneNodeIds[index], status: "error", error: error instanceof Error ? error.message : "生成失败" };
+    }
+  });
+  return toolResult({ projectId, concurrency: limit, results });
+});
+
+type GenerationTask = {
+  taskId?: string;
+  targetNodeId?: string;
+  capability: "text" | "image" | "video" | "speech" | "music";
+  prompt: string;
+  model?: string;
+  title?: string;
+  position?: { x: number; y: number };
+  voiceId?: string;
+  params: Record<string, unknown>;
+};
+
+function generationRef(index: number) { return index === 0 ? "result" : `result-${index + 1}`; }
+
+async function prepareGenerationNodes(projectId: string, inputTasks: Array<Omit<GenerationTask, "params"> & { params?: Record<string, unknown> }>) {
+  const tasks: GenerationTask[] = inputTasks.map((task) => ({ ...task, params: task.params || {} }));
+  const targetIds = tasks.flatMap((task) => task.targetNodeId ? [task.targetNodeId] : []);
+  if (new Set(targetIds).size !== targetIds.length) throw new Error("同一批次不能重复重新生成同一个节点");
+
+  if (targetIds.length) {
+    const project = await api<{ nodes: Array<{ id: string; type: string; title: string }> }>(`/api/projects/${encodeURIComponent(projectId)}`);
+    const nodeById = new Map(project.nodes.map((node) => [node.id, node]));
+    tasks.forEach((task) => {
+      if (!task.targetNodeId) return;
+      const node = nodeById.get(task.targetNodeId);
+      if (!node) throw new Error(`节点不存在：${task.targetNodeId}`);
+      const expectedType = task.capability === "speech" ? "audio" : task.capability;
+      if (node.type !== expectedType) throw new Error(`节点 ${task.targetNodeId} 的类型是 ${node.type}，不能用 ${task.capability} 重新生成`);
+      if (!task.title) task.title = node.title;
+    });
+  }
+
+  const prepared = await applyOperations(projectId, tasks.map((task, index) => {
+    const metadata = {
+      prompt: task.prompt,
+      ...(task.model ? { model: task.model } : {}),
+      ...(task.taskId ? { batchTaskId: task.taskId } : {}),
+      status: "loading",
+      generationState: "queued",
+      remoteOperationActive: true,
+      remoteOperationLabel: "MCP · 排队中",
+      batchQueuePosition: index + 1,
+      errorDetails: "",
+    };
+    return task.targetNodeId
+      ? { op: "update_node" as const, nodeId: task.targetNodeId, patch: { metadata } }
+      : { op: "add_node" as const, ref: generationRef(index), node: { type: task.capability === "speech" ? "audio" : task.capability, title: task.title || task.prompt.slice(0, 32), position: task.position, metadata } };
+}));
+
+  const nodeIds = tasks.map((task, index) => task.targetNodeId || String((prepared as any).createdRefs?.[generationRef(index)] || ""));
+  const preparedProject = (prepared as any).project as { nodes: Array<{ id: string; title: string; position: { x: number; y: number }; metadata?: Record<string, unknown> }> };
+  const toneNodeIds: Array<string | undefined> = new Array(tasks.length).fill(undefined);
+  const toneOperations: any[] = [];
+  tasks.forEach((task, index) => {
+    if (task.capability !== "speech") return;
+    const audioNodeId = nodeIds[index];
+    const audioNode = preparedProject.nodes.find((node) => node.id === audioNodeId);
+    if (!audioNode) throw new Error(`语音节点不存在：${audioNodeId}`);
+    const existing = preparedProject.nodes.find((node) => node.metadata?.artifactType === "speech-tone-plan" && node.metadata?.targetNodeId === audioNodeId);
+    const toneRef = `speech-tone-${index + 1}`;
+    const sourceNodeId = String(task.params.sourceNodeId || "").trim();
+    const toneMetadata = {
+      artifactType: "speech-tone-plan",
+      targetNodeId: audioNodeId,
+      model: process.env.TTS_TONE_MODEL || "deepseek-v4-flash-260425",
+      prompt: JSON.stringify({ currentText: task.prompt, voiceDirection: String(task.params.direction || "") }, null, 2),
+      content: "等待 DeepSeek 生成情景化语气分段…",
+      status: "loading",
+      generationState: "queued",
+      remoteOperationActive: true,
+      remoteOperationLabel: "MCP · 排队中",
+      speechStage: "queued",
+      errorDetails: "",
+    };
+    if (existing) {
+      toneNodeIds[index] = existing.id;
+      toneOperations.push({ op: "update_node", nodeId: existing.id, patch: { title: `语气优化 · ${task.title || audioNode.title}`, metadata: toneMetadata } });
+      toneOperations.push({ op: "connect", from: existing.id, to: audioNodeId });
+      if (sourceNodeId) toneOperations.push({ op: "connect", from: sourceNodeId, to: existing.id });
+    } else {
+      toneOperations.push({ op: "add_node", ref: toneRef, node: { type: "text", title: `语气优化 · ${task.title || audioNode.title}`, position: { x: audioNode.position.x - 440, y: audioNode.position.y }, width: 380, height: 300, metadata: toneMetadata } });
+      toneOperations.push({ op: "connect", from: toneRef, to: audioNodeId });
+      if (sourceNodeId) toneOperations.push({ op: "connect", from: sourceNodeId, to: toneRef });
+    }
+  });
+  if (toneOperations.length) {
+    const tonesPrepared = await applyOperations(projectId, toneOperations);
+    tasks.forEach((task, index) => {
+      if (task.capability === "speech" && !toneNodeIds[index]) toneNodeIds[index] = String((tonesPrepared as any).createdRefs?.[`speech-tone-${index + 1}`] || "");
+    });
+  }
+  return { tasks, nodeIds, toneNodeIds };
+}
+
+async function markGenerationNodeRunning(projectId: string, nodeId: string, task: GenerationTask, toneNodeId?: string) {
+  const providerLabel = task.capability === "text" && task.model
+    ? `${task.model} 请求中`
+    : task.capability === "speech"
+      ? "等待 DeepSeek 语气优化"
+      : "MCP 生成中";
+  const operations: any[] = [{
+    op: "update_node",
+    nodeId,
+    patch: {
+      metadata: {
+        status: "loading",
+        generationState: "running",
+        remoteOperationActive: true,
+        remoteOperationLabel: providerLabel,
+        batchQueuePosition: null,
+        errorDetails: "",
+      },
+    },
+  }];
+  if (task.capability === "speech" && toneNodeId) {
+    operations.push({
+      op: "update_node",
+      nodeId: toneNodeId,
+      patch: {
+        metadata: {
+          status: "loading",
+          generationState: "running",
+          remoteOperationActive: true,
+          remoteOperationLabel: "DeepSeek 正在优化语气",
+          speechStage: "tone",
+          errorDetails: "",
+        },
+      },
+    });
+  }
+  await applyOperations(projectId, operations);
+}
+
+async function completeGenerationNode(projectId: string, nodeId: string, task: GenerationTask, toneNodeId?: string) {
+  const generated = await runGeneration(task.capability, task.prompt, task.model, task.voiceId, task.params, { projectId, nodeId, toneNodeId });
+  const metadata = "text" in generated
+    ? { content: generated.text, status: "success", generationState: "ready", remoteOperationActive: false }
+    : { content: generated.resource.url, storageKey: generated.resource.id, mimeType: generated.resource.mimeType, bytes: generated.resource.size, status: "success", generationState: "ready", remoteOperationActive: false, ...(generated.resource.metadata || {}) };
+  const resource = "resource" in generated ? generated.resource : undefined;
+  const resultTitle = task.title || (resource?.name ? String(resource.name).replace(/\.[^.]+$/, "") : task.prompt.slice(0, 32));
+  const updated = await applyOperations(projectId, [{ op: "update_node", nodeId, patch: { title: resultTitle, metadata } }]);
+  return { generated, projectVersion: (updated as any).project?.version };
+}
+
+async function failGenerationNode(projectId: string, nodeId: string, error: unknown) {
+  await applyOperations(projectId, [{ op: "update_node", nodeId, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, errorDetails: error instanceof Error ? error.message : "生成失败" } } }]).catch(() => undefined);
+}
+
+function generationConcurrency() {
+  const value = Number(process.env.GENERATION_MAX_CONCURRENCY);
+  if (!Number.isInteger(value) || value < 1) throw new Error("请在 .codex/.env 中填写正整数 GENERATION_MAX_CONCURRENCY");
+  return Math.min(5, value);
+}
+
+async function runWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>) {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await worker(items[index], index);
+    }
+  }));
+  return results;
+}
+
+async function runGeneration(capability: string, prompt: string, model: string | undefined, voiceId: string | undefined, params: Record<string, unknown>, context?: { projectId: string; nodeId: string; toneNodeId?: string }) {
+  if (capability === "text") {
+    if (!model) throw new Error("文本生成必须指定 model");
+    return { text: (await api<{ text: string }>("/api/generate/text", { method: "POST", body: { prompt, model, systemPrompt: params.systemPrompt || "", inputResourceIds: params.inputResourceIds || [] } })).text };
+  }
+  if (capability === "image") {
+    if (!model) throw new Error("图片生成必须指定 model");
+    return { resource: (await api<{ resource: Resource }>("/api/generate/image", { method: "POST", body: { prompt, model, width: params.width, height: params.height, referenceResourceIds: params.referenceResourceIds || [] } })).resource };
+  }
+  if (capability === "video") {
+    const resources = (await api<{ resources: Resource[] }>("/api/generate/video", { method: "POST", body: { prompt, model: model || "minimax-h3", duration: params.duration || 5, quality: params.quality, ratio: params.ratio, count: 1, imageResourceIds: params.imageResourceIds || [], audioResourceIds: params.audioResourceIds || [] } })).resources;
+    if (!resources[0]) throw new Error("视频生成没有返回资源");
+    return { resource: resources[0] };
+  }
+  if (capability === "speech") {
+    if (!voiceId) throw new Error("语音生成必须指定 pull characters 中的 voiceId");
+    return { resource: (await api<{ resource: Resource }>("/api/generate/speech", { method: "POST", body: { content: prompt, voiceId, direction: params.direction, projectId: context?.projectId, nodeId: context?.nodeId, toneNodeId: context?.toneNodeId } })).resource };
+  }
+  const resources = (await api<{ resources: Resource[] }>("/api/generate/music", { method: "POST", body: { prompt, model: model || "", params } })).resources;
+  if (!resources[0]) throw new Error("音乐生成没有返回资源");
+  return { resource: resources[0] };
+}
+
+type Resource = { id: string; name: string; url: string; mimeType: string; size: number; metadata?: Record<string, unknown> };
+
+async function applyOperations(projectId: string, operations: unknown[], expectedVersion?: number) {
+  return api(`/api/canvas/projects/${encodeURIComponent(projectId)}/operations`, { method: "POST", body: { operations, expectedVersion } });
+}
+
+async function assertOperationsDoNotTouchClaimedNodes(projectId: string, operations: Array<Record<string, any>>) {
+  const project = await api<{ nodes: Array<{ id: string; metadata?: Record<string, unknown> }>; connections: Array<{ id: string; fromNodeId: string; toNodeId: string }> }>(`/api/projects/${encodeURIComponent(projectId)}`);
+  const claimed = new Set(project.nodes.filter((node) => node.metadata?.remoteOperationActive).map((node) => node.id));
+  if (!claimed.size) return;
+  const connectionById = new Map(project.connections.map((connection) => [connection.id, connection]));
+  for (const operation of operations) {
+    let touched: string[] = [];
+    if (operation.op === "update_node" || operation.op === "delete_node") touched = [String(operation.nodeId || "")];
+    if (operation.op === "connect") touched = [String(operation.from || ""), String(operation.to || "")];
+    if (operation.op === "disconnect") {
+      if (operation.connectionId) {
+        const connection = connectionById.get(String(operation.connectionId));
+        if (connection) touched = [connection.fromNodeId, connection.toNodeId];
+      } else touched = [String(operation.from || ""), String(operation.to || "")];
+    }
+    const lockedNodeId = touched.find((nodeId) => claimed.has(nodeId));
+    if (lockedNodeId) throw new Error(`节点 ${lockedNodeId} 正由另一个 MCP 操作锁定，不能修改或重连`);
+  }
+}
+
+async function api<T = unknown>(endpoint: string, input: { method?: string; body?: unknown } = {}): Promise<T> {
+  await ensureLocalService();
+  const response = await fetch(`${apiOrigin}${endpoint}`, {
+    method: input.method || "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Croco-Client-Id": mcpClientId,
+      "X-Croco-Operation-Origin": "mcp",
+    },
+    ...(input.body !== undefined ? { body: JSON.stringify(input.body) } : {}),
+    signal: AbortSignal.timeout(15 * 60_000),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String((payload as any).error || `CrocoTV 请求失败（${response.status}）`));
+  return payload as T;
+}
+
+async function ensureLocalService(forceStart = false) {
+  const status = await serviceStatus();
+  if (status.api && status.web) return { ...status, started: false };
+  if (!forceStart && status.api) return { ...status, started: false };
+  const runtimeDir = path.join(workspaceRoot, "data", "runtime");
+  mkdirSync(runtimeDir, { recursive: true });
+  const logPath = path.join(runtimeDir, "crocotv.log");
+  const log = openSync(logPath, "a");
+  try {
+    const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev"], { cwd: workspaceRoot, detached: true, stdio: ["ignore", log, log], env: process.env });
+    child.unref();
+  } finally { closeSync(log); }
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    await wait(500);
+    const current = await serviceStatus();
+    if (current.api && current.web) return { ...current, started: true, logPath };
+  }
+  throw new Error(`CrocoTV 启动超时，请查看 ${logPath}`);
+}
+
+async function serviceStatus() {
+  const [app, webReady] = await Promise.all([readStatus(`${apiOrigin}/api/status`), reachable(webOrigin)]);
+  return {
+    api: Boolean(app),
+    web: webReady,
+    apiOrigin,
+    webOrigin,
+    app,
+    pluginVersion: bundleManifest.pluginVersion,
+    mcpVersion: bundleManifest.mcpVersion,
+    skillsBundleVersion: bundleManifest.skillsBundleVersion,
+  };
+}
+async function readStatus(url: string) { try { const response = await fetch(url, { signal: AbortSignal.timeout(1500) }); return response.ok ? await response.json() : null; } catch { return null; } }
+async function reachable(url: string) { try { const response = await fetch(url, { signal: AbortSignal.timeout(1500) }); return response.ok; } catch { return false; } }
+async function allowedWorkspaceFile(filePath: string) {
+  const resolved = await realpath(path.resolve(workspaceRoot, filePath));
+  if (resolved !== workspaceRoot && !resolved.startsWith(`${workspaceRoot}${path.sep}`)) throw new Error("只允许导入 CrocoTV 工作区内的文件");
+  return resolved;
+}
+function mimeFromPath(filePath: string) {
+  const extension = path.extname(filePath).toLowerCase();
+  return ({ ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".mp4": "video/mp4", ".mov": "video/quicktime", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".json": "application/json", ".txt": "text/plain" } as Record<string, string>)[extension] || "application/octet-stream";
+}
+function toolResult(value: unknown) { return { content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], structuredContent: { result: value } }; }
+function wait(ms: number) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+function findPluginRoot(start: string) {
+  let current = path.resolve(start);
+  while (true) {
+    try {
+      readFileSync(path.join(current, ".codex-plugin", "plugin.json"));
+      return current;
+    } catch {}
+    const parent = path.dirname(current);
+    if (parent === current) throw new Error("无法定位 Croco Video Factory Plugin 根目录");
+    current = parent;
+  }
+}
+
+void ensureLocalService(true).catch((error) => console.error(`[crocotv] ${error.message}`));
+await server.connect(new StdioServerTransport());

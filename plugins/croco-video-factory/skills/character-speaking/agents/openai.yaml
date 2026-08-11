@@ -1,0 +1,4 @@
+interface:
+  display_name: "Character Speaking"
+  short_description: "让指定角色以优化后的语气朗读文案并生成可播放的 MP3 音频"
+  default_prompt: "使用 $character-speaking 让指定角色朗读给定文案并返回生成的音频。"

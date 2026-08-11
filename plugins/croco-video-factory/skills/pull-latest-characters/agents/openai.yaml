@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pull Latest Characters"
+  short_description: "增量同步 CrocoBack 当前发布的老师资料和角色资产"
+  default_prompt: "Use $pull-latest-characters to pull and incrementally update the latest published characters."
