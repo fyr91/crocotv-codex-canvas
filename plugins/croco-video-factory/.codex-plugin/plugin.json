@@ -1,6 +1,6 @@
 {
   "name": "croco-video-factory",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Run the CrocoTV local canvas and its P1-P10 educational video production workflow from Codex.",
   "author": {
     "name": "fyr91",

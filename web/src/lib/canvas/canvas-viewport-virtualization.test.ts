@@ -33,4 +33,12 @@ describe("canvas viewport virtualization", () => {
         expect(shouldUseCanvasOverview(1_800)).toBe(false);
         expect(shouldUseCanvasOverview(1_801)).toBe(true);
     });
+
+    it("uses the reduced full, compact, and outline boundaries", () => {
+        const image = node("image", 0, 0);
+        expect(canvasNodeRenderDetail(image, 135 / 240, 100)).toBe("full");
+        expect(canvasNodeRenderDetail(image, 134.9 / 240, 100)).toBe("compact");
+        expect(canvasNodeRenderDetail(image, 43.2 / 240, 100)).toBe("compact");
+        expect(canvasNodeRenderDetail(image, 43.1 / 240, 100)).toBe("outline");
+    });
 });

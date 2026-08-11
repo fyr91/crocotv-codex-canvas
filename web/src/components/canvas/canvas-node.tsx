@@ -17,6 +17,7 @@ import { reasoningDisplayState } from "@/lib/canvas/canvas-node-reasoning";
 import { isMediaBatchChild, isMediaBatchRoot } from "@/lib/canvas/canvas-media-batch";
 import { CanvasNodeReasoningBox } from "./canvas-node-reasoning-box";
 import { CanvasStackFrame as BatchFrame } from "./canvas-stack-frame";
+import { ManagedCanvasVideo } from "./managed-canvas-video";
 import { AudioNodePlayer } from "@/components/audio/audio-node-player";
 import { canvasNodeImagePreviewUrl } from "@/lib/canvas/canvas-viewport-virtualization";
 
@@ -935,20 +936,6 @@ function ImageContent({
             <BatchControls node={node} readOnly={readOnly} isBatchRoot={isBatchRoot} batchCount={batchCount} batchExpanded={batchExpanded} onToggleBatch={onToggleBatch} onSetBatchPrimary={onSetBatchPrimary} />
         </BatchFrame>
     );
-}
-
-function ManagedCanvasVideo({ src }: { src: string }) {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    useEffect(() => {
-        const video = videoRef.current;
-        return () => {
-            if (!video) return;
-            video.pause();
-            video.removeAttribute("src");
-            video.load();
-        };
-    }, []);
-    return <video ref={videoRef} src={src} controls preload="metadata" className="h-full w-full rounded-[18px] bg-black object-contain" data-canvas-no-zoom />;
 }
 
 function BatchControls({ node, readOnly, isBatchRoot, batchCount, batchExpanded, onToggleBatch, onSetBatchPrimary }: { node: CanvasNodeData; readOnly: boolean; isBatchRoot: boolean; batchCount: number; batchExpanded: boolean; onToggleBatch?: () => void; onSetBatchPrimary?: () => void }) {
