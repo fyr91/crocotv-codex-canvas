@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { rename, writeFile } from "node:fs/promises";
 
 export function validateImageReview(review) {
@@ -25,7 +26,7 @@ export async function recordImageReview({ review, reviewPath, pointerPath, revie
 }
 
 async function atomicJson(target, value) {
-    const temporary = `${target}.${process.pid}.tmp`;
+    const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
     await rename(temporary, target);
 }

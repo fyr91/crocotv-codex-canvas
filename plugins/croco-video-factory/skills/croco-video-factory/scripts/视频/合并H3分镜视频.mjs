@@ -28,19 +28,16 @@ export async function mergeProjectShots({ projectDir, ffmpegPath = process.env.F
     for (const [index, shot] of plan.shots.entries()) {
         const folder = String(shot.folder || shot.directory || "");
         const shotId = String(shot.id ?? shot.shotId ?? index + 1).padStart(3, "0");
-        if (shot.sceneDesignRequired !== false && (!shot.sceneId || !shot.storySegmentId)) throw new Error(`${folder} 缺少 sceneId 或 storySegmentId，拒绝合片`);
-        const previous = index > 0 ? plan.shots[index - 1] : null;
-        if (previous && shot.sceneId && shot.sceneId === previous.sceneId && shot.storySegmentId === previous.storySegmentId) {
-            const previousId = previous.id ?? previous.shotId;
-            if (shot.continuity?.type !== "tail-frame" || shot.continuity?.dependsOnShotId !== previousId) throw new Error(`${folder} 与前镜属于同一故事场景但没有直接 tail-frame 依赖，拒绝合片`);
-        }
+        const shotSceneIds = sceneIdsOf(shot);
+        if (shot.sceneDesignRequired !== false && (!shotSceneIds.length || !shot.storySegmentId)) throw new Error(`${folder} 缺少 sceneIds 或 storySegmentId，拒绝合片`);
         const videoDir = path.join(root, "分镜", folder, "视频生成");
         const pointer = JSON.parse(await readFile(path.join(videoDir, "当前视频.json"), "utf8"));
         if (pointer.status !== "succeeded") throw new Error(`${folder} 当前视频未成功，不能合并完整视频`);
         const videoPath = safeProjectPath(root, videoDir, pointer.path);
         await stat(videoPath);
         const sceneFile = await optionalJson(path.join(root, "分镜", folder, "场景参考图.json"));
-        if (shot.sceneDesignRequired !== false && (sceneFile?.sceneId !== shot.sceneId || sceneFile?.storySegmentId !== shot.storySegmentId || !(sceneFile?.references || []).length)) throw new Error(`${folder} 缺少匹配的场景参考图，拒绝合片`);
+        const referencedSceneIds = new Set((sceneFile?.references || []).map((item) => String(item.sceneId || sceneFile?.sceneId || "")).filter(Boolean));
+        if (shot.sceneDesignRequired !== false && (!(sceneFile?.references || []).length || shotSceneIds.some((sceneId) => !referencedSceneIds.has(sceneId)))) throw new Error(`${folder} 缺少匹配 sceneIds 的场景参考图，拒绝合片`);
         const sceneReferenceSha256 = [];
         for (const reference of sceneFile?.references || []) {
             const imagePath = safeProjectPath(root, path.join(root, "分镜", folder), reference.path);
@@ -48,7 +45,7 @@ export async function mergeProjectShots({ projectDir, ffmpegPath = process.env.F
             if (reference.imageSha256 && reference.imageSha256 !== imageSha256) throw new Error(`${folder} 场景参考图哈希已失效，拒绝合片`);
             sceneReferenceSha256.push(imageSha256);
         }
-        sources.push({ shotId, folder, jobId: pointer.jobId || null, path: videoPath, sha256: await sha256File(videoPath), storySegmentId: shot.storySegmentId || null, sceneId: shot.sceneId || null, continuity: shot.continuity || { type: "independent" }, sceneReferenceSha256 });
+        sources.push({ shotId, folder, jobId: pointer.jobId || null, path: videoPath, sha256: await sha256File(videoPath), storySegmentId: shot.storySegmentId || null, sceneIds: shotSceneIds, continuity: shot.continuity || { type: "independent" }, sceneReferenceSha256 });
     }
     verifyGates({ dialogueReport, visualReport, sources });
     const runId = `${new Date().toISOString().replace(/[-:]/gu, "").replace(/\.\d{3}Z$/u, "Z")}-${randomUUID().slice(0, 8)}`;
@@ -121,7 +118,7 @@ function verifyGates({ dialogueReport, visualReport, sources }) {
         const visual = visualReport.shots?.find((item) => item.shotId === source.shotId || item.folder === source.folder);
         if (!dialogue || dialogue.verdict !== "pass" || dialogue.sourceSha256 !== source.sha256) throw new Error(`${source.folder} 对白验收缺失、失败或已过期`);
         if (!visual || visual.sourceSha256 !== source.sha256) throw new Error(`${source.folder} 三帧视觉验收缺失或已过期`);
-        if (visual.storySegmentId !== source.storySegmentId || visual.sceneId !== source.sceneId) throw new Error(`${source.folder} 三帧视觉验收的故事场景绑定已过期`);
+        if (visual.storySegmentId !== source.storySegmentId || JSON.stringify(sceneIdsOf(visual)) !== JSON.stringify(source.sceneIds)) throw new Error(`${source.folder} 三帧视觉验收的故事场景绑定已过期`);
         if (JSON.stringify((visual.sceneReferences || []).map((item) => item.imageSha256).sort()) !== JSON.stringify([...source.sceneReferenceSha256].sort())) throw new Error(`${source.folder} 三帧视觉验收的场景参考图已过期`);
         if ((visual.continuity?.type || "independent") !== (source.continuity?.type || "independent") || (visual.continuity?.dependsOnShotId ?? null) !== (source.continuity?.dependsOnShotId ?? null)) throw new Error(`${source.folder} 三帧视觉验收的连续性依赖已过期`);
     }
@@ -129,6 +126,7 @@ function verifyGates({ dialogueReport, visualReport, sources }) {
 
 async function readGate(filePath, label) { try { return JSON.parse(await readFile(filePath, "utf8")); } catch (error) { if (error.code === "ENOENT") throw new Error(`缺少${label}报告，拒绝合片`); throw error; } }
 async function optionalJson(filePath) { try { return JSON.parse(await readFile(filePath, "utf8")); } catch (error) { if (error.code === "ENOENT") return null; throw error; } }
+function sceneIdsOf(shot) { const values = Array.isArray(shot?.sceneIds) ? shot.sceneIds : shot?.sceneId ? [shot.sceneId] : []; return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))]; }
 async function archiveExisting(outputDir, outputPath) { try { await stat(outputPath); } catch (error) { if (error.code === "ENOENT") return; throw error; } const archiveDir = path.join(outputDir, "历史版本", `安全合片替换-${new Date().toISOString().replace(/[-:.]/gu, "")}`); await mkdir(archiveDir, { recursive: true }); await rename(outputPath, path.join(archiveDir, path.basename(outputPath))); const pointerPath = path.join(outputDir, "当前完整视频.json"); try { await rename(pointerPath, path.join(archiveDir, "当前完整视频.json")); } catch (error) { if (error.code !== "ENOENT") throw error; } }
 async function probeMedia(command, inputPath) { const raw = await captureCommand(command, ["-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height,pix_fmt,r_frame_rate,time_base,sample_rate,channels:format=duration", "-of", "json", inputPath]); const data = JSON.parse(raw); return { video: data.streams?.find((item) => item.codec_type === "video") || null, audio: data.streams?.find((item) => item.codec_type === "audio") || null, durationSeconds: Number(data.format?.duration || 0) }; }
 async function hashDecodedAudio(command, inputArgs) { return new Promise((resolve, reject) => { const hash = createHash("sha256"); let error = ""; const child = spawn(command, ["-hide_banner", "-loglevel", "error", ...inputArgs, "-map", "0:a:0", "-ac", "2", "-ar", "32000", "-c:a", "pcm_s16le", "-f", "s16le", "-"], { stdio: ["ignore", "pipe", "pipe"] }); child.stdout.on("data", (chunk) => hash.update(chunk)); child.stderr.setEncoding("utf8"); child.stderr.on("data", (chunk) => error += chunk); child.once("error", reject); child.once("exit", (code) => code === 0 ? resolve(hash.digest("hex")) : reject(new Error(`音频哈希计算失败：${error.trim()}`))); }); }

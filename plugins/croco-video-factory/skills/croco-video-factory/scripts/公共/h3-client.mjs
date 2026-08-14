@@ -2,9 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 export function h3Config(env = process.env) {
-    const maxConcurrency = Number(env.GENERATION_MAX_CONCURRENCY);
-    if (!Number.isInteger(maxConcurrency) || maxConcurrency < 1) throw new Error("GENERATION_MAX_CONCURRENCY 必须是正整数");
-    const config = { baseUrl: String(env.H3_BASE_URL || "").replace(/\/$/, ""), apiKey: String(env.H3_API_KEY || "").trim(), maxConcurrency };
+    const config = { baseUrl: String(env.H3_BASE_URL || "").replace(/\/$/, ""), apiKey: String(env.H3_API_KEY || "").trim() };
     if (!config.baseUrl) throw new Error("请在 .codex/.env 中填写 H3_BASE_URL");
     if (!config.apiKey) throw new Error("请在 .codex/.env 中填写 H3_API_KEY");
     return config;

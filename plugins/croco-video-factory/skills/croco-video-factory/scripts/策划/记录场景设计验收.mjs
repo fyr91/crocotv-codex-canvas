@@ -15,8 +15,7 @@ export async function recordSceneReview({ viewDir, attempt, verdict, reviewer, c
     if (!viewDir || !Number.isInteger(number) || number < 1 || number > 5) throw new Error("必须提供 --view-dir 和 1–5 的 --attempt");
     if (!["pass", "fail"].includes(verdict)) throw new Error("--record 只能是 pass 或 fail");
     if (!reviewer) throw new Error("必须提供 --reviewer");
-    const imagePath = path.join(directory, `场景设计图-第${String(number).padStart(2, "0")}次.png`);
-    await stat(imagePath);
+    const imagePath = await existingAttemptPath(directory, number);
     const uniqueChecks = [...new Set(checks)];
     if (verdict === "pass") {
         const missing = requiredChecks.filter((item) => !uniqueChecks.includes(item));
@@ -24,12 +23,20 @@ export async function recordSceneReview({ viewDir, attempt, verdict, reviewer, c
         if (issues.length) throw new Error("PASS 不得包含 issues");
     } else if (!issues.length) throw new Error("FAIL 必须提供 --issues");
     const review = { schemaVersion: 1, status: verdict, attempt: number, reviewer: String(reviewer), checks: uniqueChecks, issues, imagePath: path.basename(imagePath), imageSha256: createHash("sha256").update(await readFile(imagePath)).digest("hex"), reviewedAt: new Date().toISOString() };
-    await atomicJson(path.join(directory, `场景设计验收-第${String(number).padStart(2, "0")}次.json`), review);
-    if (verdict === "pass") await atomicJson(path.join(directory, "当前场景设计图.json"), { status: "pass", attempt: number, imagePath: path.basename(imagePath), imageSha256: review.imageSha256, reviewer: review.reviewer });
+    await atomicJson(path.join(directory, `场景综合设定图验收-第${String(number).padStart(2, "0")}次.json`), review);
+    if (verdict === "pass") await atomicJson(path.join(directory, "当前场景综合设定图.json"), { status: "pass", attempt: number, imagePath: path.basename(imagePath), imageSha256: review.imageSha256, reviewer: review.reviewer });
     return review;
 }
 
 async function atomicJson(target, value) { await mkdir(path.dirname(target), { recursive: true }); const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`; await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8"); await rename(temporary, target); }
+
+async function existingAttemptPath(directory, number) {
+    for (const prefix of ["场景综合设定图", "场景设计图"]) {
+        const candidate = path.join(directory, `${prefix}-第${String(number).padStart(2, "0")}次.png`);
+        try { await stat(candidate); return candidate; } catch (error) { if (error.code !== "ENOENT") throw error; }
+    }
+    throw new Error(`找不到第 ${number} 次场景综合设定图`);
+}
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     try {

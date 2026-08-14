@@ -7,25 +7,6 @@ import { fileURLToPath } from "node:url";
 import { buildH3Request, downloadH3, ensureH3Runtime, getH3Job, h3Config, h3ProfileForAspect, submitH3Job, uploadH3Asset } from "../公共/h3-client.mjs";
 import { buildPromptInputHashes, generateH3Prompt, promptConfig } from "./生成H3提示词.mjs";
 
-export async function runWithConcurrency(items, limit, worker) {
-    const results = new Array(items.length); let next = 0;
-    await Promise.all(new Array(Math.min(limit, items.length)).fill(0).map(async () => { while (next < items.length) { const index = next++; results[index] = await worker(items[index], index); } }));
-    return results;
-}
-
-export function createLimiter(limit) {
-    let active = 0;
-    const queue = [];
-    const drain = () => {
-        while (active < limit && queue.length) {
-            active++;
-            const { work, resolve, reject } = queue.shift();
-            Promise.resolve().then(work).then(resolve, reject).finally(() => { active--; drain(); });
-        }
-    };
-    return (work) => new Promise((resolve, reject) => { queue.push({ work, resolve, reject }); drain(); });
-}
-
 export function normalizeContinuity(shot) {
     const value = shot?.continuity;
     if (!value || value.type === "independent") return null;
@@ -42,21 +23,17 @@ export function validateShotDependencies(shots) {
         ids.add(shot.id); indexes.set(shot.id, index);
     });
     shots.forEach((shot, index) => {
-        if (shot.sceneDesignRequired !== false && (!String(shot.storySegmentId || "").trim() || !String(shot.sceneId || "").trim())) throw new Error(`${shot.folder} 缺少 storySegmentId 或 sceneId`);
+        if (shot.sceneDesignRequired !== false && (!String(shot.storySegmentId || "").trim() || !sceneIdsOf(shot).length)) throw new Error(`${shot.folder} 缺少 storySegmentId 或 sceneIds`);
         const value = normalizeContinuity(shot);
-        const previous = index > 0 ? shots[index - 1] : null;
-        if (previous && shot.storySegmentId === previous.storySegmentId && shot.sceneId === previous.sceneId) {
-            const expectedParentId = previous.id;
-            if (value?.type !== "tail-frame" || value.dependsOnShotId !== expectedParentId) throw new Error(`${shot.folder} 与前镜属于同一故事场景，必须 tail-frame 依赖分镜 ${expectedParentId}`);
-        }
         if (!value) return;
+        if (value.type === "soft-continuity") return;
         if (!Number.isInteger(value.dependsOnShotId) || !indexes.has(value.dependsOnShotId)) throw new Error(`${shot.folder} 的 continuity 依赖不存在`);
         if (indexes.get(value.dependsOnShotId) >= index) throw new Error(`${shot.folder} 只能依赖时间线上更早的分镜`);
     });
     return true;
 }
 
-export async function generateProjectShots({ projectDir, config = h3Config(), ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg" }, dependencies = {}) {
+export async function generateProjectShots({ projectDir, config = h3Config(), ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg", ffprobePath = process.env.FFPROBE_PATH || "ffprobe" }, dependencies = {}) {
     const shotsRoot = path.join(projectDir, "分镜");
     const plan = JSON.parse(await readFile(path.join(shotsRoot, "分镜计划.json"), "utf8"));
     const shots = Array.isArray(plan.shots) ? plan.shots.map((shot) => ({ ...shot, projectAspectRatio: plan.aspectRatio || "16:9" })) : [];
@@ -69,9 +46,6 @@ export async function generateProjectShots({ projectDir, config = h3Config(), ff
     let cacheWrite = Promise.resolve();
     const persistCache = () => cacheWrite = cacheWrite.then(() => atomicJson(cachePath, cache));
     const assetUploads = new Map();
-    const h3Limit = createLimiter(config.maxConcurrency);
-    const promptLimit = createLimiter(config.maxConcurrency);
-    const tailLimit = createLimiter(config.maxConcurrency);
     const byId = new Map(shots.map((shot) => [shot.id, shot]));
     const tasks = new Map();
     const runShot = (shot) => {
@@ -82,7 +56,7 @@ export async function generateProjectShots({ projectDir, config = h3Config(), ff
             if (continuity?.type === "tail-frame") {
                 const parent = byId.get(continuity.dependsOnShotId);
                 parentPointer = await runShot(parent);
-                parentPointer = await tailLimit(() => ensureLastFrame({ projectDir, shot: parent, pointer: parentPointer, ffmpegPath }, dependencies));
+                parentPointer = await ensureLastFrame({ projectDir, shot: parent, pointer: parentPointer, ffmpegPath }, dependencies);
             }
             const shotDir = path.join(shotsRoot, shot.folder);
             const videoDir = path.join(shotDir, "视频生成");
@@ -90,17 +64,17 @@ export async function generateProjectShots({ projectDir, config = h3Config(), ff
             let manifest = await optionalJson(manifestPath);
             const promptInvalidated = await promptNeedsRegeneration({ manifest, shot, shotDir, videoDir, projectDir, parentPointer });
             if (promptInvalidated) {
-                await promptLimit(() => generateH3Prompt({ shotDir, config: dependencies.promptConfig || promptConfig() }, dependencies.promptDependencies || {}));
+                await generateH3Prompt({ shotDir, config: dependencies.promptConfig || promptConfig() }, dependencies.promptDependencies || {});
                 manifest = await optionalJson(manifestPath);
             }
             if (!manifest) throw new Error(`${shot.folder} 缺少 H3参考素材.json`);
             if (!(await manifestMatchesShot({ manifest, shot, shotDir, videoDir, projectDir, parentPointer }))) throw new Error(`${shot.folder} 的 H3参考素材.json 与当前场景或依赖不一致`);
             let pointer = await optionalJson(path.join(videoDir, "当前视频.json"));
             const pointerDependencyChanged = continuity?.type === "tail-frame" && pointer?.continuity?.sourceLastFrameSha256 !== parentPointer.lastFrameSha256;
-            if (pointer?.status === "succeeded" && !pointerDependencyChanged && !promptInvalidated) return tailLimit(() => ensureLastFrame({ projectDir, shot, pointer, ffmpegPath }, dependencies));
+            if (pointer?.status === "succeeded" && !pointerDependencyChanged && !promptInvalidated) return ensureLastFrame({ projectDir, shot, pointer, ffmpegPath }, dependencies);
             if (pointer?.status === "succeeded") await archiveShotOutput(videoDir, pointer);
-            pointer = await h3Limit(() => processShot({ projectDir, manifestPath, config, cache, persistCache, assetUploads, forceNew: pointerDependencyChanged || promptInvalidated }, dependencies));
-            return tailLimit(() => ensureLastFrame({ projectDir, shot, pointer, ffmpegPath }, dependencies));
+            pointer = await processShot({ projectDir, manifestPath, config, cache, persistCache, assetUploads, forceNew: pointerDependencyChanged || promptInvalidated, ffprobePath }, dependencies);
+            return ensureLastFrame({ projectDir, shot, pointer, ffmpegPath }, dependencies);
         })();
         tasks.set(shot.id, task);
         return task;
@@ -113,10 +87,11 @@ export async function promptNeedsRegeneration(input) {
 }
 
 export async function manifestMatchesShot({ manifest, shot, shotDir, videoDir, projectDir, parentPointer = null }) {
-    if (manifest?.schemaVersion !== 3) return false;
+    if (manifest?.schemaVersion !== 5) return false;
     const profile = h3ProfileForAspect(shot.projectAspectRatio);
     if (manifest.aspectRatio !== profile.aspectRatio || manifest.quality !== profile.quality || manifest.expectedWidth !== profile.width || manifest.expectedHeight !== profile.height) return false;
-    if ((manifest.storySegmentId || null) !== (shot.storySegmentId || null) || (manifest.sceneId || null) !== (shot.sceneId || null)) return false;
+    if ((manifest.storySegmentId || null) !== (shot.storySegmentId || null) || JSON.stringify(sceneIdsOf(manifest)) !== JSON.stringify(sceneIdsOf(shot))) return false;
+    if (String(manifest.shotId || "") !== String(shot.shotId ?? shot.id ?? "") || String(manifest.generationSegmentId || "") !== String(shot.generationSegmentId ?? shot.shotId ?? shot.id ?? "")) return false;
     if (Boolean(manifest.sceneDesignRequired) !== (shot.sceneDesignRequired !== false)) return false;
     const continuity = normalizeContinuity(shot);
     if (continuity?.type === "tail-frame") {
@@ -131,7 +106,7 @@ export async function manifestMatchesShot({ manifest, shot, shotDir, videoDir, p
     try { sceneManifest = await readFile(path.join(shotDir, "场景参考图.json")); } catch { return false; }
     if (createHash("sha256").update(sceneManifest).digest("hex") !== manifest.sceneReferenceManifestSha256) return false;
     for (const item of manifest.sceneReferences) {
-        if (!item.imageSha256 || item.sceneId !== shot.sceneId) return false;
+        if (!item.imageSha256 || !sceneIdsOf(shot).includes(item.sceneId)) return false;
         let image;
         try { image = await readFile(safeProjectPath(projectDir, videoDir, item.path)); } catch { return false; }
         if (createHash("sha256").update(image).digest("hex") !== item.imageSha256) return false;
@@ -168,8 +143,10 @@ async function processShot(input, dependencies) {
     if (job.width !== manifest.expectedWidth || job.height !== manifest.expectedHeight || job.duration_seconds !== manifest.durationSeconds) throw new Error(`H3 输出规格与请求不一致：期望 ${manifest.expectedWidth}×${manifest.expectedHeight}`);
     const [video, poster] = await Promise.all([downloadH3({ config: input.config, jobId }, dependencies), downloadH3({ config: input.config, jobId, kind: "poster" }, dependencies)]);
     if (!video.length || !poster.length) throw new Error("H3 输出文件为空");
-    await writeFile(path.join(directory, "分镜视频.mp4"), video); await writeFile(path.join(directory, "分镜视频封面.jpg"), poster);
-    const pointer = { status: "succeeded", jobId, path: "分镜视频.mp4", posterPath: "分镜视频封面.jpg", seed: job.seed, width: job.width, height: job.height, aspectRatio: manifest.aspectRatio, quality: manifest.quality, durationSeconds: job.duration_seconds, ...(manifest.continuity ? { continuity: manifest.continuity } : {}) };
+    const videoPath = path.join(directory, "分镜视频.mp4");
+    await writeFile(videoPath, video); await writeFile(path.join(directory, "分镜视频封面.jpg"), poster);
+    const actualDurationSeconds = dependencies.probeDuration ? await dependencies.probeDuration(videoPath) : await probeDuration(input.ffprobePath, videoPath);
+    const pointer = { status: "succeeded", jobId, path: "分镜视频.mp4", posterPath: "分镜视频封面.jpg", shotId: manifest.shotId, generationSegmentId: manifest.generationSegmentId, seed: job.seed, width: job.width, height: job.height, aspectRatio: manifest.aspectRatio, quality: manifest.quality, targetDurationSeconds: manifest.targetDurationSeconds ?? manifest.durationSeconds, actualDurationSeconds, durationSeconds: actualDurationSeconds, ...(manifest.continuity ? { continuity: manifest.continuity } : {}) };
     await atomicJson(path.join(directory, "当前视频.json"), pointer); await atomicJson(statePath, pointer); return pointer;
 }
 
@@ -205,11 +182,31 @@ async function optionalJson(filePath) {
     try { return JSON.parse(await readFile(filePath, "utf8")); } catch (error) { if (error.code === "ENOENT") return null; throw error; }
 }
 
+function sceneIdsOf(shot) {
+    const values = Array.isArray(shot?.sceneIds) ? shot.sceneIds : shot?.sceneId ? [shot.sceneId] : [];
+    return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
 async function runCommand(command, args) {
     await new Promise((resolve, reject) => {
         const child = spawn(command, args, { stdio: "inherit" });
         child.once("error", (error) => reject(error.code === "ENOENT" ? new Error(`找不到 FFmpeg：${command}，请在 .codex/.env 配置 FFMPEG_PATH`) : error));
         child.once("exit", (code, signal) => code === 0 ? resolve() : reject(new Error(`FFmpeg 尾帧提取失败（${signal ? `signal ${signal}` : `exit ${code}`}）`)));
+    });
+}
+
+async function probeDuration(command, inputPath) {
+    return new Promise((resolve, reject) => {
+        let output = "", error = "";
+        const child = spawn(command, ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", inputPath], { stdio: ["ignore", "pipe", "pipe"] });
+        child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk) => output += chunk); child.stderr.on("data", (chunk) => error += chunk);
+        child.once("error", (reason) => reject(reason.code === "ENOENT" ? new Error(`找不到 FFprobe：${command}`) : reason));
+        child.once("exit", (code) => {
+            if (code !== 0) return reject(new Error(`FFprobe 读取实际时长失败：${error.trim()}`));
+            const value = Number(output.trim());
+            return value > 0 ? resolve(Number(value.toFixed(3))) : reject(new Error(`FFprobe 返回无效时长：${output.trim()}`));
+        });
     });
 }
 

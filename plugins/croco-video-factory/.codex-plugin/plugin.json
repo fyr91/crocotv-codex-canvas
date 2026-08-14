@@ -1,7 +1,7 @@
 {
   "name": "croco-video-factory",
-  "version": "0.1.1",
-  "description": "Run the CrocoTV local canvas and its P1-P10 educational video production workflow from Codex.",
+  "version": "0.1.2",
+  "description": "Run the CrocoTV local canvas and its P1-P8 educational video production workflow from Codex.",
   "author": {
     "name": "fyr91",
     "url": "https://github.com/fyr91"
@@ -13,7 +13,7 @@
   "interface": {
     "displayName": "Croco Video Factory",
     "shortDescription": "Operate CrocoTV and produce educational videos locally.",
-    "longDescription": "Bundles the CrocoTV Canvas MCP server with the Croco Video Factory P1-P10 workflow, character sync, speech, prompt optimization, content review, and continuous-learning skills.",
+    "longDescription": "Bundles the CrocoTV Canvas MCP server with one shared Croco Video Factory P1-P8 workflow, Canvas and native atomic capabilities, character sync, speech, prompt optimization, content review, and continuous-learning skills.",
     "developerName": "fyr91",
     "category": "Productivity",
     "capabilities": ["Canvas", "Local Generation", "Video Production"],

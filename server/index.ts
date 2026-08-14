@@ -107,7 +107,7 @@ app.post("/api/canvas/projects/:id/run-nodes", asyncHandler(async (request, resp
     const job = await createCanvasRunJob({
       projectId: param(request.params.id),
       nodeIds: Array.isArray(request.body?.nodeIds) ? request.body.nodeIds : [],
-      concurrency: Number(request.body?.concurrency) || 1,
+      concurrency: request.body?.concurrency == null ? undefined : Number(request.body.concurrency),
       originClientId: originClientId || "mcp",
     });
     return response.status(202).json(job);
@@ -115,12 +115,12 @@ app.post("/api/canvas/projects/:id/run-nodes", asyncHandler(async (request, resp
   response.json(await runCanvasConfigNodes({
     projectId: param(request.params.id),
     configNodeIds: Array.isArray(request.body?.nodeIds) ? request.body.nodeIds : [],
-    concurrency: Number(request.body?.concurrency) || 1,
+    concurrency: request.body?.concurrency == null ? undefined : Number(request.body.concurrency),
     originClientId: originClientId || "canvas-node-runtime",
     remoteOperation: request.header("x-croco-operation-origin") === "mcp",
   }));
 }));
-app.post("/api/canvas/projects/:id/rerun-outputs", asyncHandler(async (request, response) => response.status(202).json(await createCanvasRerunJob({ projectId: param(request.params.id), outputNodeIds: Array.isArray(request.body?.outputNodeIds) ? request.body.outputNodeIds : [], concurrency: Number(request.body?.concurrency) || 1, originClientId: clientId(request) || "mcp" }))));
+app.post("/api/canvas/projects/:id/rerun-outputs", asyncHandler(async (request, response) => response.status(202).json(await createCanvasRerunJob({ projectId: param(request.params.id), outputNodeIds: Array.isArray(request.body?.outputNodeIds) ? request.body.outputNodeIds : [], concurrency: request.body?.concurrency == null ? undefined : Number(request.body.concurrency), originClientId: clientId(request) || "mcp" }))));
 app.get("/api/canvas/run-jobs/:jobId", asyncHandler(async (request, response) => response.json(getCanvasRunJob(param(request.params.jobId)))));
 app.post("/api/canvas/run-jobs/:jobId/cancel", asyncHandler(async (request, response) => response.json(await cancelCanvasRunJob(param(request.params.jobId)))));
 app.post("/api/canvas/projects/:id/verify-video-asr", asyncHandler(async (request, response) => response.json(await verifyCanvasVideoAsr({

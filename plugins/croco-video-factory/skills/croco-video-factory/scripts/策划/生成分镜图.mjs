@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertPngDimensions, fileDataUri, generateRunwareImage, imageDimensionsForAspect, runwareConfig, sameExecutablePath } from "../公共/runware-client.mjs";
+import { assertPngDimensions, fileDataUri, generateRunwareImage, GPT_IMAGE_02_MODEL, imageDimensionsForAspect, NANO_BANANA_LITE_MODEL, runwareConfig, sameExecutablePath } from "../公共/runware-client.mjs";
 
 if (sameExecutablePath(process.argv[1], fileURLToPath(import.meta.url))) {
     try {
@@ -19,7 +19,9 @@ if (sameExecutablePath(process.argv[1], fileURLToPath(import.meta.url))) {
         if (!shot) throw new Error("分镜计划.json 中找不到当前分镜");
         const dimensions = imageDimensionsForAspect(plan.aspectRatio);
         const scenes = await optionalJson(path.join(directory, "场景参考图.json")) || { references: [] };
-        if (shot.sceneDesignRequired !== false && (!shot.sceneId || scenes.sceneId !== shot.sceneId || !(scenes.references || []).length)) throw new Error("当前分镜缺少与分镜计划匹配的已验收场景参考图");
+        const plannedSceneIds = sceneIdsOf(shot);
+        const referencedSceneIds = new Set((scenes.references || []).map((item) => String(item.sceneId || scenes.sceneId || "")).filter(Boolean));
+        if (shot.sceneDesignRequired !== false && (!plannedSceneIds.length || !(scenes.references || []).length || plannedSceneIds.some((sceneId) => !referencedSceneIds.has(sceneId)))) throw new Error("当前分镜缺少与分镜计划 sceneIds 匹配的已验收场景参考图");
         const characters = JSON.parse(await readFile(path.join(directory, "角色参考图.json"), "utf8"));
         const scenePaths = [];
         for (const item of scenes.references || []) {
@@ -31,11 +33,15 @@ if (sameExecutablePath(process.argv[1], fileURLToPath(import.meta.url))) {
         const referenceImages = await Promise.all(referencePaths.map(fileDataUri));
         const outputPath = path.join(directory, `分镜图-第${String(attempt).padStart(2, "0")}次.png`);
         process.loadEnvFile(process.env.CROCO_ENV_FILE || path.join(process.env.CROCOTV_HOME || process.cwd(), ".codex", ".env"));
-        const metadata = await generateRunwareImage({ config: runwareConfig(), prompt: await readFile(path.join(directory, "分镜画面提示词.md"), "utf8"), outputPath, referenceImages, width: dimensions.width, height: dimensions.height });
+        const modelIndex = process.argv.indexOf("--image-model");
+        const model = modelIndex >= 0 ? process.argv[modelIndex + 1] : process.argv.includes("--fast") ? NANO_BANANA_LITE_MODEL : GPT_IMAGE_02_MODEL;
+        const mode = model === NANO_BANANA_LITE_MODEL ? "fast" : "standard";
+        const metadata = await generateRunwareImage({ config: runwareConfig(), model, prompt: await readFile(path.join(directory, "分镜画面提示词.md"), "utf8"), outputPath, referenceImages, width: dimensions.width, height: dimensions.height });
         const actual = await assertPngDimensions(outputPath, dimensions);
-        await writeFile(path.join(directory, `分镜图-第${String(attempt).padStart(2, "0")}次生成.json`), `${JSON.stringify({ ...metadata, aspectRatio: dimensions.aspectRatio, ...actual }, null, 2)}\n`);
+        await writeFile(path.join(directory, `分镜图-第${String(attempt).padStart(2, "0")}次生成.json`), `${JSON.stringify({ ...metadata, mode, aspectRatio: dimensions.aspectRatio, ...actual }, null, 2)}\n`);
         console.log(outputPath);
     } catch (error) { console.error(`错误：${error.message}`); process.exitCode = 1; }
 }
 
 async function optionalJson(filePath) { try { return JSON.parse(await readFile(filePath, "utf8")); } catch (error) { if (error.code === "ENOENT") return null; throw error; } }
+function sceneIdsOf(shot) { const values = Array.isArray(shot?.sceneIds) ? shot.sceneIds : shot?.sceneId ? [shot.sceneId] : []; return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))]; }

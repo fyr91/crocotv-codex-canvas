@@ -70,7 +70,8 @@ export async function runCanvasConfigNodes(input: {
   const nodeIds = normalizedConfigNodeIds(input.configNodeIds);
   const initial = asProject(await readProject(input.projectId));
   validateConfigNodeIds(initial, nodeIds, input.operationId);
-  const concurrency = Math.max(1, Math.min(5, Number(input.concurrency) || 1));
+  const requestedConcurrency = Number(input.concurrency);
+  const concurrency = Math.max(1, Math.min(nodeIds.length, Number.isInteger(requestedConcurrency) && requestedConcurrency > 0 ? requestedConcurrency : nodeIds.length));
   const results = await runWithConcurrency(nodeIds, concurrency, async (configNodeId) => {
     try {
       input.signal?.throwIfAborted();
@@ -150,7 +151,7 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
         metadata: {
           artifactType: "speech-tone-plan",
           targetNodeId: outputIds[0],
-          model: process.env.TTS_TONE_MODEL || "deepseek-v4-flash-260425",
+          model: speechToneModel(),
           prompt: inputs.prompt,
           content: "等待 DeepSeek 生成情景化语气分段…",
           status: "loading",
@@ -428,7 +429,8 @@ function requiredConfig(project: CanvasProject, nodeId: string) { const node = p
 function generationMode(node: CanvasNode): GenerationMode { const value = String(node.metadata?.generationMode || "image"); if (!["text", "image", "video", "audio", "music"].includes(value)) throw new Error(`不支持的生成模式：${value}`); return value as GenerationMode; }
 function nodeText(node: CanvasNode) { return node.type === "text" ? String(node.metadata?.content || node.metadata?.prompt || "").trim() : ""; }
 function mediaKind(node: CanvasNode): "image" | "video" | "audio" | undefined { if (node.type === "image") return "image"; if (node.type === "video") return "video"; if (node.type === "audio" || node.type === "music") return "audio"; return undefined; }
-function normalizeModel(value: string) { const decoded = value.includes("::") ? value.slice(value.indexOf("::") + 2) : value; const aliases: Record<string, string> = { "volc-doubao-turbo": models.volcengineLlm[0], "volc-deepseek-flash": models.volcengineLlm[1], "volc-deepseek-pro": models.volcengineLlm[2], "bigmodel-glm-52": models.bigmodelLlm[0], "bigmodel-glm-5v": models.bigmodelLlm[1], "runware-gemini-pro": models.runwareLlm[0], "runware-gemini-flash": models.runwareLlm[1], "runware-gemini-flash-lite": models.runwareLlm[2], "runware-lite": models.image[0], "runware-nano": models.image[1], "minimax-h3": "minimax-h3", "volc-speech": "volcengine:seed-tts-2.0-expressive", "suno-music": String(models.music) }; return aliases[decoded] || decoded; }
+function normalizeModel(value: string) { const decoded = value.includes("::") ? value.slice(value.indexOf("::") + 2) : value; const aliases: Record<string, string> = { "volc-doubao-turbo": models.volcengineLlm[0], "volc-deepseek-flash": models.volcengineLlm[1], "deepseek-v4-flash-260425": models.volcengineLlm[1], "volc-deepseek-pro": models.volcengineLlm[2], "bigmodel-glm-52": models.bigmodelLlm[0], "bigmodel-glm-5v": models.bigmodelLlm[1], "runware-gemini-pro": models.runwareLlm[0], "runware-gemini-flash": models.runwareLlm[1], "runware-gemini-flash-lite": models.runwareLlm[2], "runware-lite": models.image[0], "runware-nano": models.image[1], "runware-gpt-image-02": models.image[2], "minimax-h3": "minimax-h3", "volc-speech": "volcengine:seed-tts-2.0-expressive", "suno-music": String(models.music) }; return aliases[decoded] || decoded; }
+function speechToneModel() { const configured = process.env.TTS_TONE_MODEL || "deepseek-v4-flash-ga-260731"; return configured === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : configured; }
 function validateModel(mode: GenerationMode, model: string) { if (!model) throw new Error("生成模组必须指定模型"); if (mode === "text" && ![...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(model)) throw new Error(`模型 ${model} 不是可用的文字模型`); if (mode === "image" && !models.image.includes(model)) throw new Error(`模型 ${model} 不是可用的图片模型`); if (mode === "video" && model !== "minimax-h3") throw new Error(`模型 ${model} 不是可用的视频模型`); }
 function textResourceIdsForModel(model: string, inputs: ResolvedInput) { if (models.runwareLlm.includes(model)) return [...inputs.imageIds, ...inputs.videoIds, ...inputs.audioIds]; if (model === "glm-5v-turbo") return [...inputs.imageIds, ...inputs.videoIds]; if (model === "doubao-seed-2-1-turbo-260628") return inputs.imageIds; return []; }
 function generationCount(node: CanvasNode, mode: GenerationMode) { if (mode === "audio") return 1; if (mode === "music") return 2; const value = Number(mode === "video" ? node.metadata?.videoCount : node.metadata?.count); return Math.max(1, Math.min(3, Number.isFinite(value) ? Math.floor(value) : 1)); }

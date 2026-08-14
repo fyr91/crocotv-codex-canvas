@@ -1,31 +1,29 @@
 ---
 name: minimax-video-prompt-optimizer
-description: Optimize MiniMax H3 视频提示词 for T2VA, I2VA, FL2VA, L2VA, and Ref2VA. Use when the user asks for MiniMax 视频提示词优化、H3 提词优化、多模态提示词改写, composing integrated_multimodal_description, overall_soundscape, and non_diegetic_music, aligning keyframes, or defining image, video, and audio reference labels.
+description: Optimize MiniMax H3 视频提示词 with one universal Ref2VA six-section structure across text, keyframe, and full-reference inputs. Use when the user asks for MiniMax 视频提示词优化、H3 提词优化、多模态提示词改写、关键帧对齐，或定义 image、video、audio reference labels.
 ---
 
 # H3 Prompt Writing
 
 ## Workflow
 
-1. Identify the input mode: T2VA, I2VA, FL2VA, L2VA, or full-reference Ref2VA.
-2. For base text/keyframe modes, read `references/base-en.txt` and follow its final prompt structure.
-3. For full-reference mode, read `references/ref-en.txt` and follow its six-section rewrite format.
-4. Preserve the exact field names, section order, labels, and timing notation from the selected guide.
+1. Read `references/ref-en.txt` and always use its Ref2VA six-section rewrite format.
+2. Inspect supplied text, first/last frames, images, videos, and audio only to determine stable reference roles and timeline constraints; do not use them to select another System Prompt or output schema.
+3. Read `references/base-en.txt` only when detailed camera, speaker, dialogue-across-cut, or keyframe-path examples are needed; never copy its three-field output structure.
+4. Preserve the universal field names, section order, stable labels, and timing notation.
 
-## Base Modes
+## Universal Structure
 
-- T2VA: build the full audiovisual timeline from text.
-- I2VA: start from the first frame and develop forward from it.
-- FL2VA: describe the continuous path between the first and last frames.
-- L2VA: infer a plausible opening and converge to the supplied last frame.
+Every task returns, in order:
 
-Use `integrated_multimodal_description`, `overall_soundscape`, and `non_diegetic_music` in the order shown in `references/base-en.txt`.
+- `subject_definitions`
+- `summary`
+- `retention_analysis`
+- `detailed_description`
+- `overall_soundscape`
+- `non_diegetic_music`
 
-## Full-Reference Mode
-
-Ref2VA rewrites use `subject_definitions`, `summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`, and `non_diegetic_music` in that order. Reference labels stay consistent across all sections.
-
-Read `references/ref-en.txt` for label rules, retention analysis, and complete examples.
+Reference labels stay consistent across all sections. A task without a particular media kind omits invented references rather than switching formats.
 
 ## Output Rules
 

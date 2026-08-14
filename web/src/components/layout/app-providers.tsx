@@ -58,7 +58,7 @@ const happyHorseConfig = {
 };
 const localModels: ProviderCatalogModel[] = [
     { id: "volc-doubao-turbo", provider_id: "volcengine", capability: "llm", model_key: "doubao-seed-2-1-turbo-260628", display_name: "豆包 Seed 2.1 Turbo", is_default: true, config: { inputModalities: ["text", "image"] } },
-    { id: "volc-deepseek-flash", provider_id: "volcengine", capability: "llm", model_key: "deepseek-v4-flash-260425", display_name: "DeepSeek V4 Flash", is_default: false, config: { inputModalities: ["text"] } },
+    { id: "volc-deepseek-flash", provider_id: "volcengine", capability: "llm", model_key: "deepseek-v4-flash-ga-260731", display_name: "DeepSeek V4 Flash GA", is_default: false, config: { inputModalities: ["text"] } },
     { id: "volc-deepseek-pro", provider_id: "volcengine", capability: "llm", model_key: "deepseek-v4-pro-260425", display_name: "DeepSeek V4 Pro", is_default: false, config: { inputModalities: ["text"] } },
     { id: "bigmodel-glm-52", provider_id: "bigmodel", capability: "llm", model_key: "glm-5.2", display_name: "GLM 5.2", is_default: false, config: { inputModalities: ["text"] } },
     { id: "bigmodel-glm-5v", provider_id: "bigmodel", capability: "llm", model_key: "glm-5v-turbo", display_name: "GLM 5V Turbo", is_default: false, config: { inputModalities: ["text", "image", "video"] } },
@@ -67,6 +67,7 @@ const localModels: ProviderCatalogModel[] = [
     { id: "runware-gemini-flash-lite", provider_id: "runware", capability: "llm", model_key: "google:gemini@3.1-flash-lite", display_name: "Runware · Gemini 3.1 Flash Lite", is_default: false, config: { inputModalities: ["text", "image", "video", "audio"] } },
     { id: "runware-lite", provider_id: "runware", capability: "image", model_key: "google:nano-banana@2-lite", display_name: "Nano Banana 2 Lite", is_default: true, config: { imageSizePresets, maxInputAssets: 14, supportsPromptOptimize: false, supportsMaskEdit: false, inputModalities: ["text", "image"] } },
     { id: "runware-nano", provider_id: "runware", capability: "image", model_key: "google:4@1", display_name: "Nano Banana", is_default: false, config: { imageSizePresets, maxInputAssets: 14, supportsPromptOptimize: false, supportsMaskEdit: false, inputModalities: ["text", "image"] } },
+    { id: "runware-gpt-image-02", provider_id: "runware", capability: "image", model_key: "openai:gpt-image@2", display_name: "GPT Image 02", is_default: false, config: { imageSizePresets, maxInputAssets: 8, supportsPromptOptimize: false, supportsMaskEdit: false, inputModalities: ["text", "image"] } },
     { id: "minimax-h3", provider_id: "minimax_h3", capability: "video", model_key: "minimax-h3", display_name: "MiniMax H3", is_default: true, config: { capabilitiesSource: "minimax-h3-fixed-v3", maxPromptChars: 20_000, videoInputModes: ["text", "firstFrame", "multimodal"], videoSettingsByInputMode: { text: h3Settings, firstFrame: h3Settings, multimodal: h3Settings }, inputModalities: ["text", "image", "audio"] } },
     { id: "happyhorse", provider_id: "happyhorse", capability: "video", model_key: "happyhorse", display_name: "Happy Horse", is_default: false, config: happyHorseConfig },
     { id: "volc-speech", provider_id: "volcengine", capability: "speech", model_key: "volcengine:seed-tts-2.0-expressive", display_name: "火山引擎 Seed-TTS 2.0", is_default: true, config: { inputModalities: ["text"] } },

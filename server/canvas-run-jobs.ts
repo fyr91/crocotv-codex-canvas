@@ -44,7 +44,6 @@ export async function createCanvasRunJob(input: {
   originClientId: string;
   targetOutputNodeIds?: Record<string, string[]>;
 }) {
-  const concurrency = Math.max(1, Math.min(5, Number(input.concurrency) || 1));
   const jobId = randomUUID();
   const queued = await queueCanvasConfigNodes({
     projectId: input.projectId,
@@ -53,6 +52,8 @@ export async function createCanvasRunJob(input: {
     originClientId: input.originClientId,
     targetOutputNodeIds: input.targetOutputNodeIds,
   });
+  const requestedConcurrency = Number(input.concurrency);
+  const concurrency = Math.max(1, Math.min(queued.nodeIds.length, Number.isInteger(requestedConcurrency) && requestedConcurrency > 0 ? requestedConcurrency : queued.nodeIds.length));
   const job: CanvasRunJob = {
     id: jobId,
     projectId: input.projectId,

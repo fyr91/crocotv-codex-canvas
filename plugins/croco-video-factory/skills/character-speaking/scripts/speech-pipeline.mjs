@@ -131,6 +131,7 @@ export async function optimizeTone(input, dependencies = {}) {
                     { role: "system", content: input.systemPrompt },
                     { role: "user", content: JSON.stringify(userData) },
                 ],
+                thinking: { type: "enabled" },
                 response_format: { type: "json_object" },
                 stream: false,
             }),
@@ -179,9 +180,10 @@ async function responseError(response, fallback) {
 }
 
 export function configFromEnv(env = process.env) {
+    const configuredArkModel = String(env.TTS_TONE_MODEL || "deepseek-v4-flash-ga-260731").trim();
     const config = {
         arkApiKey: String(env.ARK_API_KEY || "").trim(),
-        arkModel: String(env.TTS_TONE_MODEL || "deepseek-v4-flash-260425").trim(),
+        arkModel: configuredArkModel === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : configuredArkModel,
         arkBaseUrl: String(env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").trim(),
         doubaoApiKey: String(env.DOUBAO_TTS_API_KEY || "").trim(),
         doubaoResourceId: String(env.DOUBAO_TTS_RESOURCE_ID || "").trim(),
@@ -282,7 +284,7 @@ export async function runSpeechPipeline(input, dependencies = {}) {
     const sectionId = uuid();
     let temporaryPath;
     try {
-        onProgress("正在使用 DeepSeek V4 Flash 优化语气…");
+        onProgress("正在使用 DeepSeek V4 Flash GA 优化语气…");
         const segments = await optimizeTone(input, dependencies);
         onProgress(`语气结果校验通过，共 ${segments.length} 段。`);
         const pcmChunks = [];

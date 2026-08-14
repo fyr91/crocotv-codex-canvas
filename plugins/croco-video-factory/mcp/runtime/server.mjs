@@ -32100,6 +32100,7 @@ var init_stdio2 = __esm({
 
 // plugins/croco-video-factory/mcp/server.ts
 var server_exports = {};
+import { createHash, randomUUID } from "node:crypto";
 import { closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import { spawn } from "node:child_process";
@@ -32153,7 +32154,7 @@ async function prepareGenerationNodes(projectId, inputTasks) {
     const toneMetadata = {
       artifactType: "speech-tone-plan",
       targetNodeId: audioNodeId,
-      model: process.env.TTS_TONE_MODEL || "deepseek-v4-flash-260425",
+      model: speechToneModel(),
       prompt: JSON.stringify({ currentText: task.prompt, voiceDirection: String(task.params.direction || "") }, null, 2),
       content: "\u7B49\u5F85 DeepSeek \u751F\u6210\u60C5\u666F\u5316\u8BED\u6C14\u5206\u6BB5\u2026",
       status: "loading",
@@ -32227,11 +32228,6 @@ async function completeGenerationNode(projectId, nodeId, task, toneNodeId) {
 async function failGenerationNode(projectId, nodeId, error51) {
   await applyOperations(projectId, [{ op: "update_node", nodeId, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, errorDetails: error51 instanceof Error ? error51.message : "\u751F\u6210\u5931\u8D25" } } }]).catch(() => void 0);
 }
-function generationConcurrency() {
-  const value = Number(process.env.GENERATION_MAX_CONCURRENCY);
-  if (!Number.isInteger(value) || value < 1) throw new Error("\u8BF7\u5728 .codex/.env \u4E2D\u586B\u5199\u6B63\u6574\u6570 GENERATION_MAX_CONCURRENCY");
-  return Math.min(5, value);
-}
 async function runWithConcurrency(items, limit, worker) {
   const results = new Array(items.length);
   let next = 0;
@@ -32264,6 +32260,18 @@ async function runGeneration(capability, prompt, model, voiceId, params, context
   const resources = (await api("/api/generate/music", { method: "POST", body: { prompt, model: model || "", params } })).resources;
   if (!resources[0]) throw new Error("\u97F3\u4E50\u751F\u6210\u6CA1\u6709\u8FD4\u56DE\u8D44\u6E90");
   return { resource: resources[0] };
+}
+async function importWorkspaceResource(filePath, title) {
+  await ensureLocalService();
+  const source = await allowedWorkspaceFile(filePath);
+  const bytes = await readFile(source);
+  const form = new FormData();
+  form.append("file", new Blob([bytes], { type: mimeFromPath(source) }), title || path2.basename(source));
+  const response = await fetch(`${apiOrigin}/api/resources`, { method: "POST", headers: { "X-Croco-Client-Id": mcpClientId }, body: form });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(payload.error || `\u8D44\u6E90\u5BFC\u5165\u5931\u8D25\uFF08${response.status}\uFF09`));
+  if (!payload.id || !payload.url || !payload.mimeType) throw new Error("\u8D44\u6E90\u5BFC\u5165\u54CD\u5E94\u7F3A\u5C11 id\u3001url \u6216 mimeType");
+  return payload;
 }
 async function applyOperations(projectId, operations, expectedVersion) {
   return api(`/api/canvas/projects/${encodeURIComponent(projectId)}/operations`, { method: "POST", body: { operations, expectedVersion } });
@@ -32369,6 +32377,10 @@ function toolResult(value) {
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+function speechToneModel() {
+  const configured = process.env.TTS_TONE_MODEL || "deepseek-v4-flash-ga-260731";
+  return configured === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : configured;
+}
 function findPluginRoot(start) {
   let current = path2.resolve(start);
   while (true) {
@@ -32397,7 +32409,7 @@ var init_server3 = __esm({
     webOrigin = process.env.CROCO_LOCAL_WEB_ORIGIN || "http://localhost:3000";
     mcpClientId = `mcp-${process.pid}`;
     server = new McpServer({ name: "crocotv", version: bundleManifest.mcpVersion }, {
-      instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic multi-node changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Use canvas_create_project when a new canvas is requested. For new generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. Generated or imported files must enter the local resource library before being placed on a canvas."
+      instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic multi-node changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Use canvas_create_project when a new canvas is requested. For new Canvas-provider generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. When Codex built-in ImageGen has already produced a GPT image, use canvas_place_imagegen_result to import it and preserve Prompt/Reference provenance without fabricating a provider Config. Generated or imported files must enter the local resource library before being placed on a canvas."
     });
     positionSchema = external_exports.object({ x: external_exports.number(), y: external_exports.number() });
     metadataSchema = external_exports.record(external_exports.string(), external_exports.unknown());
@@ -32526,23 +32538,132 @@ var init_server3 = __esm({
       description: "Copy a file from this repository into the unified local resource library. The source file must be inside the CrocoTV workspace.",
       inputSchema: { filePath: external_exports.string().min(1), title: external_exports.string().max(180).optional() },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
-    }, async ({ filePath, title }) => {
+    }, async ({ filePath, title }) => toolResult(await importWorkspaceResource(filePath, title)));
+    server.registerTool("canvas_place_imagegen_result", {
+      description: "Place a GPT image already generated by Codex built-in ImageGen onto Canvas without pretending it came from a Canvas provider Config. Imports the workspace image, creates or reuses the exact Prompt Text node, creates one provenance-rich Image node, and atomically connects the Prompt plus ordered image references to that Image. Do not use this for P5 standard Storyboard generation or when the user explicitly requests generation on Canvas; build an openai:gpt-image@2 Config graph and call canvas_run_nodes instead.",
+      inputSchema: {
+        projectId: external_exports.string().uuid(),
+        imageFilePath: external_exports.string().min(1),
+        prompt: external_exports.string().min(1).max(2e4),
+        promptNodeId: external_exports.string().min(1).max(80).optional(),
+        referenceNodeIds: external_exports.array(external_exports.string().min(1).max(80)).max(8).default([]),
+        title: external_exports.string().min(1).max(180).optional(),
+        position: positionSchema.optional(),
+        expectedVersion: external_exports.number().int().positive().optional(),
+        factoryRunId: external_exports.string().min(1).max(80).optional(),
+        stage: external_exports.string().min(1).max(20).optional(),
+        shotId: external_exports.string().min(1).max(80).optional(),
+        artifactType: external_exports.string().min(1).max(80).optional(),
+        layoutSection: external_exports.string().min(1).max(80).optional(),
+        layoutOrder: external_exports.number().finite().optional()
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+    }, async ({ projectId, imageFilePath, prompt, promptNodeId: requestedPromptNodeId, referenceNodeIds, title, position, expectedVersion, artifactType, ...productionMetadata }) => {
       await ensureLocalService();
-      const source = await allowedWorkspaceFile(filePath);
-      const bytes = await readFile(source);
-      const form = new FormData();
-      form.append("file", new Blob([bytes], { type: mimeFromPath(source) }), title || path2.basename(source));
-      const response = await fetch(`${apiOrigin}/api/resources`, { method: "POST", headers: { "X-Croco-Client-Id": mcpClientId }, body: form });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(payload.error || `\u8D44\u6E90\u5BFC\u5165\u5931\u8D25\uFF08${response.status}\uFF09`));
-      return toolResult(payload);
+      const project = await api(`/api/projects/${encodeURIComponent(projectId)}`);
+      const nodesById = new Map(project.nodes.map((node) => [node.id, node]));
+      const normalizedPrompt = prompt.trim();
+      if (requestedPromptNodeId) {
+        const promptNode2 = nodesById.get(requestedPromptNodeId);
+        if (!promptNode2) throw new Error(`Prompt Text \u8282\u70B9\u4E0D\u5B58\u5728\uFF1A${requestedPromptNodeId}`);
+        if (promptNode2.type !== "text") throw new Error(`Prompt \u8282\u70B9\u5FC5\u987B\u662F Text Node\uFF1A${requestedPromptNodeId}`);
+        const existingPrompt = String(promptNode2.metadata?.content || "").trim();
+        if (existingPrompt !== normalizedPrompt) throw new Error("promptNodeId \u7684 Text \u5185\u5BB9\u4E0E\u4F20\u5165 prompt \u4E0D\u4E00\u81F4\uFF1B\u8BF7\u5148\u786E\u8BA4\u6216\u521B\u5EFA\u6B63\u786E\u7684 Prompt Text");
+      }
+      for (const referenceNodeId of referenceNodeIds) {
+        const referenceNode = nodesById.get(referenceNodeId);
+        if (!referenceNode) throw new Error(`\u53C2\u8003\u56FE\u8282\u70B9\u4E0D\u5B58\u5728\uFF1A${referenceNodeId}`);
+        if (referenceNode.type !== "image") throw new Error(`ImageGen \u53C2\u8003\u8282\u70B9\u5FC5\u987B\u662F Image Node\uFF1A${referenceNodeId}`);
+      }
+      const imageSource = await allowedWorkspaceFile(imageFilePath);
+      const sourceMimeType = mimeFromPath(imageSource);
+      if (!sourceMimeType.startsWith("image/")) throw new Error(`ImageGen \u843D\u56FE\u53EA\u63A5\u53D7\u56FE\u7247\u6587\u4EF6\uFF0C\u5B9E\u9645\u4E3A ${sourceMimeType}`);
+      const resource = await importWorkspaceResource(imageFilePath, title);
+      const promptNodeId = requestedPromptNodeId || randomUUID();
+      const imageNodeId = randomUUID();
+      const promptNode = requestedPromptNodeId ? nodesById.get(requestedPromptNodeId) : void 0;
+      const promptPosition = position || promptNode?.position || { x: 160, y: 160 };
+      const imagePosition = {
+        x: promptPosition.x + (promptNode?.width || 320) + 96,
+        y: promptPosition.y
+      };
+      const promptSha256 = createHash("sha256").update(normalizedPrompt).digest("hex");
+      const sourceNodeIds = [promptNodeId, ...referenceNodeIds];
+      const sharedMetadata = Object.fromEntries(Object.entries(productionMetadata).filter(([, value]) => value !== void 0));
+      const imageTitle = title || path2.parse(resource.name).name || "GPT ImageGen \u56FE\u7247";
+      const operations = [];
+      if (!requestedPromptNodeId) {
+        operations.push({
+          op: "add_node",
+          node: {
+            id: promptNodeId,
+            type: "text",
+            title: `${imageTitle} \xB7 Prompt`,
+            position: promptPosition,
+            metadata: {
+              content: normalizedPrompt,
+              contentSha256: promptSha256,
+              status: "success",
+              artifactType: "image-prompt",
+              sourceNodeIds: referenceNodeIds,
+              ...sharedMetadata
+            }
+          }
+        });
+      }
+      operations.push({
+        op: "add_node",
+        node: {
+          id: imageNodeId,
+          type: "image",
+          title: imageTitle,
+          position: imagePosition,
+          metadata: {
+            content: resource.url,
+            storageKey: resource.id,
+            mimeType: resource.mimeType,
+            bytes: resource.size,
+            status: "success",
+            generationState: "ready",
+            artifactType: artifactType || "imagegen-imported-image",
+            generationRoute: "codex-built-in-imagegen",
+            requestedRoute: "gpt",
+            actualModel: "codex-imagegen",
+            sourceKind: "imported-generation",
+            sourcePromptNodeId: promptNodeId,
+            sourceNodeIds,
+            orderedReferenceNodeIds: referenceNodeIds,
+            prompt: normalizedPrompt,
+            promptSha256,
+            inputSnapshot: {
+              promptNodeId,
+              promptSha256,
+              orderedReferenceNodeIds: referenceNodeIds,
+              route: "codex-built-in-imagegen"
+            },
+            ...sharedMetadata
+          }
+        }
+      });
+      operations.push({ op: "connect", from: promptNodeId, to: imageNodeId });
+      operations.push(...referenceNodeIds.map((referenceNodeId) => ({ op: "connect", from: referenceNodeId, to: imageNodeId })));
+      const updated = await applyOperations(projectId, operations, expectedVersion);
+      return toolResult({
+        projectId,
+        promptNodeId,
+        imageNodeId,
+        createdPromptNode: !requestedPromptNodeId,
+        orderedReferenceNodeIds: referenceNodeIds,
+        resource,
+        projectVersion: updated.project?.version
+      });
     });
     server.registerTool("canvas_run_nodes", {
-      description: "Submit one or more existing Canvas generation-module nodes as an asynchronous run job through the same local execution path used by the UI. Video config nodes use MiniMax H3. The claimed config nodes are immediately locked and glow green while MCP owns them; generated results retain ordinary Canvas connections to the exact referenced input nodes. Poll canvas_get_run_status with the returned jobId.",
+      description: "Submit one or more existing Canvas generation-module nodes as an asynchronous run job through the same local execution path used by the UI. When concurrency is omitted, every selected node starts concurrently; pass a lower value only when the user explicitly requests throttling. Canvas retains every configured model for direct user operation; Croco Video Factory applies its narrower stage routing when it constructs nodes. Image config nodes support connected multimodal image references, including Nano Banana Lite, Nano Banana, and GPT Image 02; video config nodes use MiniMax H3. The claimed config nodes are immediately locked and glow green while MCP owns them; generated results retain ordinary Canvas connections to the exact referenced input nodes. Poll canvas_get_run_status with the returned jobId.",
       inputSchema: {
         projectId: external_exports.string().uuid(),
         nodeIds: external_exports.array(external_exports.string().min(1).max(80)).min(1).max(20),
-        concurrency: external_exports.number().int().min(1).max(5).optional()
+        concurrency: external_exports.number().int().min(1).max(20).optional()
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
     }, async ({ projectId, nodeIds, concurrency }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/run-nodes`, {
@@ -32560,8 +32681,8 @@ var init_server3 = __esm({
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     }, async ({ jobId }) => toolResult(await api(`/api/canvas/run-jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" })));
     server.registerTool("canvas_rerun_outputs", {
-      description: "Rerun existing generated result nodes in place through their original connected Config nodes. Node IDs and graph positions are preserved; poll canvas_get_run_status with the returned jobId.",
-      inputSchema: { projectId: external_exports.string().uuid(), outputNodeIds: external_exports.array(external_exports.string().min(1).max(80)).min(1).max(20), concurrency: external_exports.number().int().min(1).max(5).optional() },
+      description: "Rerun existing generated result nodes in place through their original connected Config nodes. When concurrency is omitted, every independent selected output reruns concurrently. Node IDs and graph positions are preserved; poll canvas_get_run_status with the returned jobId.",
+      inputSchema: { projectId: external_exports.string().uuid(), outputNodeIds: external_exports.array(external_exports.string().min(1).max(80)).min(1).max(20), concurrency: external_exports.number().int().min(1).max(20).optional() },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
     }, async ({ projectId, outputNodeIds, concurrency }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/rerun-outputs`, { method: "POST", body: { outputNodeIds, concurrency } })));
     server.registerTool("canvas_verify_video_asr", {
@@ -32624,13 +32745,13 @@ var init_server3 = __esm({
       description: "Legacy direct batch generation that does not construct reproducible generation-module graphs. Prefer creating connected Config nodes and calling canvas_run_nodes. This tool remains only for compatibility with existing result-node regeneration.",
       inputSchema: {
         projectId: external_exports.string().uuid(),
-        concurrency: external_exports.number().int().min(1).max(5).optional(),
+        concurrency: external_exports.number().int().min(1).max(20).optional(),
         tasks: external_exports.array(generationTaskSchema).min(1).max(20)
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
     }, async ({ projectId, concurrency, tasks }) => {
       const prepared = await prepareGenerationNodes(projectId, tasks);
-      const limit = Math.min(prepared.tasks.length, concurrency || generationConcurrency());
+      const limit = Math.min(prepared.tasks.length, concurrency || prepared.tasks.length);
       const results = await runWithConcurrency(prepared.tasks, limit, async (task, index) => {
         const nodeId = prepared.nodeIds[index];
         try {

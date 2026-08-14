@@ -1,4 +1,4 @@
 interface:
   display_name: "MiniMax 视频提示词优化"
-  short_description: "将多模态创意优化为 MiniMax H3 五种模式的视频提示词"
+  short_description: "用通用 Ref2VA 六段结构优化 MiniMax H3 视频提示词"
   default_prompt: "使用 $minimax-video-prompt-optimizer 将这份多模态需求优化为 MiniMax H3 视频提示词。"

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Mp3Encoder } from "@breezystack/lamejs";
 import { addResource, fileSize, writeGenerated } from "./storage";
 
+const deepSeekV4FlashModel = "deepseek-v4-flash-ga-260731";
+
 const systemPrompt = `你负责把一段中文正文按局部表达方式拆分为可分别合成语音的连续片段。用户消息是一个 JSON 对象，只包含 currentText 与 voiceDirection。
 
 你的任务：
@@ -30,7 +32,8 @@ export type SpeechGenerationProgress = {
 export async function generateSpeech(input: { content: string; voiceId: string; direction?: string }, onProgress?: (progress: SpeechGenerationProgress) => void | Promise<void>) {
   if (!input.content.trim()) throw new Error("语音正文不能为空");
   if (!input.voiceId.trim()) throw new Error("请从角色目录选择一个已有角色");
-  const toneModel = process.env.TTS_TONE_MODEL || process.env.ARK_MODEL || "doubao-seed-2-1-turbo-260628";
+  const configuredToneModel = process.env.TTS_TONE_MODEL || deepSeekV4FlashModel;
+  const toneModel = configuredToneModel === "deepseek-v4-flash-260425" ? deepSeekV4FlashModel : configuredToneModel;
   let failedStage: "tone" | "synthesis" | "saving" = "tone";
   try {
     await onProgress?.({ stage: "tone", label: "DeepSeek 正在优化语气", toneModel });
@@ -66,7 +69,7 @@ async function optimizeTone(content: string, direction: string, model: string) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: JSON.stringify({ currentText: content, voiceDirection: direction, ...(feedback ? { validationFeedback: feedback } : {}) }) }], response_format: { type: "json_object" }, stream: false }), signal: AbortSignal.timeout(180_000),
+      body: JSON.stringify({ model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: JSON.stringify({ currentText: content, voiceDirection: direction, ...(feedback ? { validationFeedback: feedback } : {}) }) }], thinking: { type: "enabled" }, response_format: { type: "json_object" }, stream: false }), signal: AbortSignal.timeout(180_000),
     });
     if (!response.ok) throw new Error(`豆包语气优化失败（${response.status}）`);
     const payload = await response.json() as any;

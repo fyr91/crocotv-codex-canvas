@@ -16,9 +16,9 @@ description: Use when a user asks a character, Voice ID, 鳄鱼爸爸, or person
 
 Seed-TTS 2.0 Expressive 默认使用 1.25× 语速，对应请求字段 `speech_rate: 25`。调用方不需要额外传 speed 参数。
 
-语气优化模型使用独立配置 `TTS_TONE_MODEL`，默认 `deepseek-v4-flash-260425`；不得复用 Storyboard 或其他 Ark 工作流的 `ARK_MODEL`。该模型使用 `json_object` 返回语气分段，应用层必须逐字符校验原文和字段结构；校验失败时最多反馈重试 3 次，只有通过后才可进入 TTS。
+语气优化模型使用独立配置 `TTS_TONE_MODEL`，默认正式版 `deepseek-v4-flash-ga-260731`；不得复用 Storyboard 或其他 Ark 工作流的 `ARK_MODEL`。旧值 `deepseek-v4-flash-260425` 自动归一到正式版。请求必须显式传入 `thinking: { type: "enabled" }`，并使用 `json_object` 返回语气分段；应用层必须逐字符校验原文和字段结构，校验失败时最多反馈重试 3 次，只有通过后才可进入 TTS。
 
-批量生成由调用方并行启动单条语音命令，不使用供应商 Batch API；并发上限读取项目 `.codex/.env` 的 `GENERATION_MAX_CONCURRENCY`，缺失或不是正整数时停止。一个任务从语气优化开始，到 MP3 落盘或失败时释放并发槽位；同一条语音内部的分段按原顺序依次生成，不得并发。
+批量生成由调用方同时启动所有互不依赖的单条语音命令，不使用供应商 Batch API，不设置 Skill 级并发上限。一个任务从语气优化开始，到 MP3 落盘或失败时结束；同一条语音内部的分段按原顺序依次生成，不得并发。
 
 ## 工作流程
 

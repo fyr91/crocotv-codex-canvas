@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+export const NANO_BANANA_LITE_MODEL = "google:nano-banana@2-lite";
+export const GPT_IMAGE_02_MODEL = "openai:gpt-image@2";
+export const CROCO_FLOW_IMAGE_MODELS = [NANO_BANANA_LITE_MODEL, GPT_IMAGE_02_MODEL];
+
 export function sameExecutablePath(argvPath, modulePath) {
     return Boolean(argvPath) && path.resolve(argvPath).normalize("NFC") === modulePath.normalize("NFC");
 }
@@ -15,10 +19,14 @@ export function runwareConfig(env = process.env) {
 export function buildRunwareImageRequest(input, uuid) {
     const references = input.referenceImages || [];
     const hasDimensions = Number.isInteger(input.width) && input.width > 0 && Number.isInteger(input.height) && input.height > 0;
+    const model = String(input.model || NANO_BANANA_LITE_MODEL);
+    if (!CROCO_FLOW_IMAGE_MODELS.includes(model)) throw new Error(`Croco Video Factory 图像路由不支持模型：${model}`);
     return {
-        taskType: "imageInference", taskUUID: uuid, model: "google:nano-banana@2-lite", positivePrompt: input.prompt,
+        taskType: "imageInference", taskUUID: uuid, model, positivePrompt: input.prompt,
         deliveryMethod: "sync", outputType: "URL", outputFormat: "PNG", outputQuality: 90, numberResults: 1, includeCost: true,
-        safety: { checkContent: true },
+        ...(model === GPT_IMAGE_02_MODEL
+            ? { providerSettings: { openai: { quality: "auto", moderation: "low" } } }
+            : { safety: { checkContent: true } }),
         ...(hasDimensions ? { width: input.width, height: input.height } : references.length ? { resolution: "1K" } : {}),
         ...(references.length ? { inputs: { referenceImages: references } } : {}),
     };
@@ -30,7 +38,7 @@ export function imageDimensionsForAspect(aspectRatio) {
     if (ratio === "3:4") return { aspectRatio: ratio, width: 896, height: 1200 };
     if (ratio === "4:3") return { aspectRatio: ratio, width: 1200, height: 896 };
     if (ratio === "16:9") return { aspectRatio: ratio, width: 1376, height: 768 };
-    throw new Error(`Nano Banana Lite 不支持项目画幅：${ratio}`);
+    throw new Error(`Croco Video Factory 图像路由不支持项目画幅：${ratio}`);
 }
 
 export async function assertPngDimensions(filePath, expected) {
@@ -63,7 +71,7 @@ export async function generateRunwareImage(input, dependencies = {}) {
     const temporary = `${input.outputPath}.${process.pid}.tmp`;
     await writeFile(temporary, Buffer.from(await image.arrayBuffer()));
     await rename(temporary, input.outputPath);
-    return { taskUUID: uuid, imageUUID: item.imageUUID || null, seed: item.seed ?? null, cost: Number(item.cost) || 0, promptSha256: createHash("sha256").update(input.prompt).digest("hex") };
+    return { model: request.model, taskUUID: uuid, imageUUID: item.imageUUID || null, seed: item.seed ?? null, cost: Number(item.cost) || 0, promptSha256: createHash("sha256").update(input.prompt).digest("hex") };
 }
 
 async function parsePayload(response) {

@@ -7,7 +7,7 @@ import { getSunoCallbackUrl } from "./suno-callback";
 import { createModelAssetLease, type ModelAssetLease } from "./model-asset-url";
 
 export const models = {
-  volcengineLlm: ["doubao-seed-2-1-turbo-260628", "deepseek-v4-flash-260425", "deepseek-v4-pro-260425"],
+  volcengineLlm: ["doubao-seed-2-1-turbo-260628", "deepseek-v4-flash-ga-260731", "deepseek-v4-pro-260425"],
   bigmodelLlm: ["glm-5.2", "glm-5v-turbo"],
   runwareLlm: ["google:gemini@3.1-pro", "google:gemini@3-flash", "google:gemini@3.1-flash-lite"],
   image: ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2"],
@@ -16,7 +16,8 @@ export const models = {
 };
 
 export async function generateText(prompt: string, requestedModel?: string, inputResourceIds: string[] = [], inputDataUrls: string[] = [], systemPrompt = "") {
-  const logicalModel = requestedModel && [...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(requestedModel) ? requestedModel : models.volcengineLlm[0];
+  const normalizedRequestedModel = requestedModel === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : requestedModel;
+  const logicalModel = normalizedRequestedModel && [...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(normalizedRequestedModel) ? normalizedRequestedModel : models.volcengineLlm[0];
   const channel = models.runwareLlm.includes(logicalModel) ? "runware" : models.bigmodelLlm.includes(logicalModel) ? "bigmodel" : "volcengine";
   const apiKey = required(channel === "runware" ? "RUNWARE_API_KEY" : channel === "bigmodel" ? "BIGMODEL_API_KEY" : "ARK_API_KEY");
   const baseUrl = (channel === "runware" ? process.env.RUNWARE_BASE_URL || "https://api.runware.ai/v1" : channel === "bigmodel" ? process.env.BIGMODEL_BASE_URL || "https://open.bigmodel.cn/api/paas/v4" : process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
@@ -45,7 +46,7 @@ export async function generateText(prompt: string, requestedModel?: string, inpu
       : [{ role: "user", content }];
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages, stream: false }),
+      body: JSON.stringify({ model, messages, ...(logicalModel === "deepseek-v4-flash-ga-260731" ? { thinking: { type: "enabled" } } : {}), stream: false }),
       signal: AbortSignal.timeout(420_000),
     });
     const channelLabel = channel === "runware" ? "Runware" : channel === "bigmodel" ? "智谱 BigModel" : "火山引擎 Ark";
@@ -250,7 +251,7 @@ function mediaContent(mimeType: string, dataUrl: string) {
 function resolveLlmDeployment(model: string) {
   const envByModel: Record<string, string> = {
     "doubao-seed-2-1-turbo-260628": "ARK_DOUBAO_TURBO_MODEL",
-    "deepseek-v4-flash-260425": "ARK_DEEPSEEK_V4_FLASH_MODEL",
+    "deepseek-v4-flash-ga-260731": "ARK_DEEPSEEK_V4_FLASH_MODEL",
     "deepseek-v4-pro-260425": "ARK_DEEPSEEK_V4_PRO_MODEL",
     "glm-5.2": "BIGMODEL_GLM_52_MODEL",
     "glm-5v-turbo": "BIGMODEL_GLM_5V_MODEL",

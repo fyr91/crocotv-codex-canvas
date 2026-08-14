@@ -2,36 +2,30 @@
 
 ## 契约边界
 
-本契约只定义[固定 P1–P10 制作流程](执行后端选择规范.md)的产物如何在 Canvas 中执行、保存、连接和布局，不定义新的生产阶段。每个节点必须对应真实输入、执行配置、结果、快照或验收记录；不得创建只模拟进度的节点。Canvas 与 Skill 原生后端的阶段产物语义必须一致。
+本契约只定义[唯一 P1–P8 流程](执行后端选择规范.md)的产物如何在 Canvas 中保存、连接和布局。每个节点必须是真实输入、System Prompt、执行 Config、Result、快照、Gate、验收或用户 Comment；不得用节点模拟研究、验证或执行进度。
 
-## 分组模型
+## 分组与列
 
-画布的所有列都复用现有 `canvas_upsert_shot_column` 和 `groupKind: shot-column`，不新增 Group 类型。通过 `shotId` 区分三种语义角色：
+继续复用 `groupKind: shot-column`，不新增 Group 类型：
 
-| Group | 用途 | 关键标识 |
+| Group | 用途 | 标识 |
 |---|---|---|
-| 项目公共列 | P1–P3 的全局简报、脚本、角色、场景和风格产物 | `shotId: project`、`groupKind: shot-column` |
-| 正式分镜列 | 按分镜从左到右排列，纵向放置该分镜的 P2–P5 来源、P4 音频、P7 Prompt、P8 Video 和 P9 验收 | `shotId: shot-*`、`groupKind: shot-column` |
-| Pre-roll 列 | 承载不属于单一正式分镜的 P6 真实执行图 | `shotId: pre-roll`、`groupKind: shot-column`；子节点记录 `stage: P6` |
+| 项目公共列 | P1 简报、P2 剧本链、P3 公共资产、P4 导演总纲 | `shotId: project` |
+| 正式分镜列 | P4 确立后，一个 Storyboard Unit 一列；可跨不同 `sceneId` | `shotId: shot-*` |
 
-正式分镜列是最终主布局：一个分镜一列，包含该分镜的文案、角色、场景、音频、Storyboard、Prompt、Video、首中尾帧和验收。节点创建时立即进入目标列，不得生成后再依赖手工整理。Comment 不建立连接，但占据正常布局空间。
+正式分镜列按 `shotOrder` 从左到右；列内纵向放置 P4 文字分镜、P5 Storyboard、P6 Prompt、P8 Config/Video 和综合评估 Comment/metadata。同一 `shotId` 的多个 `generationSegmentId` 依次放在同一列。P3 角色/场景资产作为统一资源输入连接到需要它们的列，不复制本地资源文件。
 
-## 阶段与布局分区
+## 阶段布局
 
 | 阶段 | 典型产物 | `layoutSection` / 默认顺序 |
 |---|---|---|
-| P1 | 需求、项目、角色索引 | `project` / 10 |
-| P2 | 事实、大纲、文案、最终脚本 | `script` / 20 |
-| P3 | 角色、NPC、场景、风格与图像验收 | `visual-definition` / 30 |
-| P4 | 语气优化、Speech Config、Audio 和真实时长 | `audio` / 40 |
-| P5 | 分镜脚本、Storyboard Config/Image 与连续性 | `storyboard` / 50 |
-| P6 | 在 Pre-roll 列内按来源、核心点、Storyboard 抽取、场景脚本/风格、Preview Prompt、H3 Video、调整和确认的顺序排列 | `pre-roll-source/script/reference/prompt/video/approval` / 10–90 |
-| P7 | H3 System Prompt、基础/最终 Prompt 和有序素材快照 | `h3-prompt` / 60 |
-| P8 | H3 Config、Video 和尾帧 | `h3-video` / 70 |
-| P9 | 首中尾帧、ASR、视觉验收和 Comment | `verification` / 80–90 |
-| P10 | 合片 Config、最终 Video 和可追溯记录 | `delivery` / 100 |
-
-P6 Video 记录 `previewOnly: true` 和 `mergeEligible: false`，不得接入 P10。P8 中通过当前快照且 P9 验收合格的正式分镜 Video 才能记录 `mergeEligible: true`。
+| P1 | 需求、项目简报、资源索引 | `project` / 10 |
+| P2 | 主题/大纲、事实输入与 Gate、剧本、确认 | `script` / 20 |
+| P3 | 角色/Variation/Voice、四视图、场景/道具、综合设定图；用户指定 GPT 时可包含 Prompt → ImageGen imported Image | `production-design` / 30 |
+| P4 | 导演总纲、正式分镜 Result、跨分镜审核 | `director-plan` / 40 |
+| P5 | Storyboard Prompt、Config/Image、验收 | `storyboard` / 50 |
+| P6 | Ref2VA 通用 System、runtime brief、豆包 Final Prompt、lock | `h3-prompt` / 60 |
+| P8 | 正式 H3 Config、Video、尾帧、实际时长、Codex 综合评估 Comment/metadata | `h3-video` / 70；`video-evaluation` / 80 |
 
 ## 必需 metadata
 
@@ -41,35 +35,48 @@ P6 Video 记录 `previewOnly: true` 和 `mergeEligible: false`，不得接入 P1
 {
   "factoryRunId": "factory-...",
   "shotId": "shot-03",
-  "stage": "P8",
-  "artifactType": "h3-video-config",
+  "stage": "P6",
+  "artifactType": "h3-prompt-result",
   "layoutManaged": true,
-  "layoutSection": "h3-video",
-  "layoutOrder": 70
+  "layoutSection": "h3-prompt",
+  "layoutOrder": 60
 }
 ```
 
-Group 额外记录 `groupKind`、`columnIndex` 和 `layoutDirection: vertical`；子节点记录 `groupId`。同一角色或场景在多个分镜列中可使用不同画布节点，但必须复用统一资源库的同一 `storageKey`，不复制本地文件。
+分镜节点按需增加 `shotOrder`、`storySegmentId`、`sceneIds`、`generationSegmentId`、`targetDurationSeconds`、`actualDurationSeconds`、`continuity.type`、`dependsOnShotId`。一个 P4 分镜跨场景时使用有序 `sceneIds`；P6 可在场景切换处产生多个生成片段，但不得把它们冒充新的 P4 `shotId`。
 
-## 排序、间距与禁止重叠
-
-默认 Group 内边距 48px、节点纵向间距 56px、分区间距 96px、列间距 160px；使用节点真实 width/height 排版。节点或 Group 重叠是写入失败条件：
-
-- `next.y = previous.y + previous.height + gap`；
-- 新节点只能原位更新或追加到当前列的下一无碰撞位置；
-- 节点高度变化时下方受管理节点自动下移；
-- 新增节点只能扩大 Group，不能侵入相邻列；
-- 首、中、尾帧纵向排列；
-- 一次原子操作完成创建、连接、布局、碰撞检测、保存和事件发布。
-
-用户手动布局节点可设为 `layoutManaged: false`。后续重排保留其位置且让其他节点绕开；如果两个手动节点已重叠，布局操作必须失败并报告节点 ID。
+System Prompt 节点增加 `promptRole: system`、`templateKey`、`templateVersion`、`contentSha256`。模型 Result 增加 `generatedByConfigId` 和 `inputSnapshot`; 不允许 canonical Text update 覆盖正文。确定性 Text 增加 `deterministic: true` 与 `sourceNodeIds/sourceArtifactIds`。内置 ImageGen 落图 Image 不记录 `generatedByConfigId`，而记录 `generationRoute: codex-built-in-imagegen`、`sourceKind: imported-generation`、`sourcePromptNodeId`、`promptSha256`、`orderedReferenceNodeIds` 和 `inputSnapshot`。P8 综合评估记录增加 `artifactType: p8-video-evaluation`、Video/P2/P4/P6 哈希、各维度证据、问题归因和唯一总评；它不含 `generatedByConfigId`，也不伪装为模型 Result。
 
 ## 连接契约
 
-只建立真实数据或生成依赖：输入/结果 → Config、前镜尾帧 → 后镜 P7/P8 Config、明确复用的角色/场景/音频 → 当前 Config。普通连接线不因 MCP 创建而改变样式。独立分镜之间不得为了视觉连续而添加无语义连接。Comment 一律不连线。
+- 只建立真实数据依赖：输入/Result → Config、System Text → Config、Reference → 媒体 Config、前镜尾帧 → 后镜 H3 Config。
+- 内置 ImageGen 落图使用 Prompt Text → imported Image 的来源连线；有参考图时增加有序 Reference Image → imported Image。该链不包含 Config，不得冒充 Canvas Provider Result。
+- 上述来源图统一由 `canvas_place_imagegen_result` 建立；通用 `canvas_apply_operations` 不作为该场景的默认手工拼装入口。
+- 模型修订链连接“当前候选 Result + 审核 Result + 人工反馈 Text → 修订 Config”；不得直接修改候选 Result。
+- `independent` 分镜之间不连线；`soft-continuity` 共享资产但不等待；`tail-frame` 必须直接连接前镜尾帧。
+- Comment 不连线，只记录人工解释或决策；Gate 的机器可验证状态使用 metadata/approval snapshot。
 
-## 输入快照、确认和失效
+## 输入、锁定与确认快照
 
-生成结果保存 `inputSnapshot`，至少包含 user prompt SHA-256、System Prompt SHA-256 及节点 ID、普通来源节点 ID，以及图片、视频和音频资源 ID 的有序数组。任一输入内容、资源 ID、顺序、System Prompt 或前镜尾帧变化时，只使受影响结果和依赖链过期。
+生成结果的 `inputSnapshot` 至少包含：user/System Prompt SHA-256 与节点 ID、普通来源节点 ID、有序图片/视频/音频资源 ID、前镜尾帧哈希。任一绑定内容、资源 ID、顺序或哈希变化时，只使受影响结果和依赖链过期。
 
-所有用户门禁确认统一保存 `approvalSnapshot`，包含 `stage`、当前产物 ID/哈希、输入快照哈希、确认时间和可选调整哈希。P2、P3 和 P5 在互动模式使用该契约；P6 在所有模式使用，且产物哈希必须是当前 Pre-roll Video SHA-256，输入快照必须覆盖 P2–P5 来源及 P6 中间产物。任一绑定值变化都撤销该确认并阻止下游，直到重新确认。
+锁定产物记录 `lockSnapshot`，包含当前产物节点 ID/哈希、System Prompt 版本/哈希、输入快照哈希和锁定时间；它不代表额外内容校验。所有用户 Gate 使用 `approvalSnapshot`：
+
+```json
+{
+  "stage": "P2",
+  "artifactId": "node-...",
+  "artifactSha256": "...",
+  "inputSnapshotSha256": "...",
+  "approvedAt": "...",
+  "feedbackSha256": null
+}
+```
+
+P2 最终剧本在所有模式强制使用用户 Gate；其他阶段沿用共享流程的可选 Gate。绑定值变化立即撤销确认。
+
+P8 Video 固定 `previewOnly: false`。其综合评估记录必须绑定 Video storage key、P2/P4/P6 哈希、目标/实际时长、各维度证据、问题归因和唯一总评；它不是分析 Config Result。`regenerate` 只使当前 Video 过期，`revise-p6` 使受影响 P6/P8 片段过期。P8 总评通过前不得锁定当前 Video；安全合片仍属于后续流程。
+
+## 布局与原子性
+
+默认 Group 内边距 48px、节点间距 56px、分区间距 96px、列间距 160px。创建、连接、碰撞检查、保存、项目版本递增和事件发布必须在 canonical atomic command 中完成。尊重 `layoutManaged: false` 的人工布局；受管理节点不得与任何节点重叠。

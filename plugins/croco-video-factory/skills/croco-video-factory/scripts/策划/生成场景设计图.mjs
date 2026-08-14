@@ -3,13 +3,14 @@
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertPngDimensions, fileDataUri, generateRunwareImage, imageDimensionsForAspect, runwareConfig, sameExecutablePath } from "../公共/runware-client.mjs";
+import { assertPngDimensions, fileDataUri, generateRunwareImage, imageDimensionsForAspect, NANO_BANANA_LITE_MODEL, runwareConfig, sameExecutablePath } from "../公共/runware-client.mjs";
 
-export async function generateSceneDesign({ viewDir, config = runwareConfig(), aspectRatio = null } = {}) {
+export async function generateSceneDesign({ viewDir, config = runwareConfig(), aspectRatio = null, model = NANO_BANANA_LITE_MODEL } = {}) {
     const directory = path.resolve(String(viewDir || ""));
     if (!viewDir) throw new Error("缺少 --view-dir");
-    const attempts = (await readdir(directory)).filter((name) => /^场景设计图-第\d+次\.png$/u.test(name)).length;
-    if (attempts >= 5) throw new Error("同一场景视图最多生成 5 次");
+    const files = await readdir(directory);
+    const attempts = files.filter((name) => /^(?:场景综合设定图|场景设计图)-第\d+次\.png$/u.test(name)).length;
+    if (attempts >= 5) throw new Error("同一场景综合设定图最多生成 5 次");
     const attempt = attempts + 1;
     const sceneRoot = await findAncestorWithFile(directory, "场景计划.json");
     const scenePlan = sceneRoot ? await optionalJson(path.join(sceneRoot, "场景计划.json")) : null;
@@ -21,10 +22,11 @@ export async function generateSceneDesign({ viewDir, config = runwareConfig(), a
         await stat(imagePath);
         referenceImages.push(await fileDataUri(imagePath));
     }
-    const outputPath = path.join(directory, `场景设计图-第${String(attempt).padStart(2, "0")}次.png`);
-    const metadata = await generateRunwareImage({ config, prompt: await readFile(path.join(directory, "场景设计提示词.md"), "utf8"), outputPath, referenceImages, width: dimensions.width, height: dimensions.height });
+    const outputPath = path.join(directory, `场景综合设定图-第${String(attempt).padStart(2, "0")}次.png`);
+    const promptName = files.includes("场景综合设定图提示词.md") ? "场景综合设定图提示词.md" : "场景设计提示词.md";
+    const metadata = await generateRunwareImage({ config, model, prompt: await readFile(path.join(directory, promptName), "utf8"), outputPath, referenceImages, width: dimensions.width, height: dimensions.height });
     const actual = await assertPngDimensions(outputPath, dimensions);
-    await writeFile(path.join(directory, `场景设计图-第${String(attempt).padStart(2, "0")}次生成.json`), `${JSON.stringify({ ...metadata, aspectRatio: dimensions.aspectRatio, ...actual }, null, 2)}\n`, "utf8");
+    await writeFile(path.join(directory, `场景综合设定图-第${String(attempt).padStart(2, "0")}次生成.json`), `${JSON.stringify({ ...metadata, template: "integrated-scene-sheet-v1", aspectRatio: dimensions.aspectRatio, ...actual }, null, 2)}\n`, "utf8");
     return outputPath;
 }
 
@@ -37,6 +39,7 @@ if (sameExecutablePath(process.argv[1], fileURLToPath(import.meta.url))) {
         if (index < 0 || !process.argv[index + 1]) throw new Error("缺少 --view-dir");
         process.loadEnvFile(process.env.CROCO_ENV_FILE || path.join(process.env.CROCOTV_HOME || process.cwd(), ".codex", ".env"));
         const aspectIndex = process.argv.indexOf("--aspect-ratio");
-        console.log(await generateSceneDesign({ viewDir: process.argv[index + 1], config: runwareConfig(), aspectRatio: aspectIndex >= 0 ? process.argv[aspectIndex + 1] : null }));
+        const modelIndex = process.argv.indexOf("--image-model");
+        console.log(await generateSceneDesign({ viewDir: process.argv[index + 1], config: runwareConfig(), aspectRatio: aspectIndex >= 0 ? process.argv[aspectIndex + 1] : null, model: modelIndex >= 0 ? process.argv[modelIndex + 1] : NANO_BANANA_LITE_MODEL }));
     } catch (error) { console.error(`错误：${error.message}`); process.exitCode = 1; }
 }

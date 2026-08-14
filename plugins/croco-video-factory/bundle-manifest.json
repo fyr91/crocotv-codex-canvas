@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "suiteVersion": "0.1.1",
-  "pluginVersion": "0.1.1",
-  "mcpVersion": "0.1.1",
-  "skillsBundleVersion": "0.1.1",
+  "suiteVersion": "0.1.2",
+  "pluginVersion": "0.1.2",
+  "mcpVersion": "0.1.2",
+  "skillsBundleVersion": "0.1.2",
   "contracts": {
     "canvasApi": 1,
     "projectSchema": 1,
@@ -17,27 +17,27 @@
   },
   "skills": {
     "character-speaking": {
-      "version": "0.1.1",
-      "sha256": "41cb8eb9973fe93cf04f2bfc0b58204f6386000b0a3bfe1803adb6b91897e4d3"
+      "version": "0.1.2",
+      "sha256": "b3dcc0feb60e6aeb8c7ca5194c1697d2e9b928af9a2f105f0eb79a77868f3880"
     },
     "content-optimization-audit": {
-      "version": "0.1.1",
+      "version": "0.1.2",
       "sha256": "d41f1679f614552861a2e26de42deba5a5cb8c6b7b409907d3a4db753c1a4b6c"
     },
     "continuous-learning": {
-      "version": "0.1.1",
+      "version": "0.1.2",
       "sha256": "b6347542c5ffa55d62ae1b5bb1e6900184d29c4eaa3a5add4155f3e9b7414ac4"
     },
     "croco-video-factory": {
-      "version": "0.1.1",
-      "sha256": "b70d9570851d11ea0405ed8a6057901a382d50cd8e790c7a2c8c069e7e4f6bf9"
+      "version": "0.1.2",
+      "sha256": "a1804496952cc7ef03476fc40516ba815f798276aa505d74189c4dba5caf70e6"
     },
     "minimax-video-prompt-optimizer": {
-      "version": "0.1.1",
-      "sha256": "58362d42f1f6499596d9545e25bf2920138f8abf1617e496adc3f6f476bfc4db"
+      "version": "0.1.2",
+      "sha256": "6a351d5e7da62ed3bfb2a489d781d7f0f0fb942fc3aed54062971393c1d713c7"
     },
     "pull-latest-characters": {
-      "version": "0.1.1",
+      "version": "0.1.2",
       "sha256": "9ad033c3d9afa1cd89dfcb1a4e87fee1892e02553872058c76110ec8fb3db400"
     }
   }

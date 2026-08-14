@@ -35,7 +35,7 @@ export async function createVisualReview({ projectDir, ffmpegPath = "ffmpeg", ff
             frames.push({ position: ["start", "middle", "end"][position], timestampSeconds: Number(timestamp.toFixed(3)), path: path.relative(root, outputPath) });
             frameNumber++;
         }
-        shots.push({ shotId: source.shotId, folder: source.folder, storySegmentId: source.storySegmentId, sceneId: source.sceneId, sceneDesignRequired: source.sceneDesignRequired, sceneReferences: source.sceneReferences, continuity: source.continuity, jobId: source.jobId, sourcePath: path.relative(root, source.videoPath), sourceSha256: source.sourceSha256, durationSeconds: duration, frames });
+        shots.push({ shotId: source.shotId, folder: source.folder, storySegmentId: source.storySegmentId, sceneIds: source.sceneIds, sceneId: source.sceneIds[0] || null, sceneDesignRequired: source.sceneDesignRequired, sceneReferences: source.sceneReferences, continuity: source.continuity, jobId: source.jobId, sourcePath: path.relative(root, source.videoPath), sourceSha256: source.sourceSha256, durationSeconds: duration, frames });
     }
     const contactSheetPath = path.join(reviewDir, "三帧总览.jpg");
     await runCommand(ffmpegPath, ["-y", "-hide_banner", "-loglevel", "error", "-framerate", "1", "-start_number", "1", "-i", path.join(framesDir, "%04d.jpg"), "-frames:v", "1", "-vf", `tile=3x${shots.length}:padding=4:margin=4:color=white`, "-q:v", "2", contactSheetPath]);
@@ -48,7 +48,7 @@ export async function createVisualReview({ projectDir, ffmpegPath = "ffmpeg", ff
         contactSheetPath: path.relative(root, contactSheetPath),
         contactSheetSha256: await sha256File(contactSheetPath),
         shots,
-        sceneGroups: Object.values(Object.groupBy(shots.filter((shot) => shot.sceneId), (shot) => shot.sceneId)).map((items) => ({ sceneId: items[0].sceneId, shotIds: items.map((item) => item.shotId), referenceSha256: [...new Set(items.flatMap((item) => item.sceneReferences.map((reference) => reference.imageSha256)))] })),
+        sceneGroups: Object.values(Object.groupBy(shots.flatMap((shot) => shot.sceneIds.map((sceneId) => ({ sceneId, shot }))), (item) => item.sceneId)).map((items) => ({ sceneId: items[0].sceneId, shotIds: [...new Set(items.map((item) => item.shot.shotId))], referenceSha256: [...new Set(items.flatMap((item) => item.shot.sceneReferences.filter((reference) => reference.sceneId === item.sceneId).map((reference) => reference.imageSha256)))] })),
         continuityPairs: buildContinuityPairs(sources),
         review: null,
     };
@@ -89,27 +89,24 @@ async function currentSources(root) {
     for (const [index, shot] of plan.shots.entries()) {
         const folder = String(shot.folder || shot.directory || "");
         const shotId = String(shot.id ?? shot.shotId ?? index + 1).padStart(3, "0");
-        if (shot.sceneDesignRequired !== false && (!shot.sceneId || !shot.storySegmentId)) throw new Error(`${folder} 缺少 sceneId 或 storySegmentId，不能进入视觉验收`);
-        const previous = index > 0 ? plan.shots[index - 1] : null;
-        if (previous && shot.sceneId && shot.sceneId === previous.sceneId && shot.storySegmentId === previous.storySegmentId) {
-            const previousId = previous.id ?? previous.shotId;
-            if (shot.continuity?.type !== "tail-frame" || shot.continuity?.dependsOnShotId !== previousId) throw new Error(`${folder} 与前镜属于同一故事场景，但没有 tail-frame 依赖前镜`);
-        }
+        const shotSceneIds = sceneIdsOf(shot);
+        if (shot.sceneDesignRequired !== false && (!shotSceneIds.length || !shot.storySegmentId)) throw new Error(`${folder} 缺少 sceneIds 或 storySegmentId，不能进入视觉验收`);
         const videoDir = path.join(root, "分镜", folder, "视频生成");
         const pointer = JSON.parse(await readFile(path.join(videoDir, "当前视频.json"), "utf8"));
         if (pointer.status !== "succeeded") throw new Error(`${folder} 当前视频未成功`);
         const videoPath = safeProjectPath(root, videoDir, pointer.path);
         await stat(videoPath);
         const sceneFile = await optionalJson(path.join(root, "分镜", folder, "场景参考图.json"));
-        if (shot.sceneDesignRequired !== false && (sceneFile?.sceneId !== shot.sceneId || sceneFile?.storySegmentId !== shot.storySegmentId || !(sceneFile?.references || []).length)) throw new Error(`${folder} 缺少与分镜计划匹配的场景参考图`);
+        const referencedSceneIds = new Set((sceneFile?.references || []).map((item) => String(item.sceneId || sceneFile?.sceneId || "")).filter(Boolean));
+        if (shot.sceneDesignRequired !== false && (!(sceneFile?.references || []).length || shotSceneIds.some((sceneId) => !referencedSceneIds.has(sceneId)))) throw new Error(`${folder} 缺少与分镜计划 sceneIds 匹配的场景参考图`);
         const sceneReferences = [];
         for (const reference of sceneFile?.references || []) {
             const imagePath = safeProjectPath(root, path.join(root, "分镜", folder), reference.path);
             const imageSha256 = await sha256File(imagePath);
             if (reference.imageSha256 && reference.imageSha256 !== imageSha256) throw new Error(`${folder} 场景参考图哈希已失效`);
-            sceneReferences.push({ path: path.relative(root, imagePath), view: reference.view || null, imageSha256 });
+            sceneReferences.push({ sceneId: String(reference.sceneId || sceneFile?.sceneId || shotSceneIds[0] || ""), path: path.relative(root, imagePath), view: reference.view || null, imageSha256 });
         }
-        sources.push({ shotId, folder, storySegmentId: shot.storySegmentId || null, sceneId: shot.sceneId || null, sceneDesignRequired: shot.sceneDesignRequired !== false, sceneReferences, continuity: shot.continuity || { type: "independent" }, jobId: pointer.jobId || null, videoPath, sourceSha256: await sha256File(videoPath) });
+        sources.push({ shotId, folder, storySegmentId: shot.storySegmentId || null, sceneIds: shotSceneIds, sceneDesignRequired: shot.sceneDesignRequired !== false, sceneReferences, continuity: shot.continuity || { type: "independent" }, jobId: pointer.jobId || null, videoPath, sourceSha256: await sha256File(videoPath) });
     }
     return sources;
 }
@@ -118,12 +115,14 @@ function buildContinuityPairs(sources) {
     const pairs = [];
     for (let index = 1; index < sources.length; index++) {
         const previous = sources[index - 1], current = sources[index];
-        if (current.sceneId && current.sceneId === previous.sceneId && current.storySegmentId === previous.storySegmentId) pairs.push({ fromShotId: previous.shotId, toShotId: current.shotId, storySegmentId: current.storySegmentId, sceneId: current.sceneId, dependency: current.continuity });
+        if (current.sceneIds.length && sameSceneIds(current, previous) && current.storySegmentId === previous.storySegmentId) pairs.push({ fromShotId: previous.shotId, toShotId: current.shotId, storySegmentId: current.storySegmentId, sceneIds: current.sceneIds, dependency: current.continuity });
     }
     return pairs;
 }
 
 async function optionalJson(filePath) { try { return JSON.parse(await readFile(filePath, "utf8")); } catch (error) { if (error.code === "ENOENT") return null; throw error; } }
+function sceneIdsOf(shot) { const values = Array.isArray(shot?.sceneIds) ? shot.sceneIds : shot?.sceneId ? [shot.sceneId] : []; return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))]; }
+function sameSceneIds(left, right) { return JSON.stringify(sceneIdsOf(left)) === JSON.stringify(sceneIdsOf(right)); }
 
 async function probeDuration(command, inputPath) { const output = await captureCommand(command, ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", inputPath]); const value = Number(output.trim()); if (!(value > 0)) throw new Error(`无法读取视频时长：${inputPath}`); return value; }
 async function sha256File(filePath) { return createHash("sha256").update(await readFile(filePath)).digest("hex"); }
