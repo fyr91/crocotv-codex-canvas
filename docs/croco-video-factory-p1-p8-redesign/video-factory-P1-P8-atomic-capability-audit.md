@@ -39,7 +39,7 @@
 | 模型 | 旧流程中的实际固定职责 | 新 P1–P8 建议 |
 |---|---|---|
 | DeepSeek V4 Flash GA | [character-speaking](../../plugins/croco-video-factory/skills/character-speaking/SKILL.md) 的正式 Speech 语气分段 | P7 已取消；只在正式 Speech 使用独立任务 |
-| DeepSeek V4 Pro | runtime 支持的可选文字模型，旧 Croco 流程没有固定阶段绑定 | 只用于 P2 事实 Gate |
+| DeepSeek V4 Pro | runtime 支持的可选文字模型，旧 Croco 流程没有固定阶段绑定 | 不固定绑定 P1–P8；runtime 保留给用户直接操作 |
 | Gemini | runtime 支持文字和真实 Video 多模态输入 | P2 主题+大纲、P2 剧本、缺新资产时的 P3 综合创意设计、P4 导演策划；P8 默认不调用，用户明确指定外部视频理解时才可选用 |
 | GLM | runtime 支持的可选文字/视觉模型，旧 Croco 流程没有固定阶段绑定 | 只用于 P2 剧本校定/去 AI 化、P4 一次跨分镜总审 |
 | 豆包 Seed 2.1 Turbo | [H3 视频生成规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/H3视频生成规范.md)明确用于生成基础 H3 Prompt | 只用于 P6 正式 Prompt |
@@ -64,7 +64,7 @@
 | 主题分析 + 内容大纲 | 无专用 Script，依赖 Skill 写 Markdown | Gemini Text Config 可执行 | 部分已有 | 合并为一次关键调用；输出稳定 Claim ID，供事实链引用 |
 | 研究与来源采集 | Croco 原生 Script 无网页研究器 | Croco MCP 无研究工具；可由 Codex 外部研究后把结果作为输入节点 | 部分已有 | 不把研究动作伪装成 Text Node；新增“来源/Claim 结果导入”原子契约，是否增加 Croco 内建研究能力待用户确认 |
 | 按 Claim 建事实依据 | 无专用 Script | Croco MCP 无研究工具；可保存研究结果节点 | 部分已有 | Codex 研究 + 确定性 Claim/source schema；不再额外调用 Gemini 整理同一批来源 |
-| DeepSeek V4 Pro 事实依据审核 | 无专用 Script | DeepSeek V4 Pro Text Config 可执行 | 部分已有 | 使用 P2 事实 Gate Prompt；新增 `fact-gate` 结果 schema 与 pass/fail 强校验 |
+| Codex 调研事实 Gate | 无专用 Script；由 Skill 本体执行 source verification | 研究结论可保存为输入 Text，Gate 可用 Comment/metadata 表达 | 部分已有 | 不调用外部审核 Config；保留 `fact-gate` 结果 schema 与 pass/fail 强校验，PASS 后才允许运行剧本 Config |
 | Gate 失败回到大纲 | 无 | 可手工新建/重跑节点，系统不强制回路 | 缺失 | 新增阶段 Gate/失效原子能力：失败阻止剧本 Config 运行，修改大纲后只失效受影响 Claim |
 | 剧本初稿 | 无专用 Script | Gemini Text Config 可执行 | 部分已有 | 新 Prompt + locked Claim 输入连接检查 |
 | GLM 校定与去 AI 化 | [content-optimization-audit Skill](../../plugins/croco-video-factory/skills/content-optimization-audit/SKILL.md)可复用规则，但当前会先做 Critical Information 审计 | GLM Text Config 可执行 | 部分已有 | 拆出 P2 后置专用 Prompt；明确不得重复事实审核 |
@@ -142,7 +142,7 @@
 | 统一阶段 Gate / Approval | MCP + command/schema | 写入不可伪造的 approvalSnapshot；验证当前产物/输入哈希；输入变化撤销；阻止下游运行 |
 | Current Artifact / Lock | command/schema | 在多个生成候选中选择当前版本，锁定 ID、内容/资源哈希和上游快照；保留历史结果 |
 | Artifact Dependency / Invalidation | command/runtime | 记录 P1–P8 依赖边；上游变化只使受影响产物和下游 Gate 过期 |
-| P2 Fact Gate | schema + orchestration | Claim/source 结构、DeepSeek V4 Pro 结论、失败回大纲、通过后才允许运行剧本 Config |
+| P2 Fact Gate | schema + orchestration | Claim/source 结构、Codex source verification 结论、失败回大纲、通过后才允许运行剧本 Config |
 | P8 Video Evaluation Record | schema + orchestration | Codex 直接综合评估真实 Video + P2/P4/P6；记录 `pass/regenerate/revise-p6/blocked-upstream/needs-review`、维度证据与输入快照，不新增视频理解脚本 |
 
 ### P1：生产资产与 Canvas 组织能力

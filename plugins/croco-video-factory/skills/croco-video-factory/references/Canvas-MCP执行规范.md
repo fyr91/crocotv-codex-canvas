@@ -23,7 +23,7 @@
 
 ## 文字原子能力
 
-只有共享模型矩阵规定的 Gemini、GLM、豆包或 DeepSeek 调用才创建 Text Config：
+只有共享模型矩阵规定的 Gemini、GLM、豆包或用户明确指定的外部模型调用才创建 Text Config：
 
 ```text
 用户/上游事实 Text + System Prompt Text
@@ -62,7 +62,7 @@ Croco Video Factory 的自动图像路由不使用 `google:4@1`，但 Canvas run
 | 阶段 | Canvas 原子能力组合 |
 |---|---|
 | P1 | 项目/角色/资源查询 + 确定性普通 Text |
-| P2 | Gemini Text Config → 研究输入 Text → DeepSeek V4 Pro Gate Config → Gemini 剧本 Config → GLM 校定 Config → P2 approval |
+| P2 | Gemini 主题/大纲 Text Config → Codex 调研形成 Claim/source 输入 Text + Gate Comment/metadata → Gate PASS 后 Gemini 剧本 Config → GLM 校定 Config → P2 approval |
 | P3 | 确定性需求 Text；缺资产时 Gemini 设计 Config；默认 Nano Banana Lite Config/Result；用户指定 GPT 时优先 Prompt → ImageGen imported Image，必要时回退 GPT Image 02 Config/Result；图片验收记录 |
 | P4 | Gemini 导演策划 Config；按正式 shot column 保存 Result；GLM 跨分镜审核 Config；受影响分镜由 Gemini 重跑 |
 | P5 | 确定性 Storyboard Prompt Text + Reference → GPT Image 02 Image Config/Result（快速模式为 Nano Banana Lite）→ 验收记录 |
@@ -71,6 +71,6 @@ Croco Video Factory 的自动图像路由不使用 `google:4@1`，但 Canvas run
 
 ## MCP parity 判断
 
-流程文字或阶段编号变化本身不要求新增 MCP 工具。P8 综合评估由 Codex 执行动作，现有 Video 查询、`canvas_apply_operations`、Comment、shot column 与自由 metadata 已能表达 `generationSegmentId`、目标/实测时长、证据、归因和总评，因此本次不新增 MCP 工具、节点类型或端口。只有后续需要把综合评估提升为新的强类型服务状态时，才修改权威 MCP schema。
+流程文字或阶段编号变化本身不要求新增 MCP 工具。P2 Codex 调研 Gate 可由现有输入 Text、Comment/metadata、哈希和连接表达，不需要 DeepSeek Config，也不新增节点类型或端口。P8 综合评估由 Codex 执行动作，现有 Video 查询、`canvas_apply_operations`、Comment、shot column 与自由 metadata 已能表达 `generationSegmentId`、目标/实测时长、证据、归因和总评。只有后续需要把这些 Gate 或评估提升为新的强类型服务状态时，才修改权威 MCP schema。
 
 P8 Video 记录 `previewOnly: false`、`targetDurationSeconds`、媒体探测得到的 `actualDurationSeconds`、P6 input snapshot 和综合评估记录 ID/哈希。P8 总评通过前不得锁定；安全合片仍属于后续流程。

@@ -14,7 +14,7 @@
 | 阶段 | 生产调用 | 验证 / 审核调用 | 非模型 Gate |
 |---|---|---|---|
 | P1 项目需求与创作边界 | **GPT**：对话澄清、资源理解和项目简报组织 | **GPT**：识别未决边界；无外部验证模型 | Script 完整性检查；缺必要输入时用户补充 |
-| P2 主题、大纲、事实 Gate 与剧本锁定 | **GPT**：研究编排、Claim/source 映射与回流；**Gemini**：主题+大纲一次、剧本初稿一次 | **DeepSeek V4 Pro** `deepseek-v4-pro-260425`：事实 Gate 一次；**GLM**：表达校定/去 AI 化一次，不重复审事实 | Script 校验哈希和 Gate 状态；最终剧本必须用户确认 |
+| P2 主题、大纲、事实 Gate 与剧本锁定 | **GPT/Codex**：定向研究、Claim/source 映射、source verification、事实 Gate 与回流；**Gemini**：主题+大纲一次，Gate 通过后生成剧本初稿一次 | **GPT/Codex**：在同一次调研中检查证据充分性、推论边界和限定条件；**GLM**：表达校定/去 AI 化一次，不重复审事实 | Script 校验哈希和 Gate 状态；最终剧本必须用户确认 |
 | P3 可生产角色与剧本场景资产 | **GPT**：需求提取、复用判断、资产绑定和 Prompt 组装；缺新资产时 **Gemini** 做一次综合设计；生图默认 **Nano Banana Lite** `google:nano-banana@2-lite`，用户指定 GPT 时按 GPT 路由执行 | **GPT**：根据 Rubric 组织验收；默认无外部文字/视觉审核模型 | 图片 Rubric + 人工视觉确认 |
 | P4 导演总纲与正式文字分镜 | **GPT**：组织剧本/资产输入、`shotId`、预估生成时长和回流；**Gemini**：全片导演总纲+逐分镜设计一次阶段任务 | **GLM**：全部草案完成后只做一次跨分镜完整性/连续性/时长可行性总审；**GPT** 组织问题回流 | 不先生成音频；Script 检查 ID、资产引用、覆盖、3–15 秒向上取整和依赖结构 |
 | P5 Storyboard | **GPT**：按固定模板组装 Prompt；标准模式外调 **GPT Image 02** `openai:gpt-image@2`；用户选择快速模式时改用 **Nano Banana Lite** | **GPT**：组织 Rubric 验收；默认无外部通用审核模型 | 确定性 Rubric + 人工视觉确认 |

@@ -15,7 +15,7 @@ P1–P4 完成前期策划与前期设计资产，P5 将已定稿的文字分镜
   ↓
 P1 项目需求与创作边界
   ↓
-P2 主题分析 → 内容大纲 → DeepSeek V4 Pro 事实依据 Gate ↺ 内容大纲 → 剧本初稿 → GLM 去 AI 化 → 最终剧本
+P2 主题分析 → 内容大纲 → Codex 调研/source verification/事实 Gate ↺ 内容大纲 → 剧本初稿 → GLM 去 AI 化 → 最终剧本
   ↓                                                        强制用户确认（Auto / 互动都停）
 P3 角色需求 → 角色设定/Variation/音色/四视图 → 剧本场景与道具需求 → 每场景综合设定图
   ↓
@@ -52,7 +52,7 @@ P8 按 P6 提示词生成正式 H3 分镜画面 → 视频理解对照剧本/规
 
 ### 3.1 需要外部文字模型时的节点链
 
-不是每个 Text 产物都必须调用外部文字模型。字段整理、资源索引、确定性映射、固定模板组装、哈希、状态和 Gate 记录由 Codex / Script / MCP 原子能力完成。只有下文[模型调用矩阵](#33-旧流程模型落点与新流程调用矩阵)标为 Gemini、GLM、DeepSeek 或豆包的关键创作/审核任务，才创建并运行对应 Text Config。
+不是每个 Text 产物都必须调用外部文字模型。字段整理、资源索引、确定性映射、固定模板组装、哈希、状态和 Gate 记录由 Codex / Script / MCP 原子能力完成。只有下文[模型调用矩阵](#33-旧流程模型落点与新流程调用矩阵)明确标为外部模型的关键创作/审核任务，才创建并运行对应 Text Config。
 
 ```text
 上游 / 用户输入 Text
@@ -81,7 +81,7 @@ Image Result
 真实图像验收记录
 ```
 
-研究和验证动作本身不创建“研究进度 Text Node”或“验证进度 Text Node”；但模型实际消费的研究结论必须成为输入 Text，模型审核意见必须来自审核 Config 的 Result Text。
+研究和验证动作本身不创建“研究进度 Text Node”或“验证进度 Text Node”；但模型实际消费的研究结论必须成为输入 Text。Codex 调研 Gate 使用可追溯 Comment/metadata 保存结论；只有矩阵明确要求的外部模型审核意见才必须来自审核 Config 的 Result Text。
 
 ### 3.3 旧流程模型落点与新流程调用矩阵
 
@@ -97,14 +97,14 @@ Image Result
 | 阶段 | 默认由 Codex / Script / MCP 完成 | 外部文字模型调用 | 说明 |
 |---|---|---|---|
 | P1 | 收集需求、完整性检查、资源索引、项目简报结构化 | 无 | 规则确定，不值得再做 Gemini + GLM 双调用 |
-| P2 | 来源研究、Claim/source 记录、Gate 状态和版本锁定 | Gemini：主题分析 + 内容大纲一次；DeepSeek V4 Pro：事实 Gate 一次；Gemini：剧本初稿一次；GLM：最终校定/去 AI 化一次 | P2 是最关键的叙事与事实阶段，保留两次创作、两次不同职责审核 |
+| P2 | 来源研究、Claim/source 记录、source verification、事实 Gate、回流和版本锁定 | Gemini：主题分析 + 内容大纲一次；Gate 通过后生成剧本初稿一次；GLM：最终校定/去 AI 化一次 | P2 的事实核验由 Codex 调研直接完成，不再增加外部审核调用 |
 | P3 | 从锁定剧本提取角色/场景/道具需求，复用已有资产，组装固定图片约束 | Gemini：仅当需要新建或实质改造角色/Variation/声音/场景设计时，做一次 P3 综合创意设计；已有资产全部满足时不调用 | 四视图和场景整合图由图片模型生成；默认不用 GLM 逐项复审 |
 | P4 | 绑定剧本片段和 P3 资产、建立 shot IDs、按文字预估生成时长、确定性连续性检查 | Gemini：全片导演总纲 + 正式分镜设计作为一次阶段任务；GLM：全部 P4 完成后做一次跨分镜总审 | 不先生成音频；不为每个分镜串联一次 GLM；超出上下文时可按批次运行 Gemini，但仍是同一阶段任务 |
 | P5 | 用固定模板组装 Storyboard Prompt、引用排序、验收记录 | 无通用文字模型 | 标准模式由 GPT Image 02 生成 Storyboard；用户选择快速模式时使用 Nano Banana Lite；确定性 Rubric + 人工查看验收 |
 | P6 | 汇总 runtime brief、引用排序和输入快照 | 豆包 Seed 2.1 Turbo：按现有 H3 System Prompt 生成正式 H3 Prompt | Result 直接锁定，不运行 Prompt validator 或双模型审核 |
 | P8 | H3 依赖调度、实测时长、Codex 直接视频理解、统一综合评估和定向处理 | MiniMax H3 生成；默认不调用外部视频理解模型 | 不执行 P7；生成/技术问题只重生成，承载问题才回 P6，且不改 P4 |
 
-DeepSeek V4 Pro 在新版 P1–P8 中只负责 P2 事实 Gate。正式 Speech 生成链另行使用 DeepSeek V4 Flash GA 正式版（`deepseek-v4-flash-ga-260731`）负责语气分段；两者都不扩展到其他通用策划或审核职责。
+DeepSeek V4 Pro 不再固定绑定新版 P1–P8，但 Canvas runtime 仍保留给用户直接操作。正式 Speech 生成链另行使用 DeepSeek V4 Flash GA 正式版（`deepseek-v4-flash-ga-260731`）负责语气分段。
 
 ## 4. P1 — 项目需求与创作边界
 
@@ -175,7 +175,7 @@ P2 的最终剧本是 P3–P8 的权威叙事依据。导演总纲、角色与�
 
 大纲必须为每个计划事实分配稳定条目，供事实依据逐项核验。
 
-### 5.3 P2-C 事实依据、DeepSeek V4 Pro 审核与 Gate
+### 5.3 P2-C 事实依据、Codex source verification 与 Gate
 
 事实依据不在流程最前面，而是对待核验大纲进行定向研究和逐项验证。
 
@@ -189,22 +189,18 @@ P2 的最终剧本是 P3–P8 的权威叙事依据。导演总纲、角色与�
 - 对应大纲位置；
 - 结论：`supported` / `revise-outline` / `remove` / `user-decision`。
 
-事实研究负责提供来源与证据，DeepSeek V4 Pro 在这里承担 P2 唯一一次完整的事实依据审核职责：检查证据是否真实支持大纲主张、限定条件是否保留、来源与结论是否错配，以及哪些条目必须回改大纲。
+Codex 在同一次事实研究中完成 source verification：检查证据是否足够支持大纲主张、推论是否越界、限定条件是否保留、来源与结论是否错配，以及哪些条目必须回改大纲。此处不再调用独立外部审核模型。
 
 Gate 规则：
 
 ```text
 待核验内容大纲
         ↓
-事实研究与证据输入
+Codex 事实研究、Claim/source 映射与 source verification
         ↓
-Codex / Script Claim-source 映射 Text
-        ↓
-DeepSeek V4 Pro 事实依据审核 Config
-        ↓
-DeepSeek V4 Pro 事实 Gate Result
+Codex 事实 Gate 记录
         ├─ FAIL → 回到内容大纲 Config 修订 → 重新事实核验
-        └─ PASS → 进入剧本初稿
+        └─ PASS → 调用 Gemini 进入剧本初稿
 ```
 
 不得为了让事实 Gate 通过而弱化、歪曲或拼接证据；证据不支持时必须修改或删除大纲内容。

@@ -8,14 +8,14 @@
 
 ## 1. 统一使用规则
 
-1. **Canvas 模式**：只有模型调用矩阵明确指定的 Gemini、GLM、豆包或 DeepSeek 调用，才走 `输入 Text / System Text → Config → Canvas runtime → 结果 Text`。MCP 不得在 Canvas 外完成模型生成后再注入结果节点。
+1. **Canvas 模式**：只有模型调用矩阵明确指定的 Gemini、GLM、豆包或其他外部模型调用，才走 `输入 Text / System Text → Config → Canvas runtime → 结果 Text`。MCP 不得在 Canvas 外完成模型生成后再注入结果节点。
 2. **原生模式**：使用相同 Prompt 语义，产物写入项目 Markdown；不能因后端不同改变阶段输入、Gate 或最终口径。
 3. **最少外部调用**：确定性整理、字段映射、模板组装、资源绑定、哈希、状态和 Gate 记录由 Codex / Script / MCP 完成，不为每个 Text 产物额外调用模型；H3 Prompt 不另运行内容 validator。
 4. **版本化**：实际 System Prompt 应保存稳定 `templateKey`、`templateVersion` 和内容哈希。规范文档不是可直接运行的 System Prompt，须先整理成模板。
 5. **缺失资产**：本表中的“待新建”只是建议资产，不代表已经存在；对应详情可通过表内链接跳转。
-6. **阶段分工**：Gemini 承担 P2/P3/P4 关键创意生成；DeepSeek V4 Pro 只承担 P2 事实 Gate；GLM 只承担 P2 后置剧本校定与 P4 一次跨分镜总审；豆包 Seed 2.1 Turbo 生成 P6 正式 H3 Prompt；P8 由 Codex 直接做视频综合评估，默认不外调；DeepSeek V4 Flash GA 只在后续正式 Speech 中做语气分段。
+6. **阶段分工**：Gemini 承担 P2/P3/P4 关键创意生成；Codex 在 P2 调研中直接完成 source verification 与事实 Gate；GLM 只承担 P2 后置剧本校定与 P4 一次跨分镜总审；豆包 Seed 2.1 Turbo 生成 P6 正式 H3 Prompt；P8 由 Codex 直接做视频综合评估，默认不外调；DeepSeek V4 Flash GA 只在后续正式 Speech 中做语气分段。
 
-当前 runtime 可选型号包括 Gemini 3.1 Pro / 3 Flash / 3.1 Flash Lite、GLM-5.2 / GLM-5V，以及 DeepSeek V4 Flash GA / Pro。P2 事实 Gate 明确锁定 `deepseek-v4-pro-260425`；P6 H3 Prompt 由豆包 Seed 2.1 Turbo 直接生成且不另运行 Prompt validator；P8 默认由 Codex 直接查看真实 Video，runtime 保留的模型只在用户明确指定时使用。P7 已取消。正式 Speech 语气分段继续使用 Flash 正式版，但使用独立任务。
+当前 runtime 可选型号包括 Gemini 3.1 Pro / 3 Flash / 3.1 Flash Lite、GLM-5.2 / GLM-5V，以及 DeepSeek V4 Flash GA / Pro。DeepSeek V4 Pro 不再固定绑定 P1–P8，仍保留给用户直接操作；P6 H3 Prompt 由豆包 Seed 2.1 Turbo 直接生成且不另运行 Prompt validator；P8 默认由 Codex 直接查看真实 Video，runtime 保留的模型只在用户明确指定时使用。P7 已取消。正式 Speech 语气分段继续使用 Flash 正式版，但使用独立任务。
 
 ## 2. 状态定义
 
@@ -35,7 +35,7 @@
 | P1 | 需求完整性检查 | 项目初始化规范中的必填项 | 新增 | [P1 项目需求完整性审核](#p1-requirement-audit) | deterministic validator / 用户补充 |
 | P2 | 主题分析 + 内容大纲 | [内容策划规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/内容策划规范.md) + [通识教育视频节奏规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/通识教育视频节奏规范.md) | 合并并优化复用 | [P2 主题分析](#p2-theme-analysis) + [P2 内容大纲](#p2-content-outline) | Gemini 一次调用 |
 | P2 | 按大纲建设事实依据 | 内容策划规范当前“先事实、后主题”顺序 | 替换 | [P2 大纲驱动事实依据](#p2-evidence-build) | Codex 研究工具 + 确定性 Claim/source 记录 |
-| P2 | 事实依据 Gate | [Critical Information 审计规则](../../plugins/croco-video-factory/skills/content-optimization-audit/references/critical-information-audit.md) | 优化后复用 | [P2 DeepSeek V4 Pro 事实依据 Gate](#p2-evidence-gate) | DeepSeek V4 Pro |
+| P2 | 事实依据 Gate | [Critical Information 审计规则](../../plugins/croco-video-factory/skills/content-optimization-audit/references/critical-information-audit.md) | 规则复用，不再需要独立 System Prompt | [P2 Codex 调研事实 Gate](#p2-evidence-gate) | Codex source verification |
 | P2 | 剧本初稿 | 内容策划规范“视频脚本初稿” | 优化后复用 | [P2 剧本初稿生成](#p2-script-draft) | Gemini |
 | P2 | 剧本校定、去 AI 化 | [Humanizer 加固规则](../../plugins/croco-video-factory/skills/content-optimization-audit/references/humanizer-rules.md) | 优化后复用 | [P2 GLM 剧本校定与去 AI 化](#p2-script-humanize) | GLM |
 | P2 | 剧本锁定前检查 | 无独立模板 | 新增 | [P2 剧本锁定 Gate](#p2-script-lock) | validator + 用户，不再调用 GLM |
@@ -90,14 +90,14 @@
 
 - 输入：已选内容大纲及其中的 Claim 清单。
 - 输出：逐 Claim 的来源、准确表述、限定词、适用范围、支持状态和受影响大纲位置。
-- 优化重点：研究动作本身不是 Text Node；研究结果和引用清单作为真实输入 Text 进入审核节点。
+- 优化重点：研究与验证动作本身不是 Text Node；研究结果、引用清单和 Gate 结论作为可追溯阶段输入/状态，供剧本 Config 消费。
 
 <a id="p2-evidence-gate"></a>
-#### P2 DeepSeek V4 Pro 事实依据 Gate
+#### P2 Codex 调研事实 Gate
 
-- 输出：逐 Claim 的 `pass / partial / fail / conflict`，Gate 总结与必须回改的大纲位置。
+- 输出：Codex 在调研中逐 Claim 给出 `pass / partial / fail / conflict`、证据充分性、推论边界、限定条件、Gate 总结与必须回改的大纲位置。
 - 循环：失败只返回“内容大纲”修改，再重建受影响事实依据；不进入剧本初稿。
-- 约束：沿用 Critical Information 的来源质量规则，但本调用不做 Humanizer。
+- 约束：沿用 Critical Information 的来源质量规则；不创建外部审核 Config，也不做 Humanizer。Gate 通过后直接调用 Gemini 生成剧本初稿。
 
 <a id="p2-script-draft"></a>
 #### P2 剧本初稿生成

@@ -80,9 +80,9 @@ Canvas 中凡是 Gemini、GLM、豆包或 DeepSeek 负责生成/审核的文字�
 | [Canvas 节点产物契约](../../plugins/croco-video-factory/skills/croco-video-factory/references/Canvas节点产物契约.md) | 节点 metadata、来源、状态、快照和布局 | 保留核心并扩展 | 增补新阶段产物类型、模型 Result 不可直改、Gate/approval/source snapshot | Canvas 专属 |
 | [原生执行规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/原生执行规范.md) | Markdown、目录、哈希、current 指针、脚本状态 | 保留原架构，更新能力映射 | 只描述原生原子能力如何实现共享阶段，不复制 P1–P8 | 原生专属 |
 | [项目初始化规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/项目初始化规范.md) | Topic、受众、方向、角色选择 | 保留核心并扩展 | P1 项目简报、硬约束、资源索引、缺失项；正式角色仍由用户选择 | 两后端语义一致 |
-| [内容策划规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/内容策划规范.md) | 事实、主题、脚本、内容审计 | 局部替换顺序并拆责 | P2 改为主题/大纲 → 事实研究 → DeepSeek V4 Pro Gate → 剧本 → GLM 去 AI 化 → 用户锁定 | Canvas 走 Text Config；原生写 Markdown/调用模型 |
+| [内容策划规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/内容策划规范.md) | 事实、主题、脚本、内容审计 | 局部替换顺序并拆责 | P2 改为主题/大纲 → Codex 事实研究/source verification/Gate → 剧本 → GLM 去 AI 化 → 用户锁定 | Canvas 外部生成走 Text Config，Codex Gate 保存可追溯状态；原生写 Markdown/JSON |
 | [通识教育视频节奏规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/通识教育视频节奏规范.md) | 单一问题、节拍、信息密度、适龄表达 | 保留核心并迁移引用 | P2 负责叙事节拍；P4 只负责拍摄节奏，不重复内容结构 | 两后端共享领域规范 |
-| [Critical Information 审计](../../plugins/croco-video-factory/skills/content-optimization-audit/references/critical-information-audit.md) | 主张、来源、限定条件和风险审计 | 保留核心并重路由 | P2 前置 DeepSeek V4 Pro 事实 Gate 的审核依据；不在后置去 AI 化重复执行 | DeepSeek V4 Pro Config / 原生同模型调用共享语义 |
+| [Critical Information 审计](../../plugins/croco-video-factory/skills/content-optimization-audit/references/critical-information-audit.md) | 主张、来源、限定条件和风险审计 | 保留核心并重路由 | P2 Codex 调研与事实 Gate 的核验依据；不在后置去 AI 化重复执行 | Codex source verification；不创建外部审核 Config |
 | [Humanizer 规则](../../plugins/croco-video-factory/skills/content-optimization-audit/references/humanizer-rules.md) | 去 AI 腔、自然表达、避免模板化 | 保留核心并重路由 | P2 后置 GLM 校定；不得新增事实或改变已通过大纲 | 同上 |
 | [NPC 角色设计规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/NPC角色设计规范.md) | 新 NPC 的身份、外形、服装、材质、行为与生产一致性 | 保留核心并扩展 | P3 角色总体设计、剧本功能、Variation、声音身份与不变量 | 两后端共享；缺新资产时才调用 Gemini |
 | 原三视图基础提示词 | 同一角色多角度、干净参考板、身份一致性 | 已局部替换 | 已迁入[四视图基础提示词](../../plugins/croco-video-factory/skills/croco-video-factory/references/四视图基础提示词.md)：左大半身主图；右正/侧/背全身 | 图像能力不变，Prompt 资产升级 |
@@ -95,7 +95,7 @@ Canvas 中凡是 Gemini、GLM、豆包或 DeepSeek 负责生成/审核的文字�
 | [MiniMax H3 Prompt Optimizer](../../plugins/croco-video-factory/skills/minimax-video-prompt-optimizer/SKILL.md) | H3 模式路由、Prompt 结构和约束 | 保留原样并按需加载 | 只在 P6 H3 Prompt 形成时加载 | 两后端共享领域子 Skill |
 | [P8 视频综合评估规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/P8-视频综合评估规范.md) | 真实视频的内容、导演实现、连续性、视听与技术质量统一评估 | 新增 | P8 每个正式 Video 生成后由 Codex 直接评估；默认不调用外部模型且不使用视频理解脚本 | Canvas 记录 Comment/metadata；原生保存 Markdown/JSON |
 | [情景化语音任务规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/情景化语音任务规范.md) | Voice ID、逐字保真、语气分段、语音生成与验证 | 降级为按需能力 | P3 只锁定声音身份；正式 Speech 阶段未定，规范暂不删除 | Canvas/原生语音能力继续保留，当前 P1–P8 默认不调用 |
-| [Character Speaking](../../plugins/croco-video-factory/skills/character-speaking/SKILL.md) | DeepSeek 分段、Seed-TTS、字符级核验与重试 | 保留原样并按需加载 | 正式 Speech 生成时使用 DeepSeek V4 Flash GA 正式版（`deepseek-v4-flash-ga-260731`）；与 P2 Gate 的 DeepSeek V4 Pro 职责隔离 | 两后端需保留等价语音调用入口 |
+| [Character Speaking](../../plugins/croco-video-factory/skills/character-speaking/SKILL.md) | DeepSeek 分段、Seed-TTS、字符级核验与重试 | 保留原样并按需加载 | 正式 Speech 生成时使用 DeepSeek V4 Flash GA 正式版（`deepseek-v4-flash-ga-260731`）；P2 不再固定调用 DeepSeek | 两后端需保留等价语音调用入口 |
 | [Pull Latest Characters](../../plugins/croco-video-factory/skills/pull-latest-characters/SKILL.md) | 拉取已发布角色、Voice 和资源完整性 | 保留原样 | P1/P3 按需同步资源；不得删除远端缺失但本地已有角色 | 两后端资源能力保留 |
 | [经验沉淀规范](../../plugins/croco-video-factory/skills/croco-video-factory/references/经验沉淀规范.md) | 纠错证据、更新既有体系、验证与回滚 | 保留原样 | 作为后续实施 Protocol 的治理约束 | 与生产后端无关 |
 
@@ -113,14 +113,14 @@ P1 默认不需要外部 LLM。Canvas 可用普通 Text 与资源查询节点/�
 
 | 必须保留 | 明确替换 | 新权威位置 |
 |---|---|---|
-| 单一核心问题、适龄性、事实准确、来源限定、视觉优先脚本、角色功能、无强行 CTA、默认无可见文字、未到导演阶段不写正式镜头/H3 Prompt | 旧“先铺事实依据再做主题”的次序，改为“Gemini 主题分析/大纲 → 定向事实研究 → DeepSeek V4 Pro 事实 Gate”；后置 GLM 只校定/去 AI 化，不重复事实审核 | 内容策划规范 + 节奏规范 + Critical/Humanizer 引用 |
+| 单一核心问题、适龄性、事实准确、来源限定、视觉优先脚本、角色功能、无强行 CTA、默认无可见文字、未到导演阶段不写正式镜头/H3 Prompt | 旧“先铺事实依据再做主题”的次序，改为“Gemini 主题分析/大纲 → Codex 定向研究/source verification/事实 Gate”；Gate 通过后 Gemini 写剧本，后置 GLM 只校定/去 AI 化 | 内容策划规范 + 节奏规范 + Critical/Humanizer 引用 |
 
 强制链：
 
 ```text
 Gemini 主题分析与内容大纲
-    → 研究与 Claim/source 映射
-    → DeepSeek V4 Pro 事实 Gate
+    → Codex 研究、Claim/source 映射与 source verification
+    → Codex 事实 Gate
         ├─ FAIL：回改大纲并只重验受影响 Claim
         └─ PASS：Gemini 剧本初稿
                     → GLM 表达校定/去 AI 化
@@ -253,6 +253,6 @@ P4 新口径：
 5. **P6 锁定 Gate**：模型 Result 形成后是否需要用户确认；当前只有 P2 剧本保持全模式强制人工 Gate。
 6. **正式 Speech 的阶段归属**：当前 P1–P8 只在 P3 锁定声音身份；正式语音生成、DeepSeek 语气分段和 Seed-TTS 应放入后续哪个阶段。
 7. **P8 之后的旧能力归属**：建议暂时保留视觉/对白验收、修复、合片和交付规范，待下一轮定义 P9/P10，而不是现在删除；请确认。
-8. **模型具体型号政策**：P2 Gate 锁定 DeepSeek V4 Pro；H3 Prompt 锁定豆包 Seed 2.1 Turbo，不再使用外部审核模型；Speech 语气分段锁定 DeepSeek V4 Flash GA 正式版并开启 thinking；Gemini/GLM 具体型号是否继续保持可配置。
+8. **模型具体型号政策**：P2 Gate 由 Codex 调研直接完成，不固定外部模型；H3 Prompt 锁定豆包 Seed 2.1 Turbo，不再使用外部审核模型；Speech 语气分段锁定 DeepSeek V4 Flash GA 正式版并开启 thinking；Gemini/GLM 具体型号是否继续保持可配置。
 
 本轮未明确的产品政策继续沿用既有默认或保持未启用；后续如改变，应再次按更新 Protocol 审核，不在实施中静默补充。
