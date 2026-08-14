@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "suiteVersion": "0.1.2",
+  "suiteVersion": "0.1.3",
   "components": {
-    "crocoTV": "0.1.2",
-    "mcp": "0.1.2",
-    "plugin": "0.1.2",
-    "skillsBundle": "0.1.2"
+    "crocoTV": "0.1.3",
+    "mcp": "0.1.3",
+    "plugin": "0.1.3",
+    "skillsBundle": "0.1.3"
   },
   "contracts": {
     "canvasApi": 1,

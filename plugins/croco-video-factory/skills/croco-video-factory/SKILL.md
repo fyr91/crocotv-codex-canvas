@@ -7,7 +7,9 @@ description: Use when planning or producing a single-topic educational or scienc
 
 ## 启动
 
-开始 P1 前运行 `node <plugin-root>/scripts/check-compatibility.mjs`；退出码 `2` 时停止并只提供 `update-suite.mjs --plan`，用户确认后才能 `--apply --confirm`。
+用户要求更新 Croco Video Factory、Plugin、MCP 或任一捆绑 Skill 时，一律视为整套 CrocoTV 更新：先运行 `node <plugin-root>/scripts/update-suite.mjs --plan`，用户确认后才运行 `--apply --confirm`。更新器必须拉取授权应用仓库、重建应用/MCP/Skills Bundle、重新安装 Plugin、备份移出同名独立 Skill、停用被替代的旧 Plugin，并验证 Codex 实际加载来源；不得提供脱离应用仓库的 Plugin-only 更新。应用仓库存在未提交修改时立即停止并提示用户自行处理，禁止自动 stash、覆盖、reset 或只更新部分组件。
+
+开始 P1 前运行 `node <plugin-root>/scripts/check-compatibility.mjs`；退出码 `2` 时停止生产并提供上述整套更新计划。
 
 第一轮只让用户同时选择：
 

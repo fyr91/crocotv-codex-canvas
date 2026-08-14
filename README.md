@@ -93,7 +93,7 @@ npm run setup -- --migrate-env
 
 CrocoTV 项目和 Codex 的 Plugin 缓存是两个不同位置。`npm run setup` 会把本机 CrocoTV 仓库路径和共享环境文件路径写入 `~/.config/crocotv/config.json`；该文件不含密钥。安装后的 MCP 和 Skill 由此找到实际 CrocoTV 项目。
 
-Plugin 中的主 Skill 会在开始 P1 前从自身安装目录运行兼容检查：读取该安装副本的 `bundle-manifest.json`、逐个验证 Skill 哈希，并与运行中的 `/api/status`（未运行时使用本地 `compatibility.json`）比较版本和数据契约。因此生产时检查的是“Codex 实际加载的 Plugin + 实际 CrocoTV 项目”，不是只比较 Git 工作区同一文件夹中的几个版本号。
+Plugin 中的主 Skill 会在开始 P1 前从自身安装目录运行兼容检查：读取该安装副本的 `bundle-manifest.json`、逐个验证 Skill 哈希，并与运行中的 `/api/status`（未运行时使用本地 `compatibility.json`）比较版本和数据契约。检查还会核对全局启用版本、Marketplace Skill 哈希、`~/.codex/skills` 同名遮蔽、旧 Plugin 和重复 MCP server 名称。因此生产时检查的是“Codex 实际加载的 Plugin + 实际 CrocoTV 项目”，不是只比较 Git 工作区同一文件夹中的几个版本号。
 
 仓库开发者可在提交前检查待发布副本：
 
@@ -122,7 +122,9 @@ node plugins/croco-video-factory/scripts/update-suite.mjs --plan
 node plugins/croco-video-factory/scripts/update-suite.mjs --apply --confirm --target main
 ```
 
-更新器只接受 fast-forward、重新安装锁定依赖、重建套件、刷新 Marketplace 并重新安装 Plugin。完成后需开启新的 Codex 任务。
+“更新 Croco Video Factory、Plugin、MCP 或 Skill”统一表示整套更新，不提供 Plugin-only 路径。更新器只接受授权仓库的 fast-forward，随后重新安装锁定依赖、重建应用/MCP/Skills Bundle、执行 setup、刷新 Marketplace 并重新安装 Plugin。它会把同名独立 Skill 移到 `~/.codex/backups/croco-video-factory/` 的时间戳备份，停用被替代的 `crocotv@personal`，最后从全局安装副本执行兼容与实际加载来源检查。
+
+应用仓库存在未提交修改时，更新器立即停止并列出修改；它不会自动 stash、覆盖、reset，也不会退化成只更新 Plugin/Skills。完成整套更新后需开启新的 Codex 任务。
 
 ### 团队开发与发布
 
