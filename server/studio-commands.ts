@@ -2,6 +2,7 @@ import { applyCanvasOperations, type CanvasOperation } from "./canvas-commands";
 import { publishProjectUpdated } from "./canvas-events";
 import { createStudioProjectSchema, newStudioProjectState, parseStudioProjectState, updateStudioScriptSchema } from "./studio-schemas";
 import { studioMappingOperations } from "./studio-canvas-mapping";
+import { studioTextToDocument } from "./studio-document";
 import { createProject, listProjects, readProject, trashProject } from "./storage";
 import type { StudioBackedProject, StudioProjectState } from "./studio-types";
 
@@ -29,7 +30,16 @@ export async function createStudioProject(raw: unknown, originClientId = "studio
 
 export async function updateStudioScript(projectId: string, raw: unknown, originClientId = "studio-api") {
   const input = updateStudioScriptSchema.parse(raw);
-  return mutateStudioProject(projectId, (state) => ({ ...state, originalText: input.text }), { expectedVersion: input.expectedVersion, originClientId });
+  const updatedAt = new Date().toISOString();
+  return mutateStudioProject(projectId, (state) => ({
+    ...state,
+    originalText: input.text,
+    document: {
+      ...state.document,
+      content: studioTextToDocument(input.text),
+      updatedAt,
+    },
+  }), { expectedVersion: input.expectedVersion, originClientId });
 }
 
 export async function mutateStudioProject(
@@ -136,6 +146,10 @@ export function studioProjectResponse(project: StudioBackedProject) {
     updatedAt: project.updatedAt,
     canvas_project_id: project.id,
     project_version: project.version,
+    document: {
+      content: studio.document.content || studioTextToDocument(studio.originalText),
+      updated_at: studio.document.updatedAt || "",
+    },
   };
 }
 

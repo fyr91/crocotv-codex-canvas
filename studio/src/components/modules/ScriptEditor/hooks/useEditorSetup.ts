@@ -32,6 +32,10 @@ export function useEditorSetup(options: UseEditorSetupOptions = {}) {
   const t = useTranslations('scriptEditor');
 
   const editor = useEditor({
+    // Keep editor creation after hydration. ScriptEditorShell uses dynamic
+    // loading, but the App Router still evaluates the client boundary during
+    // its bailout pass.
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         // Disable defaults that conflict with our custom nodes

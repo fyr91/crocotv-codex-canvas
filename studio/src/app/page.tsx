@@ -657,7 +657,7 @@ export default function Home() {
       return <ScriptEditorShell mode="full" />;
     }
     if (currentView === 'project-editor' && projectId) {
-      return <ScriptEditorShell mode="embedded" projectId={projectId} />;
+      return <ScriptEditorShell mode="full" projectId={projectId} />;
     }
 
     // Workspace view — Line B skeleton

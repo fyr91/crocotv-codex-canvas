@@ -5,112 +5,35 @@ import { Package } from 'lucide-react';
 import type { Editor } from '@tiptap/react';
 import { useTranslations } from 'next-intl';
 import { useEditorStore } from '@/store/editorStore';
+import ProjectEntityPanel from './ProjectEntityPanel';
 
 export interface PropsPanelProps {
   editor: Editor | null;
 }
 
-interface PropEntry {
-  name: string;
-  firstSceneTitle: string;
-}
-
-/**
- * 从动作文本中提取可能的道具名词（基础正则版本）
- * - 中文：提取引号（「」「""」）内的物品
- * - 英文：提取大写开头的名词短语
- */
-function extractProps(text: string): string[] {
-  const props = new Set<string>();
-
-  // 中文引号内容：「xxx」或 "xxx" 或 'xxx'
-  const zhRe = /[「"']([\u4e00-\u9fff\w]{1,10})[」"']/g;
-  let m: RegExpExecArray | null;
-  while ((m = zhRe.exec(text)) !== null) {
-    props.add(m[1]);
-  }
-
-  // 英文：大写开头的名词（排除句首）
-  const enRe = /(?<=\s)([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/g;
-  while ((m = enRe.exec(text)) !== null) {
-    props.add(m[0]);
-  }
-
-  return Array.from(props);
-}
+const QUOTED_PROP_RE = /[「"']([\u4e00-\u9fff\w]{1,20})[」"']/g;
 
 export default function PropsPanel({ editor }: PropsPanelProps) {
   const t = useTranslations('scriptEditor');
-  const derivedScenes = useEditorStore((s) => s.derivedScenes);
-
-  const propEntries = useMemo<PropEntry[]>(() => {
+  const wordCount = useEditorStore((state) => state.wordCount);
+  const suggestions = useMemo(() => {
     if (!editor) return [];
-
-    const propsMap = new Map<string, string>(); // propName -> first scene title
-    const doc = editor.state.doc;
-    let currentSceneTitle = '';
-
-    doc.descendants((node) => {
-      if (node.type.name === 'sceneHeading') {
-        currentSceneTitle = node.textContent || t('sidebar.untitledScene');
-        return true;
-      }
-      if (node.type.name === 'action') {
-        const text = node.textContent;
-        const found = extractProps(text);
-        for (const prop of found) {
-          if (!propsMap.has(prop)) {
-            propsMap.set(prop, currentSceneTitle);
-          }
-        }
-      }
-      return true;
-    });
-
-    return Array.from(propsMap.entries()).map(([name, firstSceneTitle]) => ({
-      name,
-      firstSceneTitle,
-    }));
-  }, [editor, derivedScenes]);
-
-  if (propEntries.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-elevated mb-3">
-          <Package size={20} className="text-text-muted" />
-        </div>
-        <p className="text-sm text-text-muted">{t('panels.propsEmpty')}</p>
-        <p className="text-sm text-text-muted/60 mt-1">
-          {t('panels.propsEmptyHint')}
-        </p>
-      </div>
-    );
-  }
+    const names = new Set<string>();
+    const text = editor.getText({ blockSeparator: '\n' });
+    QUOTED_PROP_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = QUOTED_PROP_RE.exec(text)) !== null) names.add(match[1]);
+    return Array.from(names).map((name) => ({ name }));
+  }, [editor, wordCount]);
 
   return (
-    <div className="p-3">
-      <div className="flex items-center gap-2 mb-3">
-        <Package size={14} className="text-text-muted" />
-        <span className="text-sm font-medium text-text-muted uppercase tracking-wider">
-          {t('panels.propsCount', { count: propEntries.length })}
-        </span>
-      </div>
-      <div className="space-y-1">
-        {propEntries.map((entry) => (
-          <div
-            key={entry.name}
-            className="flex items-center justify-between rounded-lg border border-foreground/10 bg-elevated/80 px-3 py-2 hover:border-foreground/20 transition-colors"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Package size={12} className="shrink-0 text-text-secondary" />
-              <span className="text-sm text-foreground truncate">{entry.name}</span>
-            </div>
-            <span className="shrink-0 text-sm text-text-muted ml-2 truncate max-w-[120px]">
-              {entry.firstSceneTitle}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <ProjectEntityPanel
+      kind="prop"
+      suggestions={suggestions}
+      icon={<Package size={15} />}
+      emptyTitle={t('panels.propsEmpty')}
+      emptyHint={t('panels.propsEmptyHint')}
+      countLabel={(count) => t('panels.propsCount', { count })}
+    />
   );
 }

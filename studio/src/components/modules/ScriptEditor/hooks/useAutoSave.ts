@@ -2,8 +2,10 @@ import { useEffect, useRef, useCallback } from 'react';
 import { Editor } from '@tiptap/react';
 import { scriptEditorApi } from '@/lib/scriptEditorApi';
 import { useEditorStore } from '@/store/editorStore';
+import { useProjectStore } from '@/store/projectStore';
 
 const AUTOSAVE_INTERVAL_MS = 30_000; // 30 seconds
+const AUTOSAVE_DEBOUNCE_MS = 1_200;
 
 /**
  * 自动保存 Hook
@@ -12,31 +14,77 @@ const AUTOSAVE_INTERVAL_MS = 30_000; // 30 seconds
  * - beforeunload 事件拦截（离开页面前提醒保存）
  */
 export function useAutoSave(editor: Editor | null, projectId: string | null) {
-  const { isDirty, setDirty, setLastSavedAt } = useEditorStore();
+  const setDirty = useEditorStore((state) => state.setDirty);
+  const setLastSavedAt = useEditorStore((state) => state.setLastSavedAt);
   const isSavingRef = useRef(false);
+  const saveQueuedRef = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 核心保存逻辑
   const save = useCallback(
     async (createSnapshot = false) => {
       if (!editor || !projectId) return;
-      if (isSavingRef.current) return;
+      if (isSavingRef.current) {
+        saveQueuedRef.current = true;
+        return;
+      }
 
       const content = editor.getJSON();
+      const plainText = editor.getText({ blockSeparator: '\n' });
+      const editorState = useEditorStore.getState();
+      const derivation = {
+        scenes: editorState.derivedScenes,
+        characters: editorState.derivedCharacters,
+        estimated_duration: editorState.estimatedDuration,
+        word_count: editorState.wordCount,
+        confidence_score: editorState.confidenceScore,
+      };
       isSavingRef.current = true;
 
       try {
-        await scriptEditorApi.saveDocument(projectId, content, createSnapshot);
+        const response = await scriptEditorApi.saveDocument(projectId, content, plainText, createSnapshot, derivation);
+        const currentProject = useProjectStore.getState().currentProject;
+        if (currentProject?.id === projectId) {
+          useProjectStore.getState().updateProject(projectId, {
+            originalText: response.original_text ?? plainText,
+          });
+        }
         setDirty(false);
         setLastSavedAt(new Date());
       } catch (err) {
         console.error('[useAutoSave] Save failed:', err);
       } finally {
         isSavingRef.current = false;
+        if (saveQueuedRef.current) {
+          saveQueuedRef.current = false;
+          void save(false);
+        }
       }
     },
     [editor, projectId, setDirty, setLastSavedAt]
   );
+
+  // Save shortly after the user stops typing. The 30s interval below remains
+  // as a safety net for unusual editor updates that do not emit normally.
+  useEffect(() => {
+    if (!editor || !projectId) return;
+
+    const handleUpdate = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => void save(false), AUTOSAVE_DEBOUNCE_MS);
+    };
+
+    editor.on('update', handleUpdate);
+    return () => {
+      editor.off('update', handleUpdate);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      if (useEditorStore.getState().isDirty) void save(false);
+    };
+  }, [editor, projectId, save]);
 
   // 30s 周期自动保存
   useEffect(() => {
@@ -75,10 +123,14 @@ export function useAutoSave(editor: Editor | null, projectId: string | null) {
         // 尝试在卸载前保存
         if (editor && projectId) {
           const content = editor.getJSON();
-          // 使用 sendBeacon 或同步请求不可靠，这里仅做拦截提醒
+          const plainText = editor.getText({ blockSeparator: '\n' });
+          const payload = new Blob(
+            [JSON.stringify({ content, plain_text: plainText, create_snapshot: false })],
+            { type: 'application/json' }
+          );
           navigator.sendBeacon?.(
             `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:17177'}/projects/${projectId}/document`,
-            JSON.stringify({ content, create_snapshot: false })
+            payload
           );
         }
       }
