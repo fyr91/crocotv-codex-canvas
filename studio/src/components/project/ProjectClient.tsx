@@ -10,7 +10,6 @@ import type { BreadcrumbSegment } from "@/components/layout/BreadcrumbBar";
 // PropertiesPanel removed in R2V v2 — chrome is owned per-step now.
 // ScriptProcessor right rail will become "Previously on..."; other steps
 // have their own SidePanelHeader-driven side columns.
-import ScriptProcessor from "@/components/modules/ScriptProcessor";
 import Cast from "@/components/modules/Cast";
 import VideoGenerator from "@/components/modules/VideoGenerator";
 import VideoAssembly from "@/components/modules/VideoAssembly";
@@ -24,6 +23,7 @@ import EntityConfirmModal from "@/components/modules/EntityConfirmModal";
 import dynamic from "next/dynamic";
 
 const CreativeCanvas = dynamic(() => import("@/components/canvas/CreativeCanvas"), { ssr: false });
+const ScriptEditorShell = dynamic(() => import("@/components/modules/ScriptEditor/ScriptEditorShell"), { ssr: false });
 
 // PR-3m · Steps 7-9 (Voice / Final Mix / Export) deprecated. Their
 // functionality moved into:
@@ -247,7 +247,7 @@ export default function ProjectClient({ id, breadcrumbSegments }: { id: string; 
                     <div className="atelier-page-bloom" aria-hidden="true" />
                     <div className="atelier-page-grain" aria-hidden="true" />
                     <div className="relative z-10 h-full flex flex-col overflow-hidden">
-                        {activeStep === "script" && <ScriptProcessor />}
+                        {activeStep === "script" && <ScriptEditorShell mode="embedded" projectId={currentProject.id} />}
                         {activeStep === "art_direction" && <ArtDirection />}
                         {activeStep === "cast" && <Cast />}
                         {activeStep === "assets" && <ConsistencyVault />}  {/* legacy i2v only */}

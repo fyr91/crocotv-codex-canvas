@@ -5,7 +5,8 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import { listCharacters } from "./characters";
 import { models } from "./providers";
 import { addResource, fileSize, listProjects, listResources, readProject, typeFromMime, writeGenerated } from "./storage";
-import { createStudioProject, deleteStudioProject, getStudioBackedProject, getStudioProject, listStudioAssetSources, listStudioProjectResponses, mutateStudioProject } from "./studio-commands";
+import { createStudioProject, deleteStudioProject, getStudioBackedProject, getStudioProject, listStudioAssetSources, listStudioProjectResponses, mutateStudioProject, updateStudioScript } from "./studio-commands";
+import { studioDocumentToText, studioTextToDocument } from "./studio-document";
 import {
   analyzeStudioArtDirection, analyzeStudioStoryboard, clearStudioArtDirection, copyStudioFrame, createStudioEntity, createStudioFrame, createStudioVideoTasks,
   deleteStudioEntity, deleteStudioFrame, extractStudioEntities, generateStudioAsset, generateStudioFrameAudio, mergeStudioProject, patchStudioEntity, patchStudioFrame,
@@ -65,7 +66,7 @@ studioApiRouter.get("/model-catalog", route(async (_request, response) => respon
 studioApiRouter.post("/projects", route(async (request, response) => response.status(201).json(await createStudioProject(request.body, clientId(request)))));
 studioApiRouter.get("/projects/", route(async (_request, response) => response.json(await listStudioProjectResponses({ kind: "episode" }))));
 studioApiRouter.get("/projects", route(async (_request, response) => response.json(await listStudioProjectResponses({ kind: "episode" }))));
-studioApiRouter.put("/projects/:id/text", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, originalText: String(request.body?.text || "") }), { originClientId: clientId(request) }))));
+studioApiRouter.put("/projects/:id/text", projectRoute(async (request, response, id) => response.json(await updateStudioScript(id, request.body, clientId(request)))));
 studioApiRouter.put("/projects/:id/reparse", projectRoute(async (request, response, id) => response.json(await extractStudioEntities(id, String(request.body?.text || ""), clientId(request)))));
 studioApiRouter.post("/projects/:id/extract_preview", projectRoute(async (request, response, id) => response.json(await previewStudioEntities(id, String(request.body?.text || ""), clientId(request)))));
 studioApiRouter.post("/projects/:id/toggle_starred", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, starred: !state.starred }), { originClientId: clientId(request) }))));
@@ -231,13 +232,43 @@ studioApiRouter.post("/projects/:id/export", projectRoute(async (_request, respo
 studioApiRouter.post("/upload", upload.single("file"), route(async (request, response) => { const resource = await storeUpload(request); response.json({ url: resource.url, path: resource.url, resource_id: resource.id }); }));
 studioApiRouter.get("/asset-sources", route(async (_request, response) => response.json(await listStudioAssetSources())));
 
-studioApiRouter.post("/projects/:id/document", projectRoute(async (request, response, id) => { const content = objectValue(request.body?.content || request.body); const updatedAt = new Date().toISOString(); await mutateStudioProject(id, (state) => ({ ...state, document: { ...state.document, content, updatedAt, snapshots: request.body?.create_snapshot && state.document.content ? [...state.document.snapshots, { timestamp: Date.now() / 1000, label: "自动快照", content: state.document.content }].slice(-500) : state.document.snapshots } }), { originClientId: clientId(request) }); response.json({ project_id: id, content, updated_at: updatedAt }); }));
-studioApiRouter.get("/projects/:id/document", projectRoute(async (_request, response, id) => { const document = (await getStudioBackedProject(id)).studio.document; response.json({ project_id: id, content: document.content || { type: "doc", content: [] }, updated_at: document.updatedAt || "" }); }));
+studioApiRouter.post("/projects/:id/document", projectRoute(async (request, response, id) => {
+  const content = objectValue(request.body?.content || request.body);
+  const text = typeof request.body?.plain_text === "string"
+    ? boundedText(request.body.plain_text, "plain_text", 1_000_000)
+    : studioDocumentToText(content);
+  const updatedAt = new Date().toISOString();
+  const project = await mutateStudioProject(id, (state) => ({
+    ...state,
+    originalText: text,
+    document: {
+      ...state.document,
+      content,
+      updatedAt,
+      snapshots: request.body?.create_snapshot && state.document.content
+        ? [...state.document.snapshots, { timestamp: Date.now() / 1000, label: "自动快照", content: state.document.content }].slice(-500)
+        : state.document.snapshots,
+    },
+  }), { originClientId: clientId(request) });
+  response.json({ project_id: id, content, original_text: text, updated_at: updatedAt, project_version: project.project_version });
+}));
+studioApiRouter.get("/projects/:id/document", projectRoute(async (_request, response, id) => {
+  const project = await getStudioBackedProject(id);
+  const document = project.studio.document;
+  response.json({
+    project_id: id,
+    content: document.content || studioTextToDocument(project.studio.originalText),
+    content_source: document.content ? "document" : "original_text",
+    original_text: project.studio.originalText,
+    updated_at: document.updatedAt || project.updatedAt || "",
+    project_version: project.version,
+  });
+}));
 studioApiRouter.get("/projects/:id/document/snapshots", projectRoute(async (_request, response, id) => response.json((await getStudioBackedProject(id)).studio.document.snapshots.map((snapshot) => ({ project_id: id, timestamp: String(snapshot.timestamp), created_at: new Date(snapshot.timestamp * 1000).toISOString() })).reverse())));
 studioApiRouter.post("/projects/:id/document/snapshots", projectRoute(async (request, response, id) => { const timestamp = Date.now() / 1000; await mutateStudioProject(id, (state) => ({ ...state, document: { ...state.document, snapshots: [...state.document.snapshots, { timestamp, label: String(request.body?.label || "手动快照"), content: state.document.content || {} }].slice(-500) } }), { originClientId: clientId(request) }); response.json({ project_id: id, timestamp: String(timestamp), created_at: new Date(timestamp * 1000).toISOString() }); }));
-studioApiRouter.post("/projects/:id/document/snapshots/:timestamp/restore", projectRoute(async (request, response, id) => { const timestamp = Number(param(request.params.timestamp)); const project = await getStudioBackedProject(id); const snapshot = project.studio.document.snapshots.find((item) => item.timestamp === timestamp); if (!snapshot) throw new Error("文档快照不存在"); const updatedAt = new Date().toISOString(); await mutateStudioProject(id, (state) => ({ ...state, document: { ...state.document, content: snapshot.content, updatedAt } }), { originClientId: clientId(request) }); response.json({ project_id: id, content: snapshot.content, updated_at: updatedAt }); }));
-studioApiRouter.post("/projects/:id/document/import", projectRoute(async (request, response, id) => { const text = Buffer.from(String(request.body?.content || ""), "base64").toString("utf8"); const content = textToTiptap(text); const updatedAt = new Date().toISOString(); await mutateStudioProject(id, (state) => ({ ...state, originalText: text, document: { ...state.document, content, updatedAt } }), { originClientId: clientId(request) }); response.json({ project_id: id, content, updated_at: updatedAt, filename: String(request.body?.filename || "") }); }));
-studioApiRouter.post("/projects/:id/document/export", projectRoute(async (request, response, id) => { const text = tiptapText(objectValue(request.body?.content)); response.setHeader("Content-Type", "text/plain; charset=utf-8"); response.setHeader("Content-Disposition", `attachment; filename=studio-${id}.txt`); response.send(text); }));
+studioApiRouter.post("/projects/:id/document/snapshots/:timestamp/restore", projectRoute(async (request, response, id) => { const timestamp = Number(param(request.params.timestamp)); const project = await getStudioBackedProject(id); const snapshot = project.studio.document.snapshots.find((item) => item.timestamp === timestamp); if (!snapshot) throw new Error("文档快照不存在"); const updatedAt = new Date().toISOString(); const text = studioDocumentToText(snapshot.content); await mutateStudioProject(id, (state) => ({ ...state, originalText: text, document: { ...state.document, content: snapshot.content, updatedAt } }), { originClientId: clientId(request) }); response.json({ project_id: id, content: snapshot.content, original_text: text, updated_at: updatedAt }); }));
+studioApiRouter.post("/projects/:id/document/import", projectRoute(async (request, response, id) => { const text = Buffer.from(String(request.body?.content || ""), "base64").toString("utf8"); const content = studioTextToDocument(text); const updatedAt = new Date().toISOString(); await mutateStudioProject(id, (state) => ({ ...state, originalText: text, document: { ...state.document, content, updatedAt } }), { originClientId: clientId(request) }); response.json({ project_id: id, content, original_text: text, updated_at: updatedAt, filename: String(request.body?.filename || "") }); }));
+studioApiRouter.post("/projects/:id/document/export", projectRoute(async (request, response, id) => { const text = studioDocumentToText(objectValue(request.body?.content)); response.setHeader("Content-Type", "text/plain; charset=utf-8"); response.setHeader("Content-Disposition", `attachment; filename=studio-${id}.txt`); response.send(text); }));
 studioApiRouter.post("/projects/:id/sync_derivation", projectRoute(async (request, response, id) => { await mutateStudioProject(id, (state) => ({ ...state, metadata: { ...state.metadata, derivation: objectValue(request.body) } }), { originClientId: clientId(request) }); response.json({ status: "ok", synced_at: new Date().toISOString() }); }));
 studioApiRouter.post("/projects/:id/derive_gaps", projectRoute(async (request, response, id) => { const project = await getStudioBackedProject(id); const preview = await previewStudioEntities(id, stringArray(request.body?.raw_text_blocks).join("\n") || project.studio.originalText, clientId(request)); const results = [...preview.characters.map((item) => ({ type: "character", name: item.name, description: item.description, confidence: 1 })), ...preview.props.map((item) => ({ type: "prop", name: item.name, description: item.description, confidence: 1 })), ...preview.scenes.map((item) => ({ type: "location", name: item.name, description: item.description, confidence: 1 }))]; response.json({ results, entities: results, cached: false }); }));
 studioApiRouter.post("/projects/:id/shot_blocks/:shotId/confirm", projectRoute(async (request, response, id) => { const shotId = param(request.params.shotId); await patchStudioFrame(id, shotId, { ...objectValue(request.body), status: "confirmed" }, clientId(request)); response.json({ shot_id: shotId, status: "confirmed", ...objectValue(request.body), confirmed_at: new Date().toISOString() }); }));
@@ -402,5 +433,3 @@ async function cancelVideoTask(projectId: string, taskId: string, originClientId
   if (jobId && findStudioGenerationJob(jobId)) await cancelStudioGenerationJob(jobId);
   return mutateVideoTask(projectId, taskId, { status: "failed", error: "用户取消" }, originClientId);
 }
-function textToTiptap(text: string) { return { type: "doc", content: text.split(/\n{2,}/).filter(Boolean).map((paragraph) => ({ type: "paragraph", content: [{ type: "text", text: paragraph }] })) }; }
-function tiptapText(value: any): string { if (typeof value?.text === "string") return value.text; if (Array.isArray(value?.content)) return value.content.map(tiptapText).filter(Boolean).join(value.type === "doc" ? "\n\n" : ""); return ""; }

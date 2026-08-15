@@ -29,6 +29,9 @@ export interface DocumentResponse {
   project_id: string;
   content: object;
   updated_at: string;
+  original_text?: string;
+  content_source?: 'document' | 'original_text';
+  project_version?: number;
 }
 
 export interface SnapshotResponse {
@@ -39,9 +42,15 @@ export interface SnapshotResponse {
 
 export const scriptEditorApi = {
   /** 保存文档 */
-  saveDocument: async (projectId: string, content: object, createSnapshot = false): Promise<DocumentResponse> => {
+  saveDocument: async (
+    projectId: string,
+    content: object,
+    plainText: string,
+    createSnapshot = false
+  ): Promise<DocumentResponse> => {
     const res = await axios.post(`${API_BASE}/projects/${projectId}/document`, {
       content,
+      plain_text: plainText,
       create_snapshot: createSnapshot,
     });
     return res.data;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { EditorContent } from '@tiptap/react';
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, X } from 'lucide-react';
@@ -14,6 +14,8 @@ import { useSceneFolding } from './hooks/useSceneFolding';
 import { useViewMode } from './hooks/useViewMode';
 import { useOfflineCache } from './hooks/useOfflineCache';
 import { useL3Completion } from './hooks/useL3Completion';
+import { useAutoSave } from './hooks/useAutoSave';
+import { useDerivation } from './hooks/useDerivation';
 import { PasteHintBar } from './components/PasteHintBar';
 import { ShortcutHelpPanel } from './components/ShortcutHelpPanel';
 import { ContinuityIndicator } from './components/ContinuityIndicator';
@@ -21,6 +23,10 @@ import RightPanelContainer from './panels';
 import LeftSidebar from './sidebar';
 import StoryboardView from './views/StoryboardView';
 import ReadModeOverlay from './components/ReadModeOverlay';
+import PipelineLinkDialog from './dialogs/PipelineLinkDialog';
+import { scriptEditorApi } from '@/lib/scriptEditorApi';
+import { useProjectStore } from '@/store/projectStore';
+import { toast } from '@/store/toastStore';
 
 export interface ScriptEditorShellProps {
   mode?: 'full' | 'embedded' | 'focus';
@@ -34,6 +40,7 @@ export default function ScriptEditorShell({
   initialContent,
 }: ScriptEditorShellProps) {
   const t = useTranslations('scriptEditor');
+  const tScript = useTranslations('script');
   const { editor, isReady } = useEditorSetup({ content: initialContent });
   const { showHint, analysis, applyFormatting, dismissHint } = usePasteHandler(editor);
   const { showShortcutHelp, closeShortcutHelp } = useKeyboardShortcuts(editor);
@@ -42,6 +49,13 @@ export default function ScriptEditorShell({
   const { mode: viewMode, setMode: setViewMode, isReadOnly, showToolbar, showSidebars } = useViewMode();
   const { hasNewerLocal, restoreFromLocal, dismissLocalRestore, isOffline } = useOfflineCache(projectId, editor);
   useL3Completion(editor, projectId ?? null);
+  useDerivation(editor);
+  const { save } = useAutoSave(editor, projectId ?? null);
+
+  const [documentLoading, setDocumentLoading] = useState(Boolean(projectId));
+  const [projectPickerOpen, setProjectPickerOpen] = useState(!projectId);
+  const currentProject = useProjectStore((s) => s.currentProject);
+  const selectProject = useProjectStore((s) => s.selectProject);
 
   const isDirty = useEditorStore((s) => s.isDirty);
   const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
@@ -53,6 +67,10 @@ export default function ScriptEditorShell({
   const rightCollapsed = useEditorStore((s) => s.rightSidebarCollapsed);
   const toggleLeft = useEditorStore((s) => s.toggleLeftSidebar);
   const toggleRight = useEditorStore((s) => s.toggleRightSidebar);
+  const setProjectId = useEditorStore((s) => s.setProjectId);
+  const setEditorMode = useEditorStore((s) => s.setEditorMode);
+  const setDirty = useEditorStore((s) => s.setDirty);
+  const setLastSavedAt = useEditorStore((s) => s.setLastSavedAt);
 
   const showLeft = mode === 'full' && !leftCollapsed && showSidebars;
   const showRight = mode === 'full' && !rightCollapsed && showSidebars;
@@ -63,6 +81,43 @@ export default function ScriptEditorShell({
   const didAutoFocusEmptyEditor = useRef(false);
 
   useEffect(() => {
+    setProjectId(projectId ?? null);
+    setEditorMode(mode);
+  }, [mode, projectId, setEditorMode, setProjectId]);
+
+  useEffect(() => {
+    if (!projectId || !editor) {
+      setDocumentLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setDocumentLoading(true);
+    const selectedProject = useProjectStore.getState().currentProject;
+    void Promise.all([
+      scriptEditorApi.loadDocument(projectId),
+      selectedProject?.id === projectId ? Promise.resolve() : selectProject(projectId),
+    ])
+      .then(([response]) => {
+        if (cancelled) return;
+        editor.commands.setContent(response.content, { emitUpdate: false });
+        setDirty(false);
+        setLastSavedAt(response.updated_at ? new Date(response.updated_at) : null);
+        setDocumentLoading(false);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('[ScriptEditor] Failed to load project document:', error);
+        toast.error(tScript('loadFailed'));
+        setDocumentLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editor, projectId, selectProject, setDirty, setLastSavedAt, tScript]);
+
+  useEffect(() => {
     editor?.setEditable(!isReadOnly);
   }, [editor, isReadOnly]);
 
@@ -71,6 +126,7 @@ export default function ScriptEditorShell({
       didNormalizeEmptyView.current ||
       mode !== 'full' ||
       !isReady ||
+      documentLoading ||
       !editor?.isEmpty
     ) {
       return;
@@ -80,7 +136,7 @@ export default function ScriptEditorShell({
     if (viewMode !== 'edit') {
       setViewMode('edit');
     }
-  }, [editor, isReady, mode, setViewMode, viewMode]);
+  }, [documentLoading, editor, isReady, mode, setViewMode, viewMode]);
 
   useEffect(() => {
     if (
@@ -89,6 +145,7 @@ export default function ScriptEditorShell({
       viewMode !== 'edit' ||
       isReadOnly ||
       !isReady ||
+      documentLoading ||
       !editor?.isEmpty
     ) {
       return;
@@ -100,7 +157,18 @@ export default function ScriptEditorShell({
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [editor, isReady, isReadOnly, mode, viewMode]);
+  }, [documentLoading, editor, isReady, isReadOnly, mode, viewMode]);
+
+  const handleEnterPipeline = useCallback(() => {
+    if (!projectId) return;
+    void save(false).finally(() => {
+      window.location.hash = `#/project/${projectId}`;
+    });
+  }, [projectId, save]);
+
+  const handleProjectLink = useCallback((linkedProjectId: string) => {
+    window.location.hash = `#/project/${linkedProjectId}/editor`;
+  }, []);
 
   const handleShotClick = useCallback((shotId: string) => {
     setViewMode('edit');
@@ -152,7 +220,7 @@ export default function ScriptEditorShell({
               {t('shell.title')}
             </span>
             {projectId && (
-              <span className="text-sm text-text-muted">{projectId}</span>
+              <span className="text-sm text-text-muted">{currentProject?.id === projectId ? currentProject.title : projectId}</span>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -237,7 +305,7 @@ export default function ScriptEditorShell({
               data-rendering={currentRendering}
               data-empty={isReady && isEditorEmpty ? 'true' : 'false'}
             >
-              {isReady ? (
+              {isReady && !documentLoading ? (
                 <EditorContent
                   editor={editor}
                   className={`prose prose-invert max-w-none focus:outline-none min-h-[60vh] ${
@@ -260,6 +328,7 @@ export default function ScriptEditorShell({
               editor={editor}
               mode={mode}
               projectId={projectId}
+              onEnterPipeline={handleEnterPipeline}
             />
           </aside>
         )}
@@ -307,6 +376,14 @@ export default function ScriptEditorShell({
 
       {/* Shortcut Help Panel */}
       <ShortcutHelpPanel open={showShortcutHelp} onClose={closeShortcutHelp} />
+      <PipelineLinkDialog
+        open={projectPickerOpen}
+        onClose={() => {
+          setProjectPickerOpen(false);
+          if (!projectId) window.location.hash = '#/';
+        }}
+        onLink={handleProjectLink}
+      />
     </div>
   );
 }

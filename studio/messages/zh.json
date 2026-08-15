@@ -1152,6 +1152,7 @@
     "fillNameAndPrompt": "请填写风格名称和正向提示词",
     "customStyleSaved": "自定义风格已保存！",
     "saveFailed": "保存失败，请重试",
+    "loadFailed": "剧本文档加载失败，请重试",
     "selectStyleFirst": "请先选择一个风格",
     "styleApplied": "风格已应用",
     "styleAppliedBody": "本集风格已切换为【{name}】，将用于后续生成。",
