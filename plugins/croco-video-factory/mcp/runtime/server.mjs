@@ -32098,6 +32098,82 @@ var init_stdio2 = __esm({
   }
 });
 
+// plugins/croco-video-factory/mcp/node-placement.ts
+function avoidMcpNodeOverlaps(existingNodes, inputOperations) {
+  const operations = inputOperations;
+  if (!operations.some((operation) => operation.op === "add_node")) return inputOperations;
+  const occupied = existingNodes.flatMap((node) => boundsFor(node));
+  return operations.map((operation, index) => {
+    if (operation.op !== "add_node" || !operation.node) return operation;
+    const size = nodeSize(operation.node);
+    const node = operation.node;
+    const groupId = String(node.metadata?.groupId || "");
+    let position = validPosition(node.position) ? { ...node.position } : nextPosition(occupied);
+    let collisions = collidingBounds(position, size, groupId, occupied);
+    while (collisions.length) {
+      position = groupId ? { ...position, y: Math.max(...collisions.map((item) => item.bottom)) + GAP } : { ...position, x: Math.max(...collisions.map((item) => item.right)) + GAP };
+      collisions = collidingBounds(position, size, groupId, occupied);
+    }
+    const id = String(node.id || operation.ref || `mcp-add-${index}`);
+    occupied.push({ id, type: String(node.type || ""), groupId, left: position.x, top: position.y, right: position.x + size.width, bottom: position.y + size.height });
+    return { ...operation, node: { ...node, position } };
+  });
+}
+function boundsFor(node) {
+  if (!validPosition(node.position)) return [];
+  const size = nodeSize(node);
+  return [{
+    id: String(node.id || ""),
+    type: String(node.type || ""),
+    groupId: String(node.metadata?.groupId || ""),
+    left: node.position.x,
+    top: node.position.y,
+    right: node.position.x + size.width,
+    bottom: node.position.y + size.height
+  }];
+}
+function collidingBounds(position, size, groupId, occupied) {
+  const candidate = { left: position.x, top: position.y, right: position.x + size.width, bottom: position.y + size.height };
+  return occupied.filter((item) => {
+    if (item.type === "group" && item.id === groupId || groupId === item.groupId && item.type === "group") return false;
+    return candidate.left < item.right + GAP && candidate.right + GAP > item.left && candidate.top < item.bottom + GAP && candidate.bottom + GAP > item.top;
+  });
+}
+function nextPosition(occupied) {
+  if (!occupied.length) return { x: 160, y: 160 };
+  return { x: Math.max(...occupied.map((item) => item.right)) + GAP, y: Math.min(...occupied.map((item) => item.top)) };
+}
+function validPosition(value) {
+  const position = value;
+  return Boolean(position && Number.isFinite(position.x) && Number.isFinite(position.y));
+}
+function nodeSize(node) {
+  const defaults = {
+    text: { width: 320, height: 240 },
+    image: { width: 360, height: 320 },
+    video: { width: 400, height: 300 },
+    audio: { width: 360, height: 180 },
+    music: { width: 380, height: 220 },
+    config: { width: 360, height: 390 },
+    split: { width: 340, height: 280 },
+    group: { width: 720, height: 520 },
+    comment: { width: 280, height: 180 }
+  };
+  const fallback = defaults[String(node.type || "")] || defaults.text;
+  return { width: positive(node.width) || fallback.width, height: positive(node.height) || fallback.height };
+}
+function positive(value) {
+  const number4 = Number(value);
+  return Number.isFinite(number4) && number4 > 0 ? number4 : void 0;
+}
+var GAP;
+var init_node_placement = __esm({
+  "plugins/croco-video-factory/mcp/node-placement.ts"() {
+    "use strict";
+    GAP = 64;
+  }
+});
+
 // plugins/croco-video-factory/mcp/server.ts
 var server_exports = {};
 import { createHash, randomUUID } from "node:crypto";
@@ -32274,7 +32350,12 @@ async function importWorkspaceResource(filePath, title) {
   return payload;
 }
 async function applyOperations(projectId, operations, expectedVersion) {
-  return api(`/api/canvas/projects/${encodeURIComponent(projectId)}/operations`, { method: "POST", body: { operations, expectedVersion } });
+  let positioned = operations;
+  if (operations.some((operation) => operation.op === "add_node")) {
+    const project = await api(`/api/projects/${encodeURIComponent(projectId)}`);
+    positioned = avoidMcpNodeOverlaps(project.nodes, operations);
+  }
+  return api(`/api/canvas/projects/${encodeURIComponent(projectId)}/operations`, { method: "POST", body: { operations: positioned, expectedVersion } });
 }
 async function assertOperationsDoNotTouchClaimedNodes(projectId, operations) {
   const project = await api(`/api/projects/${encodeURIComponent(projectId)}`);
@@ -32409,6 +32490,7 @@ var init_server3 = __esm({
     init_mcp();
     init_stdio2();
     init_v4();
+    init_node_placement();
     moduleDirectory = path2.dirname(fileURLToPath2(import.meta.url));
     pluginRoot = findPluginRoot(moduleDirectory);
     bundleManifest = JSON.parse(readFileSync(path2.join(pluginRoot, "bundle-manifest.json"), "utf8"));
@@ -32756,7 +32838,7 @@ var init_server3 = __esm({
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
     }, async ({ projectId, ...filters }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/nodes/query`, { method: "POST", body: filters })));
     server.registerTool("canvas_apply_operations", {
-      description: "Atomically add, update, delete, connect, or disconnect canvas nodes. Temporary refs let one call create and connect a whole graph.",
+      description: "Atomically add, update, delete, connect, or disconnect canvas nodes. Temporary refs let one call create and connect a whole graph. New MCP-created nodes keep their requested anchor when possible and are minimally shifted when that anchor overlaps an existing node; existing nodes are never moved.",
       inputSchema: { projectId: external_exports.string().uuid(), expectedVersion: external_exports.number().int().positive().optional(), operations: external_exports.array(operationSchema).min(1).max(100) },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
     }, async ({ projectId, expectedVersion, operations }) => {

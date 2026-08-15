@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod/v4";
+import { avoidMcpNodeOverlaps } from "./node-placement";
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = findPluginRoot(moduleDirectory);
@@ -383,7 +384,7 @@ server.registerTool("canvas_query_nodes", {
 }, async ({ projectId, ...filters }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/nodes/query`, { method: "POST", body: filters })));
 
 server.registerTool("canvas_apply_operations", {
-  description: "Atomically add, update, delete, connect, or disconnect canvas nodes. Temporary refs let one call create and connect a whole graph.",
+  description: "Atomically add, update, delete, connect, or disconnect canvas nodes. Temporary refs let one call create and connect a whole graph. New MCP-created nodes keep their requested anchor when possible and are minimally shifted when that anchor overlaps an existing node; existing nodes are never moved.",
   inputSchema: { projectId: z.string().uuid(), expectedVersion: z.number().int().positive().optional(), operations: z.array(operationSchema).min(1).max(100) },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
 }, async ({ projectId, expectedVersion, operations }) => {
@@ -875,7 +876,12 @@ async function importWorkspaceResource(filePath: string, title?: string): Promis
 }
 
 async function applyOperations(projectId: string, operations: unknown[], expectedVersion?: number) {
-  return api(`/api/canvas/projects/${encodeURIComponent(projectId)}/operations`, { method: "POST", body: { operations, expectedVersion } });
+  let positioned = operations;
+  if ((operations as Array<{ op?: string }>).some((operation) => operation.op === "add_node")) {
+    const project = await api<{ nodes: Array<{ id: string; type: string; position: { x: number; y: number }; width: number; height: number; metadata?: Record<string, unknown> }> }>(`/api/projects/${encodeURIComponent(projectId)}`);
+    positioned = avoidMcpNodeOverlaps(project.nodes, operations);
+  }
+  return api(`/api/canvas/projects/${encodeURIComponent(projectId)}/operations`, { method: "POST", body: { operations: positioned, expectedVersion } });
 }
 
 async function assertOperationsDoNotTouchClaimedNodes(projectId: string, operations: Array<Record<string, any>>) {
