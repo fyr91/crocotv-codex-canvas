@@ -20,7 +20,7 @@ import { useEditorStore } from '@/store/editorStore';
  * - Cmd+B: 加粗切换
  * - Cmd+I: 斜体切换
  * - Cmd+D: 插入 DualDialogue 结构
- * - Escape: 退出 focus 模式（如果在 focus 模式中）
+ * - Escape: 退出 read / focus 模式
  * - Cmd+?: 打开快捷键帮助面板（备用）
  */
 export function useKeyboardShortcuts(editor: Editor | null) {
@@ -109,9 +109,9 @@ export function useKeyboardShortcuts(editor: Editor | null) {
         return;
       }
 
-      // Escape: 退出 focus 模式
+      // Escape: 退出阅读或专注模式
       if (e.key === 'Escape' && !mod && !e.shiftKey) {
-        if (viewMode === 'focus') {
+        if (viewMode === 'read' || viewMode === 'focus') {
           e.preventDefault();
           setViewMode('edit');
           return;
