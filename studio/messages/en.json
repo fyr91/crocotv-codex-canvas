@@ -677,6 +677,8 @@
     "workflowR2VDesc": "Move from script and art direction through cast, shots, and final assembly. Choose first-frame or reference-based generation for each shot.",
     "workflowI2V": "Step-by-step Workflow",
     "workflowI2VDesc": "Build characters, scenes, and props first, then refine storyboards, motion clips, and the final cut stage by stage.",
+    "workflowComingSoon": "More workflows are in development",
+    "workflowComingSoonDesc": "More ways to create are coming soon.",
     "contentMode": "Content mode",
     "contentScripted": "I have a script",
     "contentScriptedDesc": "Import a script, identify characters and scenes, then generate storyboards and video.",

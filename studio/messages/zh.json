@@ -677,6 +677,8 @@
     "workflowR2VDesc": "从脚本、定调、选角到分镜和成片，每个镜头可选择首帧或参考图生成。",
     "workflowI2V": "分步制作",
     "workflowI2VDesc": "先建立角色、场景和道具，再逐步制作分镜、动态片段和成片，适合按阶段精细调整。",
+    "workflowComingSoon": "更多流程正在开发中",
+    "workflowComingSoonDesc": "敬请期待更多创作方式。",
     "contentMode": "内容模式",
     "contentScripted": "我有剧本",
     "contentScriptedDesc": "导入剧本，识别角色和场景，再生成分镜与视频。",

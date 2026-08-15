@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Zap, Film } from "lucide-react";
+import { X, Zap, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useProjectStore } from "@/store/projectStore";
 
@@ -17,7 +17,6 @@ interface CreateProjectDialogProps {
 export default function CreateProjectDialog({ isOpen, onClose, seriesId, seriesTitle }: CreateProjectDialogProps) {
     const [title, setTitle] = useState("");
     const [text, setText] = useState("");
-    const [workflowMode, setWorkflowMode] = useState<"r2v" | "i2v_legacy">("r2v");
     const [isCreating, setIsCreating] = useState(false);
     const createProject = useProjectStore((state) => state.createProject);
     const t = useTranslations("project");
@@ -32,7 +31,7 @@ export default function CreateProjectDialog({ isOpen, onClose, seriesId, seriesT
 
         setIsCreating(true);
         try {
-            await createProject(title, text, true, workflowMode, seriesId);
+            await createProject(title, text, true, "r2v", seriesId);
             // Get the newly created project
             const currentProject = useProjectStore.getState().currentProject;
             if (currentProject) {
@@ -104,41 +103,31 @@ export default function CreateProjectDialog({ isOpen, onClose, seriesId, seriesT
                                 <div className="grid grid-cols-2 gap-3">
                                     <button
                                         type="button"
-                                        onClick={() => setWorkflowMode("r2v")}
-                                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                                            workflowMode === "r2v"
-                                                ? "border-primary bg-primary/10"
-                                                : "border-border bg-surface hover:border-text-muted"
-                                        }`}
+                                        className="relative p-4 rounded-xl border-2 border-primary bg-primary/10 text-left transition-all"
                                     >
                                         <div className="flex items-center gap-2 mb-1.5">
-                                            <Zap size={16} className={workflowMode === "r2v" ? "text-primary" : "text-text-secondary"} />
+                                            <Zap size={16} className="text-primary" />
                                             <span className="font-medium text-sm text-foreground">{t("workflowR2V")}</span>
                                         </div>
                                         <p className="text-sm text-text-secondary leading-relaxed">
                                             {t("workflowR2VDesc")}
                                         </p>
-                                        {workflowMode === "r2v" && (
-                                            <span className="recommendation-badge absolute top-2 right-2">
-                                                {tc("recommended")}
-                                            </span>
-                                        )}
+                                        <span className="recommendation-badge absolute top-2 right-2">
+                                            {tc("recommended")}
+                                        </span>
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setWorkflowMode("i2v_legacy")}
-                                        className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                                            workflowMode === "i2v_legacy"
-                                                ? "border-primary bg-primary/10"
-                                                : "border-border bg-surface hover:border-text-muted"
-                                        }`}
+                                        disabled
+                                        aria-disabled="true"
+                                        className="relative p-4 rounded-xl border-2 border-border bg-surface/60 text-left opacity-60 cursor-not-allowed"
                                     >
                                         <div className="flex items-center gap-2 mb-1.5">
-                                            <Film size={16} className={workflowMode === "i2v_legacy" ? "text-primary" : "text-text-secondary"} />
-                                            <span className="font-medium text-sm text-foreground">{t("workflowI2V")}</span>
+                                            <Sparkles size={16} className="text-text-secondary" />
+                                            <span className="font-medium text-sm text-text-secondary">{t("workflowComingSoon")}</span>
                                         </div>
                                         <p className="text-sm text-text-secondary leading-relaxed">
-                                            {t("workflowI2VDesc")}
+                                            {t("workflowComingSoonDesc")}
                                         </p>
                                     </button>
                                 </div>
