@@ -74,14 +74,15 @@ const documentSchema = z.object({
 const promptBindingSchema = z.object({
   templateKey: z.string().min(1).max(100),
   templateVersion: z.string().max(80).optional(),
-  source: z.enum(["builtin", "legacy-studio-migration"]),
+  source: z.enum(["builtin", "global-pinned", "project", "legacy-studio-migration"]),
 }).strict();
 const projectPromptVersionSchema = z.object({
   templateKey: z.string().min(1).max(100),
   templateVersion: z.string().min(1).max(80),
   systemPrompt: z.string().min(1).max(250_000),
   systemPromptSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  source: z.literal("legacy-studio-migration"),
+  source: z.enum(["project", "legacy-studio-migration"]),
+  parentVersion: z.string().min(1).max(80).optional(),
   createdAt: z.string().min(1).max(80),
 }).strict();
 const generationExecutionSchema = z.object({

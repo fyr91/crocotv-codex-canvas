@@ -20,6 +20,7 @@ import { useSettingsStore, type Locale } from "@/store/settingsStore";
 import { toast } from "@/store/toastStore";
 import { rovingKeyDown } from "@/lib/a11y";
 import { FieldLabel, FormRow, ModeSegment, Toggle, settingsInputClass } from "./SettingsControls";
+import GlobalPromptVersionModal from "./GlobalPromptVersionModal";
 
 type SettingsCategory = "models" | "providers" | "advanced" | "about";
 
@@ -76,6 +77,20 @@ export default function SettingsPage() {
   const [promptRegistry, setPromptRegistry] = useState<PromptRegistryEntry[]>([]);
   const [registryLoading, setRegistryLoading] = useState(true);
   const [registryError, setRegistryError] = useState<string | null>(null);
+  const [selectedPromptKey, setSelectedPromptKey] = useState<string | null>(null);
+
+  const refreshPromptRegistry = useCallback(async () => {
+    setRegistryLoading(true);
+    try {
+      const registry = await api.getPromptRegistry();
+      setPromptRegistry(registry.templates);
+      setRegistryError(null);
+    } catch {
+      setRegistryError(t("registryLoadFailed"));
+    } finally {
+      setRegistryLoading(false);
+    }
+  }, [t]);
 
   const loadSharedSettings = useCallback(async () => {
     setProviderLoading(true);
@@ -296,7 +311,7 @@ export default function SettingsPage() {
         ) : (
           <div className="overflow-hidden rounded-xl border border-glass-border">
             {promptRegistry.map((template) => (
-              <div key={`${template.templateKey}@${template.templateVersion}`} className="grid gap-2 border-b border-glass-border px-4 py-3 last:border-b-0 md:grid-cols-[1fr_auto] md:items-center">
+              <button type="button" key={`${template.templateKey}@${template.templateVersion}`} onClick={() => setSelectedPromptKey(template.templateKey)} className="grid w-full gap-2 border-b border-glass-border px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-hover-bg md:grid-cols-[1fr_auto] md:items-center">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-foreground">{template.title}</div>
                   <div className="mt-1 truncate font-mono text-sm text-text-muted">{template.templateKey}</div>
@@ -306,11 +321,12 @@ export default function SettingsPage() {
                   <span className="rounded-full bg-hover-bg px-2 py-1 font-mono">v{template.templateVersion}</span>
                   <span className="rounded-full bg-status-completed-bg px-2 py-1 text-status-completed-fg">{t("registryActive")}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </Section>
+      <GlobalPromptVersionModal templateKey={selectedPromptKey} onClose={() => setSelectedPromptKey(null)} onChanged={() => void refreshPromptRegistry()} />
     </div>
   );
 

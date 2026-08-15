@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Palette, Layout, Film, BookOpen, Users, Video, Settings, Key, MessageSquareCode, Clapperboard } from "lucide-react";
+import { Palette, Layout, Film, BookOpen, Users, Video, Settings, MessageSquareCode, Clapperboard } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useProjectStore } from "@/store/projectStore";
 import PipelineSidebar from "@/components/layout/PipelineSidebar";
@@ -18,7 +18,6 @@ import ConsistencyVault from "@/components/modules/ConsistencyVault";
 import ArtDirection from "@/components/modules/ArtDirection";
 import StoryboardComposer from "@/components/modules/StoryboardComposer";
 import ModelSettingsModal from "@/components/common/ModelSettingsModal";
-import EnvConfigDialog from "@/components/project/EnvConfigDialog";
 import PromptConfigModal from "@/components/project/PromptConfigModal";
 import StoryboardR2V from "@/components/modules/StoryboardR2V";
 import EntityConfirmModal from "@/components/modules/EntityConfirmModal";
@@ -33,12 +32,12 @@ const CreativeCanvas = dynamic(() => import("@/components/canvas/CreativeCanvas"
 //   - Export → Assembly Export phase tab (PR-3k)
 // Both legacy and unified projects now share the 6-step shape.
 const LEGACY_STEPS = [
-    { id: "script", label: "1. Script", icon: BookOpen },
-    { id: "art_direction", label: "2. Art Direction", icon: Palette },
-    { id: "assets", label: "3. Assets", icon: Users },
-    { id: "storyboard", label: "4. Storyboard", icon: Layout },
-    { id: "motion", label: "5. Motion", icon: Video },
-    { id: "assembly", label: "6. Assembly", icon: Film },
+    { id: "script", labelKey: "stepScript", icon: BookOpen },
+    { id: "art_direction", labelKey: "stepArtDirection", icon: Palette },
+    { id: "assets", labelKey: "stepAssets", icon: Users },
+    { id: "storyboard", labelKey: "stepStoryboard", icon: Layout },
+    { id: "motion", labelKey: "stepMotion", icon: Video },
+    { id: "assembly", labelKey: "stepAssembly", icon: Film },
 ];
 
 // PR-3f (r2v-workflow-v3) — Unified workflow: 5 steps including Cast.
@@ -48,17 +47,16 @@ const LEGACY_STEPS = [
 // Legacy `assets` step is dropped — Cast supersedes ConsistencyVault
 // for unified projects (ConsistencyVault stays only for legacy workflow).
 const UNIFIED_STEPS = [
-    { id: "script", label: "1. Script", icon: BookOpen },
-    { id: "art_direction", label: "2. Art Direction", icon: Palette },
-    { id: "cast", label: "3. Cast", icon: Users },
-    { id: "storyboard_r2v", label: "4. Storyboard", icon: Clapperboard },
-    { id: "assembly", label: "5. Assembly", icon: Film },
+    { id: "script", labelKey: "stepScript", icon: BookOpen },
+    { id: "art_direction", labelKey: "stepArtDirection", icon: Palette },
+    { id: "cast", labelKey: "stepCast", icon: Users },
+    { id: "storyboard_r2v", labelKey: "stepStoryboard", icon: Clapperboard },
+    { id: "assembly", labelKey: "stepAssembly", icon: Film },
 ];
 
 export default function ProjectClient({ id, breadcrumbSegments }: { id: string; breadcrumbSegments?: BreadcrumbSegment[] }) {
     const [activeStep, setActiveStep] = useState("script");
     const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
-    const [envDialogOpen, setEnvDialogOpen] = useState(false);
     const [promptConfigOpen, setPromptConfigOpen] = useState(false);
     const t = useTranslations("project");
     const tp = useTranslations("pipeline");
@@ -94,8 +92,7 @@ export default function ProjectClient({ id, breadcrumbSegments }: { id: string; 
             // Phase 6 — freeform mode: skip Script step, episodes start at
             // Style. Re-number labels accordingly.
             base = UNIFIED_STEPS
-                .filter(s => s.id !== "script")
-                .map((s, i) => ({ ...s, label: s.label.replace(/^\d+\./, `${i + 1}.`) }));
+                .filter(s => s.id !== "script");
         } else {
             // Scripted unified flow: Cast is always present (per-episode view
             // of frame-referenced assets). Series-level shared assets are
@@ -136,7 +133,7 @@ export default function ProjectClient({ id, breadcrumbSegments }: { id: string; 
                     return {};
             }
         };
-        return base.map(s => ({ ...s, ...statusFor(s.id) }));
+        return base.map((s, index) => ({ ...s, label: `${index + 1}. ${tp(s.labelKey as any)}`, ...statusFor(s.id) }));
     }, [currentProject, seriesContentMode, tp]);
 
     const handleBackToHome = () => {
@@ -184,23 +181,16 @@ export default function ProjectClient({ id, breadcrumbSegments }: { id: string; 
     const settingsActions = (
         <>
             <button
-                onClick={() => setEnvDialogOpen(true)}
-                className="p-2 hover:bg-hover-bg rounded-lg transition-colors group"
-                title={t("apiKeyConfig")}
-            >
-                <Key size={16} className="text-text-secondary group-hover:text-foreground transition-colors" />
-            </button>
-            <button
                 onClick={() => setPromptConfigOpen(true)}
                 className="p-2 hover:bg-hover-bg rounded-lg transition-colors group"
-                title="Prompt Configuration"
+                title={t("promptStrategyTitle")}
             >
                 <MessageSquareCode size={16} className="text-text-secondary group-hover:text-primary transition-colors" />
             </button>
             <button
                 onClick={() => setModelSettingsOpen(true)}
                 className="p-2 hover:bg-hover-bg rounded-lg transition-colors group"
-                title="Model Settings"
+                title={t("modelSettings")}
             >
                 <Settings size={16} className="text-text-secondary group-hover:text-foreground transition-colors" />
             </button>
@@ -246,13 +236,6 @@ export default function ProjectClient({ id, breadcrumbSegments }: { id: string; 
             <PromptConfigModal
                 isOpen={promptConfigOpen}
                 onClose={() => setPromptConfigOpen(false)}
-            />
-
-            {/* Environment Config Dialog */}
-            <EnvConfigDialog
-                isOpen={envDialogOpen}
-                onClose={() => setEnvDialogOpen(false)}
-                isRequired={false}
             />
 
             {/* Main Content Area — no z-index to avoid trapping fixed modals in a stacking context */}

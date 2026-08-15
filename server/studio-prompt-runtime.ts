@@ -165,8 +165,8 @@ export async function executeStudioPrompt(input: StudioGenerationRequest): Promi
 async function resolveStudioPrompt(state: Awaited<ReturnType<typeof getStudioBackedProject>>["studio"], operation: StudioPromptOperation, explicitTemplateKey: string | undefined, requestedModel: string | undefined) {
   const binding = state.promptBindings[operation] || { templateKey: STUDIO_PROMPT_TEMPLATE_MAP[operation], source: "builtin" as const };
   const templateKey = explicitTemplateKey || binding.templateKey;
-  const builtin = await getPromptTemplate(templateKey);
-  const projectVersion = binding.source === "legacy-studio-migration" && binding.templateKey === templateKey
+  const builtin = await getPromptTemplate(templateKey, binding.source === "global-pinned" && binding.templateKey === templateKey ? binding.templateVersion : undefined);
+  const projectVersion = (binding.source === "project" || binding.source === "legacy-studio-migration") && binding.templateKey === templateKey
     ? state.projectPromptVersions.find((version) => version.templateKey === binding.templateKey && version.templateVersion === binding.templateVersion)
     : undefined;
   const prompt = projectVersion || builtin;

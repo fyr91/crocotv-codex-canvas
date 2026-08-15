@@ -19,6 +19,7 @@
  */
 import type { ReactNode } from "react";
 import clsx from "clsx";
+import { useLocalizedStepName } from "./StepPageHeader";
 
 export interface StepHeaderProps {
     /** 1-based 当前步骤号；驱动 ghost number / eyebrow / progress current 位置。 */
@@ -50,6 +51,7 @@ export default function StepHeader({
     trailing,
     className,
 }: StepHeaderProps) {
+    const localizedName = useLocalizedStepName(englishName);
     const stepStr = String(stepNumber).padStart(2, "0");
 
     // Progress bar fill 计算：当前 step 之前的所有 segments 完整填满，
@@ -97,7 +99,7 @@ export default function StepHeader({
                     <span className="mb-[1px] inline-flex items-center gap-2 font-mono text-sm font-normal uppercase leading-tight tracking-[0.2em] text-text-muted">
                         <span className="font-medium text-primary">{stepStr}</span>
                         <span aria-hidden="true" className="h-px w-3 bg-glass-border" />
-                        <span>{englishName}</span>
+                        <span>{localizedName}</span>
                     </span>
                     {/* 中文标题 — Inter Medium 16px (LumenX display token 上限) */}
                     <span

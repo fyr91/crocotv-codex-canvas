@@ -13,12 +13,13 @@ import {
 } from "./studio-workflow";
 import { studioCompatRouter } from "./studio-compat-api";
 import { studioPlaygroundRouter } from "./studio-playground-api";
-import { getPromptTemplate, listPromptTemplates } from "./prompt-registry";
+import { activateGlobalPromptVersion, createGlobalPromptVersion, getPromptTemplate, listPromptTemplates } from "./prompt-registry";
 import { STUDIO_PROMPT_TEMPLATE_MAP } from "./studio-schemas";
 import { getStudioModelCatalog } from "./model-catalog";
 import { clearProviderSecret, listProviderSecretStatuses, revealProviderSecret, updateProviderSecret } from "./provider-secrets";
 import { applyStudioCanvasEdits } from "./studio-canvas-translation";
 import { executeStudioPromptForProject, type StudioPromptOperation } from "./studio-prompt-runtime";
+import { createStudioProjectPromptVersion, getStudioPromptStrategy, setStudioPromptBinding } from "./studio-prompt-strategy";
 
 export const studioApiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
@@ -46,6 +47,17 @@ studioApiRouter.get("/prompt-registry", route(async (request, response) => respo
 studioApiRouter.get("/prompt-registry/:templateKey", route(async (request, response) => response.json(await getPromptTemplate(
   param(request.params.templateKey),
   typeof request.query.version === "string" ? request.query.version : undefined,
+))));
+studioApiRouter.post("/prompt-registry/:templateKey/versions", route(async (request, response) => response.status(201).json(await createGlobalPromptVersion({
+  templateKey: param(request.params.templateKey),
+  baseVersion: optionalText(request.body?.baseVersion ?? request.body?.base_version, 80),
+  systemPrompt: boundedText(request.body?.systemPrompt ?? request.body?.system_prompt, "systemPrompt", 250_000),
+  defaultModel: optionalText(request.body?.defaultModel ?? request.body?.default_model, 100),
+  activate: request.body?.activate === true,
+}))));
+studioApiRouter.post("/prompt-registry/:templateKey/activate", route(async (request, response) => response.json(await activateGlobalPromptVersion(
+  param(request.params.templateKey),
+  boundedText(request.body?.templateVersion ?? request.body?.template_version, "templateVersion", 80),
 ))));
 studioApiRouter.get("/model-catalog", route(async (_request, response) => response.json(getStudioModelCatalog())));
 
@@ -127,6 +139,18 @@ studioApiRouter.post("/projects/:id/merge", projectRoute(async (request, respons
 studioApiRouter.post("/projects/:id/generate_video", projectRoute(async (request, response, id) => response.json(await mergeStudioProject(id, clientId(request)))));
 studioApiRouter.post("/projects/:id/run-stage", projectRoute(async (request, response, id) => response.json(await runStudioStage(id, String(request.body?.stage || ""), clientId(request)))));
 studioApiRouter.post("/projects/:id/canvas-edits", projectRoute(async (request, response, id) => response.json(await applyStudioCanvasEdits(id, request.body?.edits, { expectedVersion: optionalVersion(request.body?.expectedVersion), originClientId: clientId(request) }))));
+studioApiRouter.get("/projects/:id/prompt-strategy", projectRoute(async (_request, response, id) => response.json(await getStudioPromptStrategy(id))));
+studioApiRouter.post("/projects/:id/prompt-strategy/:operation/versions", projectRoute(async (request, response, id) => response.status(201).json(await createStudioProjectPromptVersion(id, promptOperation(param(request.params.operation)), {
+  baseVersion: optionalText(request.body?.baseVersion ?? request.body?.base_version, 80),
+  systemPrompt: boundedText(request.body?.systemPrompt ?? request.body?.system_prompt, "systemPrompt", 250_000),
+  activate: request.body?.activate !== false,
+  expectedVersion: optionalVersion(request.body?.expectedVersion ?? request.body?.expected_version),
+}, clientId(request)))));
+studioApiRouter.put("/projects/:id/prompt-strategy/:operation/binding", projectRoute(async (request, response, id) => response.json(await setStudioPromptBinding(id, promptOperation(param(request.params.operation)), {
+  mode: promptBindingMode(request.body?.mode),
+  templateVersion: optionalText(request.body?.templateVersion ?? request.body?.template_version, 80),
+  expectedVersion: optionalVersion(request.body?.expectedVersion ?? request.body?.expected_version),
+}, clientId(request)))));
 studioApiRouter.post("/projects/:id/prompt-executions", projectRoute(async (request, response, id) => {
   const references = promptResourceReferences(request.body);
   response.json(await executeStudioPromptForProject({
@@ -247,6 +271,7 @@ function boundedText(value: unknown, label: string, maximum: number) { const tex
 function optionalText(value: unknown, maximum: number) { const text = String(value ?? ""); if (!text) return undefined; if (text.length > maximum) throw new Error(`文本超过 ${maximum} 字符`); return text; }
 function optionalTemplateKey(value: unknown) { const key = String(value || "").trim(); if (!key) return undefined; if (!/^[a-z0-9._-]{1,100}$/.test(key)) throw new Error("templateKey 无效"); return key; }
 function promptOperation(value: unknown): StudioPromptOperation { const operation = String(value || "") as StudioPromptOperation; if (!(operation in STUDIO_PROMPT_TEMPLATE_MAP)) throw new Error(`不支持的 Studio Prompt 操作：${value}`); return operation; }
+function promptBindingMode(value: unknown): "follow_global" | "pin_global" | "project" { const mode = String(value || ""); if (mode === "follow_global" || mode === "pin_global" || mode === "project") return mode; throw new Error(`Prompt 绑定模式无效：${value}`); }
 function decodePresetVoice(value: string) { const parts = value.split("."); if ((parts[0] === "design" || parts[0] === "clone") && parts[1]) { try { return Buffer.from(parts[1], "base64url").toString("utf8"); } catch {} } return value; }
 
 function promptRuntimeOptions(raw: any, operation: "storyboard_polish" | "video_polish" | "r2v_polish", frameId?: string) {

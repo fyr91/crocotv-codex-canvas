@@ -81,7 +81,7 @@ export type StudioAssemblyState = {
   mixSettings?: Record<string, number>;
 };
 
-export type StudioPromptBindingSource = "builtin" | "legacy-studio-migration";
+export type StudioPromptBindingSource = "builtin" | "global-pinned" | "project" | "legacy-studio-migration";
 
 export type StudioPromptBinding = {
   templateKey: string;
@@ -94,7 +94,8 @@ export type StudioProjectPromptVersion = {
   templateVersion: string;
   systemPrompt: string;
   systemPromptSha256: string;
-  source: "legacy-studio-migration";
+  source: "project" | "legacy-studio-migration";
+  parentVersion?: string;
   createdAt: string;
 };
 

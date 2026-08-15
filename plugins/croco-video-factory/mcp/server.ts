@@ -147,6 +147,64 @@ server.registerTool("studio_list_prompt_templates", {
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async ({ includeLegacy, includeInactive }) => toolResult(await api(`/api/studio/prompt-registry?include_legacy=${includeLegacy}&include_inactive=${includeInactive}`)));
 
+server.registerTool("studio_get_prompt_template", {
+  description: "Read one exact immutable Prompt Registry version, including its complete System Prompt, SHA-256, model policy, and input/output contract. Omit templateVersion to read the currently active global version.",
+  inputSchema: { templateKey: z.string().min(1).max(100).regex(/^croco\.[a-z0-9][a-z0-9.-]+$/), templateVersion: z.string().min(1).max(80).optional() },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ templateKey, templateVersion }) => {
+  const query = templateVersion ? `?version=${encodeURIComponent(templateVersion)}` : "";
+  return toolResult(await api(`/api/studio/prompt-registry/${encodeURIComponent(templateKey)}${query}`));
+});
+
+server.registerTool("studio_create_global_prompt_version", {
+  description: "Create a new immutable global Prompt Registry version from an existing version. Historical versions are never overwritten or deleted. Optionally activate the new version for future executions that follow global.",
+  inputSchema: {
+    templateKey: z.string().min(1).max(100).regex(/^croco\.[a-z0-9][a-z0-9.-]+$/),
+    baseVersion: z.string().min(1).max(80).optional(),
+    systemPrompt: z.string().min(1).max(250_000),
+    defaultModel: z.string().min(1).max(100).optional(),
+    activate: z.boolean().default(false),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async ({ templateKey, ...body }) => toolResult(await api(`/api/studio/prompt-registry/${encodeURIComponent(templateKey)}/versions`, { method: "POST", body })));
+
+server.registerTool("studio_activate_global_prompt_version", {
+  description: "Switch the global active pointer to an existing immutable Prompt Registry version. No version is modified or deleted; in-flight executions and pinned projects remain unchanged.",
+  inputSchema: { templateKey: z.string().min(1).max(100).regex(/^croco\.[a-z0-9][a-z0-9.-]+$/), templateVersion: z.string().min(1).max(80) },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ templateKey, templateVersion }) => toolResult(await api(`/api/studio/prompt-registry/${encodeURIComponent(templateKey)}/activate`, { method: "POST", body: { templateVersion } })));
+
+server.registerTool("studio_get_project_prompt_strategy", {
+  description: "Read a Studio project's Prompt bindings, effective versions, global version history, and immutable project version history for all structured Prompt operations.",
+  inputSchema: { projectId: z.string().uuid() },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ projectId }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/prompt-strategy`)));
+
+server.registerTool("studio_create_project_prompt_version", {
+  description: "Create a new immutable project-scoped Prompt version for one Studio operation. Historical project versions remain available. By default the new version is activated only for this project.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    operation: studioPromptOperationSchema,
+    baseVersion: z.string().min(1).max(80).optional(),
+    systemPrompt: z.string().min(1).max(250_000),
+    activate: z.boolean().default(true),
+    expectedVersion: z.number().int().positive().optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async ({ projectId, operation, ...body }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/prompt-strategy/${encodeURIComponent(operation)}/versions`, { method: "POST", body })));
+
+server.registerTool("studio_set_project_prompt_binding", {
+  description: "Atomically switch one Studio operation to follow the global active version, pin an exact immutable global version, or use an exact immutable project version. No historical version is deleted.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    operation: studioPromptOperationSchema,
+    mode: z.enum(["follow_global", "pin_global", "project"]),
+    templateVersion: z.string().min(1).max(80).optional(),
+    expectedVersion: z.number().int().positive().optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ projectId, operation, ...body }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/prompt-strategy/${encodeURIComponent(operation)}/binding`, { method: "PUT", body })));
+
 server.registerTool("studio_get_model_catalog", {
   description: "Read the authoritative Croco model/provider catalog shared by Canvas and Video Workshop, including executable model IDs and MiniMax H3 T2V, I2V, ordered FL2V, and multimodal R2V modes.",
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },

@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { atomicJson, dataDir, readJson } from "./storage";
 
 export type PromptModelPolicy = {
   defaultModel: string;
@@ -22,6 +23,9 @@ export type PromptTemplateManifestEntry = {
   outputSchema?: Record<string, unknown>;
   active: boolean;
   legacy?: boolean;
+  source?: "builtin" | "local-global";
+  parentVersion?: string;
+  createdAt?: string;
 };
 
 export type PromptTemplate = PromptTemplateManifestEntry & {
@@ -33,23 +37,47 @@ type PromptRegistryManifest = {
   templates: PromptTemplateManifestEntry[];
 };
 
+type StoredGlobalPromptVersion = Omit<PromptTemplateManifestEntry, "sourceFile" | "active" | "legacy" | "source"> & {
+  systemPrompt: string;
+  source: "local-global";
+  parentVersion: string;
+  createdAt: string;
+};
+
+type WritablePromptRegistry = {
+  schemaVersion: 1;
+  activeVersions: Record<string, string>;
+  versions: StoredGlobalPromptVersion[];
+};
+
 const referenceDirectory = path.join(resolveSkillRoot(), "references");
 const manifestPath = path.join(referenceDirectory, "prompt-registry.json");
+const writableRegistryDirectory = path.dirname(process.env.CROCO_PROMPT_REGISTRY_PATH || path.join(dataDir, "prompt-registry", "registry.json"));
+const writableRegistryPath = process.env.CROCO_PROMPT_REGISTRY_PATH || path.join(writableRegistryDirectory, "registry.json");
 let manifestPromise: Promise<PromptRegistryManifest> | undefined;
+let registryMutationQueue = Promise.resolve();
 
 export async function listPromptTemplates(options: { includeLegacy?: boolean; includeInactive?: boolean } = {}) {
-  const manifest = await loadPromptRegistryManifest();
-  return manifest.templates
+  const templates = await combinedPromptTemplates();
+  return templates
     .filter((template) => (options.includeLegacy || !template.legacy) && (options.includeInactive || template.active))
     .map((template) => ({ ...template }));
 }
 
 export async function getPromptTemplate(templateKey: string, templateVersion?: string): Promise<PromptTemplate> {
   assertTemplateKey(templateKey);
-  const manifest = await loadPromptRegistryManifest();
-  const candidates = manifest.templates.filter((template) => template.templateKey === templateKey && (!templateVersion || template.templateVersion === templateVersion));
+  const state = await readWritableRegistry();
+  const templates = await combinedPromptTemplates(state);
+  const candidates = templates.filter((template) => template.templateKey === templateKey && (!templateVersion || template.templateVersion === templateVersion));
   const entry = candidates.find((template) => template.active) || candidates[0];
   if (!entry) throw new PromptTemplateNotFoundError(templateKey, templateVersion);
+
+  if (entry.source === "local-global") {
+    const stored = state.versions.find((version) => version.templateKey === entry.templateKey && version.templateVersion === entry.templateVersion);
+    if (!stored) throw new PromptTemplateNotFoundError(templateKey, templateVersion);
+    if (sha256(Buffer.from(stored.systemPrompt, "utf8")) !== stored.contentSha256) throw new Error(`Prompt 模板完整性校验失败：${entry.templateKey}@${entry.templateVersion}`);
+    return { ...entry, systemPrompt: stored.systemPrompt };
+  }
 
   const sourcePath = safeSourcePath(entry.sourceFile);
   const source = await readFile(sourcePath);
@@ -58,6 +86,50 @@ export async function getPromptTemplate(templateKey: string, templateVersion?: s
     throw new Error(`Prompt 模板完整性校验失败：${entry.templateKey}@${entry.templateVersion}`);
   }
   return { ...entry, systemPrompt: source.toString("utf8") };
+}
+
+export async function createGlobalPromptVersion(input: { templateKey: string; baseVersion?: string; systemPrompt: string; defaultModel?: string; activate?: boolean }) {
+  assertTemplateKey(input.templateKey);
+  if (typeof input.systemPrompt !== "string" || !input.systemPrompt.trim() || input.systemPrompt.length > 250_000) throw new Error("Prompt 正文无效");
+  return withRegistryMutation(async () => {
+    const state = await readWritableRegistry();
+    const base = await getPromptTemplate(input.templateKey, input.baseVersion);
+    if (input.defaultModel && !base.modelPolicy.allowOverride && input.defaultModel !== base.modelPolicy.defaultModel) throw new Error("该 Prompt 的模型策略不允许覆盖");
+    const templates = await combinedPromptTemplates(state);
+    const templateVersion = nextPatchVersion(base.templateVersion, templates.filter((item) => item.templateKey === input.templateKey).map((item) => item.templateVersion));
+    const createdAt = new Date().toISOString();
+    const version: StoredGlobalPromptVersion = {
+      templateKey: base.templateKey,
+      templateVersion,
+      title: base.title,
+      stage: base.stage,
+      contentSha256: sha256(Buffer.from(input.systemPrompt, "utf8")),
+      modelPolicy: { ...base.modelPolicy, ...(input.defaultModel ? { defaultModel: input.defaultModel } : {}) },
+      inputModes: [...base.inputModes],
+      inputSchema: structuredClone(base.inputSchema),
+      ...(base.outputSchema ? { outputSchema: structuredClone(base.outputSchema) } : {}),
+      systemPrompt: input.systemPrompt,
+      source: "local-global",
+      parentVersion: base.templateVersion,
+      createdAt,
+    };
+    state.versions.push(version);
+    if (input.activate) state.activeVersions[input.templateKey] = templateVersion;
+    await writeWritableRegistry(state);
+    return { ...(await getPromptTemplate(input.templateKey, templateVersion)), active: input.activate === true };
+  });
+}
+
+export async function activateGlobalPromptVersion(templateKey: string, templateVersion: string) {
+  assertTemplateKey(templateKey);
+  return withRegistryMutation(async () => {
+    const state = await readWritableRegistry();
+    const exists = (await combinedPromptTemplates(state)).some((item) => item.templateKey === templateKey && item.templateVersion === templateVersion);
+    if (!exists) throw new PromptTemplateNotFoundError(templateKey, templateVersion);
+    state.activeVersions[templateKey] = templateVersion;
+    await writeWritableRegistry(state);
+    return getPromptTemplate(templateKey, templateVersion);
+  });
 }
 
 export async function loadPromptRegistryManifest(): Promise<PromptRegistryManifest> {
@@ -83,6 +155,54 @@ async function readAndValidateManifest(): Promise<PromptRegistryManifest> {
   const seen = new Set<string>();
   const templates = raw.templates.map((value, index) => validateEntry(value, index, seen));
   return { schemaVersion: 1, templates };
+}
+
+async function combinedPromptTemplates(inputState?: WritablePromptRegistry): Promise<PromptTemplateManifestEntry[]> {
+  const state = inputState || await readWritableRegistry();
+  const manifest = await loadPromptRegistryManifest();
+  const activeByKey = new Map<string, string>();
+  for (const template of manifest.templates) if (template.active && !activeByKey.has(template.templateKey)) activeByKey.set(template.templateKey, template.templateVersion);
+  for (const [templateKey, version] of Object.entries(state.activeVersions)) activeByKey.set(templateKey, version);
+  const builtins = manifest.templates.map((template) => ({ ...template, source: "builtin" as const, active: activeByKey.get(template.templateKey) === template.templateVersion }));
+  const local = state.versions.map((template) => ({
+    ...template,
+    sourceFile: "local-registry",
+    active: activeByKey.get(template.templateKey) === template.templateVersion,
+    legacy: false,
+  }));
+  return [...builtins, ...local];
+}
+
+async function readWritableRegistry(): Promise<WritablePromptRegistry> {
+  await mkdir(writableRegistryDirectory, { recursive: true });
+  const raw = await readJson<Partial<WritablePromptRegistry>>(writableRegistryPath, { schemaVersion: 1, activeVersions: {}, versions: [] });
+  return {
+    schemaVersion: 1,
+    activeVersions: raw.activeVersions && typeof raw.activeVersions === "object" && !Array.isArray(raw.activeVersions) ? Object.fromEntries(Object.entries(raw.activeVersions).filter(([key, value]) => /^croco\./.test(key) && typeof value === "string")) : {},
+    versions: Array.isArray(raw.versions) ? raw.versions.filter((version): version is StoredGlobalPromptVersion => Boolean(version && typeof version === "object" && version.source === "local-global" && typeof version.systemPrompt === "string")) : [],
+  };
+}
+
+async function writeWritableRegistry(state: WritablePromptRegistry) {
+  await mkdir(writableRegistryDirectory, { recursive: true });
+  await atomicJson(writableRegistryPath, state);
+}
+
+function withRegistryMutation<T>(task: () => Promise<T>) {
+  const result = registryMutationQueue.then(task, task);
+  registryMutationQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+function nextPatchVersion(baseVersion: string, existing: string[]) {
+  const match = baseVersion.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!match) throw new Error(`Prompt 模板版本无效：${baseVersion}`);
+  const used = new Set(existing);
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  let patch = Number(match[3]) + 1;
+  while (used.has(`${major}.${minor}.${patch}`)) patch += 1;
+  return `${major}.${minor}.${patch}`;
 }
 
 function validateEntry(value: unknown, index: number, seen: Set<string>): PromptTemplateManifestEntry {

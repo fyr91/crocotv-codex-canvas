@@ -116,13 +116,46 @@ export interface PromptRegistryEntry {
     contentSha256: string;
     active: boolean;
     legacy?: boolean;
+    source?: "builtin" | "local-global";
+    parentVersion?: string;
+    createdAt?: string;
     modelPolicy: { defaultModel: string; modelFamily: string; allowOverride: boolean };
     inputModes: string[];
+    inputSchema?: Record<string, unknown>;
+    outputSchema?: Record<string, unknown>;
+}
+
+export interface PromptTemplateDetail extends PromptRegistryEntry {
+    systemPrompt: string;
 }
 
 export interface PromptRegistryResponse {
     schemaVersion: number;
     templates: PromptRegistryEntry[];
+}
+
+export type StudioPromptOperation = "entity_extraction" | "style_analysis" | "storyboard_extraction" | "storyboard_polish" | "video_polish" | "r2v_polish";
+export interface ProjectPromptVersion {
+    templateKey: string;
+    templateVersion: string;
+    systemPrompt: string;
+    systemPromptSha256: string;
+    source: "project" | "legacy-studio-migration";
+    parentVersion?: string;
+    createdAt: string;
+}
+export interface ProjectPromptOperationStrategy {
+    operation: StudioPromptOperation;
+    templateKey: string;
+    binding: { templateKey: string; templateVersion?: string; source: "builtin" | "global-pinned" | "project" | "legacy-studio-migration" };
+    effective: { templateVersion: string; systemPromptSha256: string; source: string; model: string };
+    globalVersions: PromptRegistryEntry[];
+    projectVersions: ProjectPromptVersion[];
+}
+export interface ProjectPromptStrategyResponse {
+    projectId: string;
+    projectVersion: number;
+    operations: ProjectPromptOperationStrategy[];
 }
 
 // R2V v2 Phase 4 — Cross-episode reconcile types
@@ -1223,8 +1256,38 @@ export const api = {
         return res.data;
     },
 
-    getPromptRegistry: async (): Promise<PromptRegistryResponse> => {
-        const res = await axios.get<PromptRegistryResponse>(`${API_URL}/prompt-registry`);
+    getPromptRegistry: async (includeInactive = false): Promise<PromptRegistryResponse> => {
+        const res = await axios.get<PromptRegistryResponse>(`${API_URL}/prompt-registry`, { params: { include_inactive: includeInactive } });
+        return res.data;
+    },
+
+    getPromptTemplate: async (templateKey: string, templateVersion?: string): Promise<PromptTemplateDetail> => {
+        const res = await axios.get<PromptTemplateDetail>(`${API_URL}/prompt-registry/${encodeURIComponent(templateKey)}`, { params: templateVersion ? { version: templateVersion } : undefined });
+        return res.data;
+    },
+
+    createGlobalPromptVersion: async (templateKey: string, input: { baseVersion?: string; systemPrompt: string; defaultModel?: string; activate?: boolean }): Promise<PromptTemplateDetail> => {
+        const res = await axios.post<PromptTemplateDetail>(`${API_URL}/prompt-registry/${encodeURIComponent(templateKey)}/versions`, input);
+        return res.data;
+    },
+
+    activateGlobalPromptVersion: async (templateKey: string, templateVersion: string): Promise<PromptTemplateDetail> => {
+        const res = await axios.post<PromptTemplateDetail>(`${API_URL}/prompt-registry/${encodeURIComponent(templateKey)}/activate`, { templateVersion });
+        return res.data;
+    },
+
+    getProjectPromptStrategy: async (projectId: string): Promise<ProjectPromptStrategyResponse> => {
+        const res = await axios.get<ProjectPromptStrategyResponse>(`${API_URL}/projects/${projectId}/prompt-strategy`);
+        return res.data;
+    },
+
+    createProjectPromptVersion: async (projectId: string, operation: StudioPromptOperation, input: { baseVersion?: string; systemPrompt: string; activate?: boolean; expectedVersion?: number }): Promise<ProjectPromptStrategyResponse> => {
+        const res = await axios.post<ProjectPromptStrategyResponse>(`${API_URL}/projects/${projectId}/prompt-strategy/${operation}/versions`, input);
+        return res.data;
+    },
+
+    setProjectPromptBinding: async (projectId: string, operation: StudioPromptOperation, input: { mode: "follow_global" | "pin_global" | "project"; templateVersion?: string; expectedVersion?: number }): Promise<ProjectPromptStrategyResponse> => {
+        const res = await axios.put<ProjectPromptStrategyResponse>(`${API_URL}/projects/${projectId}/prompt-strategy/${operation}/binding`, input);
         return res.data;
     },
 
