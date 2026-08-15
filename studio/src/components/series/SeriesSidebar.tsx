@@ -2,7 +2,6 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronLeft,
   ChevronRight,
   Users,
   MapPin,
@@ -16,6 +15,8 @@ import {
 import clsx from "clsx";
 import type { Series, Project } from "@/store/projectStore";
 import { useTranslations } from "next-intl";
+import CrocoTVBranding from "@/components/layout/CrocoTVBranding";
+import ThemeToggle from "@/components/layout/ThemeToggle";
 
 // ── Types ──
 
@@ -86,6 +87,7 @@ export default function SeriesSidebar({
 }: SeriesSidebarProps) {
   const t = useTranslations("series");
   const tc = useTranslations("common");
+  const tn = useTranslations("nav");
 
   const getAssetCount = (tab: "characters" | "scenes" | "props") => {
     if (tab === "characters") return series.characters?.length || 0;
@@ -104,44 +106,47 @@ export default function SeriesSidebar({
       transition={{ duration: 0.4, ease: [0.25, 1, 0.5, 1] }}
       className="w-64 flex-shrink-0 h-full border-r border-glass-border bg-surface backdrop-blur-xl flex flex-col"
     >
-      {/* ── Header: breadcrumb + editable title ── */}
-      <div className="p-5 border-b border-glass-border">
+      {/* ── Header: stable CrocoTV brand + Studio context path ── */}
+      <div className="border-b border-glass-border px-4 py-4">
         <div className="space-y-2">
-          {/* Back row */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={onBack}
-              className="flex-shrink-0 text-text-secondary hover:text-foreground transition-colors"
-              title={t("backToHome")}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-sm text-text-secondary truncate">LumenX</span>
+          <div className="flex items-center justify-between gap-3">
+            <CrocoTVBranding />
+            <ThemeToggle />
           </div>
 
-          {/* Editable title */}
-          {isEditingTitle ? (
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => onEditTitleChange(e.target.value)}
-              onBlur={onTitleSave}
-              onKeyDown={onTitleKeyDown}
-              className="text-base font-display font-medium text-foreground bg-transparent border-b-2 border-primary outline-none w-full"
-              autoFocus
-            />
-          ) : (
-            <h1
-              className="text-base font-display font-medium text-foreground cursor-pointer hover:text-primary transition-colors truncate"
-              onDoubleClick={onTitleDoubleClick}
-              title={t("editTitleHint")}
+          <div className="flex min-w-0 items-center gap-1.5 px-2 text-sm">
+            <button
+              onClick={onBack}
+              className="shrink-0 text-text-secondary transition-colors hover:text-foreground"
+              title={t("backToHome")}
             >
-              {series.title}
-            </h1>
-          )}
+              {tn("brand")}
+            </button>
+            <span className="shrink-0 text-text-muted">&rsaquo;</span>
+
+            {isEditingTitle ? (
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => onEditTitleChange(e.target.value)}
+                onBlur={onTitleSave}
+                onKeyDown={onTitleKeyDown}
+                className="min-w-0 flex-1 border-b border-primary bg-transparent text-sm font-medium text-foreground outline-none"
+                autoFocus
+              />
+            ) : (
+              <h1
+                className="min-w-0 flex-1 cursor-pointer truncate text-sm font-medium text-foreground transition-colors hover:text-text-secondary"
+                onDoubleClick={onTitleDoubleClick}
+                title={t("editTitleHint")}
+              >
+                {series.title}
+              </h1>
+            )}
+          </div>
 
           {series.description && (
-            <p className="text-sm text-text-secondary truncate">{series.description}</p>
+            <p className="truncate px-2 text-sm text-text-secondary">{series.description}</p>
           )}
         </div>
       </div>

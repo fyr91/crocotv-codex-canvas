@@ -52,6 +52,58 @@ final result: passed
 
 ---
 
+# Studio 品牌区与剧本编辑器视觉验收
+
+## 对比目标
+
+- 品牌区视觉真相：`/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-3bf8ef16-8b92-4a18-92c0-f4d04a7b69f6.png`（300 × 384 px）。
+- 编辑器视觉真相：`/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-ade4b15c-fbf2-4419-86f7-833e933959fa.png`（875 × 557 px）。
+- 品牌区实现：`/tmp/croco-studio-brand-editor-qa/studio-brand-home-dark.png`（1280 × 720 px）。
+- 项目流程实现：`/tmp/croco-studio-brand-editor-qa/project-pipeline-brand-light.png`（1280 × 720 px）。
+- 编辑器最终实现：`/tmp/croco-studio-brand-editor-qa/script-editor-empty-dark-final.png`（1280 × 720 px）。
+- 完整对比：`/tmp/croco-studio-brand-editor-qa/compare-brand.png`、`/tmp/croco-studio-brand-editor-qa/compare-editor.png`。
+- 聚焦对比：`/tmp/croco-studio-brand-editor-qa/compare-brand-focus.png`、`/tmp/croco-studio-brand-editor-qa/compare-editor-focus-final.png`。
+
+## 视口与状态
+
+- 浏览器：Codex In-app Browser。
+- CSS 视口：1280 × 720；`devicePixelRatio = 1`；截图像素与 CSS 像素 1:1，无密度缩放。
+- 状态：中文；深色工作区、深色空白编辑器，以及亮色项目流程页。
+- 路由：`#/`、`#/studio/editor`、`#/project/643b0fde-56b0-4a82-abbb-3fde89457fea`。
+- 已验证交互：全局导航进入剧本编辑器、深浅主题切换、项目流程路由、CrocoTV 品牌链接目标、空白编辑器自动聚焦。
+- 控制台：最终编辑器与项目流程页面均无 error。
+
+## 五项保真检查
+
+- 字体与排版：CrocoTV 字标复用 Canvas 的 16px/medium/紧凑字距；Studio 上下文、导航和路径继续使用现有 Canvas 兼容字体与字号 token。编辑器占位提示沿用剧本文字字体，层级低于正文。
+- 间距与布局：CrocoTV 品牌固定在左上首行，主题切换同层；“视频工坊”和项目/系列路径统一放在下方。项目流程、工作区与编辑器的侧栏宽度和业务区域未改变。
+- 色彩与 token：仅使用现有 `foreground`、`text-muted`、`hover-bg`、`primary` 等语义 token，深浅主题对比均正常。
+- 图像与资产：CrocoTV 图标直接复制 Canvas 的 `web/public/favicon.png`，SHA-256 完全一致；未使用近似 SVG、CSS 图形或占位图。
+- 文案：去除可见的 “LumenX” 与“返回 CrocoTV”按钮语义；空白编辑器中文提示为“从这里开始写剧本，或粘贴已有内容…”，英文同步为对应用户文案。
+
+## Findings
+
+- 无剩余 P0/P1/P2 问题。
+- [P3] 光标闪烁相位不保证在静态截图中可见；运行态检查确认焦点元素为 `.ProseMirror-focused`，`caret-color` 使用主题 `primary`，编辑区最小高度为 432px。
+
+## 对比迭代历史
+
+1. 首轮聚焦对比发现空白编辑器的整列高亮线过强，可能被误认成模拟光标（P2）。
+2. 删除容器级 `focus-within` 整列高亮，仅保留真实 ProseMirror 光标、可见占位提示和整列点击区域。
+3. 重新构建并在同一 1280 × 720 深色状态捕获 `/tmp/croco-studio-brand-editor-qa/script-editor-empty-dark-final.png`；聚焦对比 `/tmp/croco-studio-brand-editor-qa/compare-editor-focus-final.png` 中已无整列高亮，运行态焦点和光标样式检查通过。
+
+## Implementation Checklist
+
+- [x] 全局、项目流程、系列和面包屑布局统一 CrocoTV 品牌层级。
+- [x] 品牌点击目标保持为 CrocoTV Canvas 首页。
+- [x] 空白可编辑文档进入编辑模式并自动获得真实编辑焦点。
+- [x] 深浅主题、项目流程与编辑器空白态完成浏览器复验。
+- [x] 最终页面无控制台错误。
+
+final result: passed
+
+---
+
 # Studio UI Polish — Design QA
 
 ## Comparison Targets

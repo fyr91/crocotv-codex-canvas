@@ -417,6 +417,7 @@
     "editor": "剧本编辑器",
     "playground": "创作台",
     "settings": "设置",
+    "brand": "视频工坊",
     "workspaceAria": "视频工坊 · 工作区",
     "mainNavAria": "主导航"
   },
@@ -2117,7 +2118,7 @@
     },
     "placeholders": {
       "sceneHeading": "INT./EXT. 场景 - 时间",
-      "startTyping": "开始输入..."
+      "startTyping": "从这里开始写剧本，或粘贴已有内容…"
     }
   }
 }

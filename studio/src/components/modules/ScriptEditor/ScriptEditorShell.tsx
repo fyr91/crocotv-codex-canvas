@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { EditorContent } from '@tiptap/react';
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, X } from 'lucide-react';
@@ -59,10 +59,48 @@ export default function ScriptEditorShell({
   const hideAllSidebars = mode === 'focus' || viewMode === 'focus';
   const hideLeftOnly = mode === 'embedded';
   const isEditorEmpty = !editor || editor.isEmpty;
+  const didNormalizeEmptyView = useRef(false);
+  const didAutoFocusEmptyEditor = useRef(false);
 
   useEffect(() => {
     editor?.setEditable(!isReadOnly);
   }, [editor, isReadOnly]);
+
+  useEffect(() => {
+    if (
+      didNormalizeEmptyView.current ||
+      mode !== 'full' ||
+      !isReady ||
+      !editor?.isEmpty
+    ) {
+      return;
+    }
+
+    didNormalizeEmptyView.current = true;
+    if (viewMode !== 'edit') {
+      setViewMode('edit');
+    }
+  }, [editor, isReady, mode, setViewMode, viewMode]);
+
+  useEffect(() => {
+    if (
+      didAutoFocusEmptyEditor.current ||
+      mode !== 'full' ||
+      viewMode !== 'edit' ||
+      isReadOnly ||
+      !isReady ||
+      !editor?.isEmpty
+    ) {
+      return;
+    }
+
+    didAutoFocusEmptyEditor.current = true;
+    const frame = window.requestAnimationFrame(() => {
+      editor.commands.focus('start');
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [editor, isReady, isReadOnly, mode, viewMode]);
 
   const handleShotClick = useCallback((shotId: string) => {
     setViewMode('edit');
@@ -197,6 +235,7 @@ export default function ScriptEditorShell({
               }`}
               data-format={currentFormat}
               data-rendering={currentRendering}
+              data-empty={isReady && isEditorEmpty ? 'true' : 'false'}
             >
               {isReady ? (
                 <EditorContent

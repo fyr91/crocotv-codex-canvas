@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, LayoutGrid, Layers, Wand2, Settings, FileText } from "lucide-react";
+import { LayoutGrid, Layers, Wand2, Settings, FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
 import clsx from "clsx";
-import LumenXBranding from "./LumenXBranding";
+import CrocoTVBranding from "./CrocoTVBranding";
 import { isTauri } from "@/lib/transport";
 import ThemeToggle from "./ThemeToggle";
 
@@ -90,24 +90,19 @@ export default function GlobalSidebar({ activeTab, onTabChange }: GlobalSidebarP
       {/* Traffic Light inset for Tauri desktop */}
       {isTauri() && <div className="tauri-titlebar-inset" />}
       <div className="border-b border-glass-border px-4 py-4">
-        <a
-          href="http://localhost:3000/canvas"
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm font-normal text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground"
-          aria-label="返回 CrocoTV"
-        >
-          <ArrowLeft size={14} />
-          <span>CrocoTV</span>
-        </a>
-        <div className="mt-1 flex items-center justify-between gap-3 px-2">
+        <div className="flex items-center justify-between gap-3">
+          <CrocoTVBranding />
+          <ThemeToggle />
+        </div>
+        <div className="mt-2 px-2">
           <button
             type="button"
             onClick={() => handleNav("workspace", "#/")}
             aria-label={t("workspaceAria")}
-            className="block text-left"
+            className="block text-left text-sm font-medium leading-6 text-foreground transition-colors hover:text-text-secondary"
           >
-            <LumenXBranding size="md" />
+            {t("brand")}
           </button>
-          <ThemeToggle />
         </div>
       </div>
 

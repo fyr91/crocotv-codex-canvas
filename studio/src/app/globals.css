@@ -680,11 +680,7 @@ html.atelier-light .atelier-display {
   text-transform: none;
 }
 
-/* Slogan-style overlay: when font-mono + atelier-display sit together
-   (LumenXBranding's "Render Noise into Narrative"), bump the size and
-   slightly relax tracking so Fraunces stays legible at small mass.
-   This rule is doubly-scoped (both class names + atelier theme) so it
-   only fires on the brand slogan and only on atelier. */
+/* Slogan-style overlay retained for legacy editorial text in Atelier themes. */
 html.atelier-dark .font-mono.atelier-display,
 html.atelier-light .font-mono.atelier-display {
   font-size: 11px;
@@ -943,6 +939,25 @@ html.atelier-light .atelier-new-tile:hover > span:first-child {
   font-family: var(--script-font-family);
   font-size: var(--script-font-size);
   line-height: var(--script-line-height);
+  min-height: 60vh;
+  caret-color: var(--color-primary);
+  outline: none;
+}
+
+.script-editor-content {
+  width: 100%;
+}
+
+.script-editor-content[data-empty="true"] .ProseMirror {
+  cursor: text;
+}
+
+.script-editor .ProseMirror .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--color-text-muted);
+  pointer-events: none;
 }
 
 /* === Format-specific indentation === */
