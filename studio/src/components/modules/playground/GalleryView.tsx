@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Video, AlertCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { API_URL } from '@/lib/api';
 import type { PlaygroundGeneration } from './usePlaygroundStore';
+import { resolvePlaygroundMediaUrl } from './media';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -19,10 +19,6 @@ interface GalleryViewProps {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getMediaUrl(path: string): string {
-  return API_URL + '/files/' + path.replace(/^output\//, '');
-}
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -102,7 +98,7 @@ export default function GalleryView({
   const output = current.outputs[0];
   const isVideo =
     output?.media_type === 'video' || VIDEO_MODES.has(current.mode);
-  const mediaUrl = output?.media_path ? getMediaUrl(output.media_path) : null;
+  const mediaUrl = output?.media_path ? resolvePlaygroundMediaUrl(output.media_path) : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -191,7 +187,7 @@ export default function GalleryView({
             const genIsVideo =
               genOutput?.media_type === 'video' || VIDEO_MODES.has(gen.mode);
             const genMediaUrl = genOutput?.media_path
-              ? getMediaUrl(genOutput.media_path)
+              ? resolvePlaygroundMediaUrl(genOutput.media_path)
               : null;
             const isSelected = idx === selectedIndex;
             const isFailed = gen.status === 'failed';

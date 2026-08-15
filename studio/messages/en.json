@@ -1734,7 +1734,8 @@
       "collapse": "Collapse",
       "failed": "Generation failed",
       "queued": "Queued…",
-      "processing": "Generating…"
+      "processing": "Generating…",
+      "imageUnavailable": "Preview unavailable"
     },
     "media": {
       "uploading": "Uploading…",

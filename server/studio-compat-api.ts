@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { listCharacters } from "./characters";
 import { createStudioProject, deleteStudioProject, getStudioBackedProject, listStudioProjectResponses, mutateStudioProject, studioProjectResponse } from "./studio-commands";
-import { applyStudioDub, createStudioEntity, deleteStudioEntity, extractStudioLastFrame, generateStudioAssetVideo, patchStudioEntity, polishStudioText, previewStudioDub, previewStudioVoice, revertStudioDub, selectStudioVideo } from "./studio-workflow";
+import { applyStudioDub, createStudioEntity, deleteStudioEntity, extractStudioLastFrame, patchStudioEntity, polishStudioText, previewStudioDub, previewStudioVoice, queueStudioAssetVideo, revertStudioDub, selectStudioVideo } from "./studio-workflow";
 import { listProjects, readProject } from "./storage";
 
 export const studioCompatRouter = Router();
@@ -95,8 +95,8 @@ studioCompatRouter.get("/series/:seriesId/characters/:characterId/appearances", 
 studioCompatRouter.patch("/projects/:id/video_tasks/:taskId/annotate", projectRoute(async (request, response, id) => response.json(await mutateTask(id, param(request.params.taskId), request.body, clientId(request)))));
 studioCompatRouter.post("/projects/:id/video_tasks/:taskId/cancel", projectRoute(async (request, response, id) => response.json(await mutateTask(id, param(request.params.taskId), { status: "failed", error: "用户取消" }, clientId(request)))));
 studioCompatRouter.delete("/projects/:id/assets/:assetType/:assetId/videos/:videoId", projectRoute(async (request, response, id) => response.json(await removeAssetVideo(id, singularAsset(request.params.assetType), param(request.params.assetId), param(request.params.videoId), clientId(request)))));
-studioCompatRouter.post("/projects/:id/assets/generate_motion_ref", projectRoute(async (request, response, id) => response.json(await generateStudioAssetVideo(id, { ...request.body, asset_type: singularAsset(request.body?.asset_type) }, clientId(request)))));
-studioCompatRouter.post("/projects/:id/assets/:assetType/:assetId/generate_video", projectRoute(async (request, response, id) => response.json(await generateStudioAssetVideo(id, { ...request.body, asset_type: singularAsset(request.params.assetType), asset_id: param(request.params.assetId) }, clientId(request)))));
+studioCompatRouter.post("/projects/:id/assets/generate_motion_ref", projectRoute(async (request, response, id) => response.status(202).json(await queueStudioAssetVideo(id, { ...request.body, asset_type: singularAsset(request.body?.asset_type) }, clientId(request)))));
+studioCompatRouter.post("/projects/:id/assets/:assetType/:assetId/generate_video", projectRoute(async (request, response, id) => response.status(202).json(await queueStudioAssetVideo(id, { ...request.body, asset_type: singularAsset(request.params.assetType), asset_id: param(request.params.assetId) }, clientId(request)))));
 studioCompatRouter.post("/projects/:id/frames/:frameId/dub/preview", projectRoute(async (request, response, id) => response.json(await previewStudioDub(id, param(request.params.frameId), requiredId(request.body?.video_task_id), Number(request.body?.offset_ms || 0), clientId(request)))));
 studioCompatRouter.post("/projects/:id/frames/:frameId/dub/apply", projectRoute(async (request, response, id) => response.json(await applyStudioDub(id, param(request.params.frameId), clientId(request)))));
 studioCompatRouter.delete("/projects/:id/frames/:frameId/dub", projectRoute(async (request, response, id) => response.json(await revertStudioDub(id, param(request.params.frameId), clientId(request)))));

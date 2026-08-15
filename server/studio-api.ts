@@ -9,7 +9,7 @@ import { createStudioProject, deleteStudioProject, getStudioBackedProject, getSt
 import {
   analyzeStudioArtDirection, analyzeStudioStoryboard, clearStudioArtDirection, copyStudioFrame, createStudioEntity, createStudioFrame, createStudioVideoTasks,
   deleteStudioEntity, deleteStudioFrame, extractStudioEntities, generateStudioAsset, generateStudioFrameAudio, mergeStudioProject, patchStudioEntity, patchStudioFrame,
-  polishStudioText, previewStudioEntities, renderStudioFrame, reorderStudioFrames, replaceStudioStoryboard, saveStudioArtDirection, selectStudioVideo, toggleStudioEntityFlag,
+  polishStudioText, previewStudioEntities, queueStudioAssetGeneration, queueStudioVideoTasks, renderStudioFrame, reorderStudioFrames, replaceStudioStoryboard, saveStudioArtDirection, selectStudioVideo, toggleStudioEntityFlag,
 } from "./studio-workflow";
 import { studioCompatRouter } from "./studio-compat-api";
 import { studioPlaygroundRouter } from "./studio-playground-api";
@@ -20,6 +20,7 @@ import { clearProviderSecret, listProviderSecretStatuses, revealProviderSecret, 
 import { applyStudioCanvasEdits } from "./studio-canvas-translation";
 import { executeStudioPromptForProject, type StudioPromptOperation } from "./studio-prompt-runtime";
 import { createStudioProjectPromptVersion, getStudioPromptStrategy, setStudioPromptBinding } from "./studio-prompt-strategy";
+import { cancelStudioGenerationJob, findStudioGenerationJob, getStudioGenerationJob } from "./studio-generation-jobs";
 
 export const studioApiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
@@ -88,7 +89,7 @@ studioApiRouter.post("/projects/:id/assets/toggle_starred", projectRoute(async (
 studioApiRouter.post("/projects/:id/assets/variant/select", projectRoute(async (request, response, id) => response.json(await mutateEntityVariant(id, request.body, "select", clientId(request)))));
 studioApiRouter.post("/projects/:id/assets/variant/delete", projectRoute(async (request, response, id) => response.json(await mutateEntityVariant(id, request.body, "delete", clientId(request)))));
 studioApiRouter.post("/projects/:id/assets/variant/favorite", projectRoute(async (request, response, id) => response.json(await mutateEntityVariant(id, request.body, "favorite", clientId(request)))));
-studioApiRouter.post("/projects/:id/assets/generate", projectRoute(async (request, response, id) => response.json(await generateStudioAsset(id, request.body, clientId(request)))));
+studioApiRouter.post("/projects/:id/assets/generate", projectRoute(async (request, response, id) => response.status(202).json(await queueStudioAssetGeneration(id, request.body, clientId(request)))));
 studioApiRouter.post("/projects/:id/generate_assets", projectRoute(async (request, response, id) => response.json(await generateMissingAssets(id, clientId(request)))));
 studioApiRouter.post("/projects/:id/assets/:assetType/:assetId/upload", upload.single("file"), projectRoute(async (request, response, id) => {
   const resource = await storeUpload(request);
@@ -131,10 +132,12 @@ studioApiRouter.post("/projects/:id/storyboard/refine_batch", projectRoute(async
 studioApiRouter.post("/projects/:id/frames/:frameId/upload_image", upload.single("file"), projectRoute(async (request, response, id) => response.json(await attachFrameResource(id, param(request.params.frameId), await storeUpload(request), clientId(request)))));
 studioApiRouter.post("/projects/:id/frames/:frameId/upload_t2i", upload.single("file"), projectRoute(async (request, response, id) => response.json(await attachFrameResource(id, param(request.params.frameId), await storeUpload(request), clientId(request)))));
 
-studioApiRouter.post("/projects/:id/video_tasks", projectRoute(async (request, response, id) => { const project = await createStudioVideoTasks(id, request.body, clientId(request)); response.json(project.video_tasks?.slice(-boundedCount(request.body?.batch_size)) || []); }));
+studioApiRouter.post("/projects/:id/video_tasks", projectRoute(async (request, response, id) => { const queued = await queueStudioVideoTasks(id, request.body, clientId(request)); response.status(202).json(queued.tasks); }));
 studioApiRouter.patch("/projects/:id/video_tasks/:taskId/annotate", projectRoute(async (request, response, id) => response.json(await mutateVideoTask(id, param(request.params.taskId), request.body, clientId(request)))));
-studioApiRouter.post("/projects/:id/video_tasks/:taskId/cancel", projectRoute(async (request, response, id) => response.json(await mutateVideoTask(id, param(request.params.taskId), { status: "failed", error: "用户取消" }, clientId(request)))));
+studioApiRouter.post("/projects/:id/video_tasks/:taskId/cancel", projectRoute(async (request, response, id) => response.json(await cancelVideoTask(id, param(request.params.taskId), clientId(request)))));
 studioApiRouter.get("/tasks/:taskId", route(async (request, response) => response.json(await findVideoTask(param(request.params.taskId)))));
+studioApiRouter.get("/generation-jobs/:jobId", route(async (request, response) => response.json(getStudioGenerationJob(param(request.params.jobId)))));
+studioApiRouter.post("/generation-jobs/:jobId/cancel", route(async (request, response) => response.json(await cancelStudioGenerationJob(param(request.params.jobId)))));
 studioApiRouter.post("/projects/:id/merge", projectRoute(async (request, response, id) => response.json(await mergeStudioProject(id, clientId(request)))));
 studioApiRouter.post("/projects/:id/generate_video", projectRoute(async (request, response, id) => response.json(await mergeStudioProject(id, clientId(request)))));
 studioApiRouter.post("/projects/:id/run-stage", projectRoute(async (request, response, id) => response.json(await runStudioStage(id, String(request.body?.stage || ""), clientId(request)))));
@@ -386,8 +389,18 @@ async function mutateVideoTask(projectId: string, taskId: string, patch: Record<
   return response.video_tasks.find((task: any) => task.id === taskId);
 }
 async function findVideoTask(taskId: string) {
+  const job = findStudioGenerationJob(taskId);
+  if (job) return job;
   for (const summary of await listProjects()) { const project = await readProject(String(summary!.id)).catch(() => null) as any; const task = project?.studio?.videoTasks?.find((item: any) => item.id === taskId); if (task) return task; }
   throw new Error(`任务不存在：${taskId}`);
+}
+async function cancelVideoTask(projectId: string, taskId: string, originClientId: string) {
+  const project = await getStudioBackedProject(projectId);
+  const task = project.studio.videoTasks.find((item) => item.id === taskId);
+  if (!task) throw new Error(`任务不存在：${taskId}`);
+  const jobId = String(task.generation_job_id || "");
+  if (jobId && findStudioGenerationJob(jobId)) await cancelStudioGenerationJob(jobId);
+  return mutateVideoTask(projectId, taskId, { status: "failed", error: "用户取消" }, originClientId);
 }
 function textToTiptap(text: string) { return { type: "doc", content: text.split(/\n{2,}/).filter(Boolean).map((paragraph) => ({ type: "paragraph", content: [{ type: "text", text: paragraph }] })) }; }
 function tiptapText(value: any): string { if (typeof value?.text === "string") return value.text; if (Array.isArray(value?.content)) return value.content.map(tiptapText).filter(Boolean).join(value.type === "doc" ? "\n\n" : ""); return ""; }

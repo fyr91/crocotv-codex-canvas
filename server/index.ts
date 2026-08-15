@@ -14,15 +14,19 @@ import { applyCanvasOperations, type CanvasOperation } from "./canvas-commands";
 import { openProjectEventStream, publishProjectUpdated } from "./canvas-events";
 import { runCanvasConfigNodes } from "./canvas-node-runtime";
 import { cancelCanvasRunJob, createCanvasRerunJob, createCanvasRunJob, getCanvasRunJob, initializeCanvasRunJobs, recoverInterruptedCanvasRuns } from "./canvas-run-jobs";
+import { initializeStudioGenerationJobs } from "./studio-generation-jobs";
 import { verifyCanvasVideoAsr } from "./canvas-asr-runtime";
 import { mergeCanvasVideos, recordCanvasVisualReview, useCanvasVideoFrames } from "./canvas-video-tools";
 import { relayoutCanvasShotColumns, upsertCanvasShotColumn } from "./canvas-shot-columns";
 import { suiteCompatibility } from "./version";
 import { studioApiRouter } from "./studio-api";
+import { recoverInterruptedStudioGenerations } from "./studio-workflow";
 
 await ensureStorage();
 await initializeCanvasRunJobs();
+await initializeStudioGenerationJobs();
 await recoverInterruptedCanvasRuns();
+await recoverInterruptedStudioGenerations();
 
 const app = express();
 const port = Number(process.env.LOCAL_API_PORT || 4399);

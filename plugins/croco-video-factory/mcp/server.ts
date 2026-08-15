@@ -309,7 +309,7 @@ server.registerTool("studio_run_stage", {
 }, async ({ projectId, stage }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/run-stage`, { method: "POST", body: { stage } })));
 
 server.registerTool("studio_generate_asset_video", {
-  description: "Generate a Cast character/scene/prop motion-reference video through the shared Canvas H3 runtime. This can call the configured external video provider and incur cost.",
+  description: "Queue a Cast character/scene/prop motion-reference video through the shared Canvas H3 runtime. Returns immediately with _task_id and _generation_job; poll studio_get_generation_job until it reaches a terminal state. This can call the configured external video provider and incur cost.",
   inputSchema: {
     projectId: z.string().uuid(),
     assetType: z.enum(["character", "scene", "prop"]),
@@ -319,6 +319,18 @@ server.registerTool("studio_generate_asset_video", {
   },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
 }, async ({ projectId, assetType, assetId, prompt, duration }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/assets/generate_motion_ref`, { method: "POST", body: { asset_type: assetType, asset_id: assetId, prompt, duration, batch_size: 1 } })));
+
+server.registerTool("studio_get_generation_job", {
+  description: "Read the persisted status and result metadata of an asynchronous Studio generation job.",
+  inputSchema: { jobId: z.string().uuid() },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ jobId }) => toolResult(await api(`/api/studio/generation-jobs/${encodeURIComponent(jobId)}`)));
+
+server.registerTool("studio_cancel_generation_job", {
+  description: "Cancel a queued or running Studio generation job. Completed, failed, or already-cancelled jobs are returned unchanged.",
+  inputSchema: { jobId: z.string().uuid() },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+}, async ({ jobId }) => toolResult(await api(`/api/studio/generation-jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" })));
 
 server.registerTool("studio_control_workflow", {
   description: "Control local Studio storyboard and assembly decisions without UI clicks: select a take, extract a last frame, preview/apply/revert dialogue dub, choose local BGM and mix levels, or merge the project.",

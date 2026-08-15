@@ -3,8 +3,8 @@
 import { useState, useCallback } from 'react';
 import { Download, Video, Copy, Check, Replace, Crown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { API_URL } from '@/lib/api';
 import { usePlaygroundStore, type PlaygroundGeneration } from './usePlaygroundStore';
+import { resolvePlaygroundMediaUrl } from './media';
 
 interface ResultCardProps {
   generation: PlaygroundGeneration;
@@ -23,11 +23,6 @@ const MODE_LABELS: Record<string, string> = {
   t2i: 'T2I',
   i2i: 'I2I',
 };
-
-function getMediaUrl(path: string): string {
-  const relativePath = path.replace(/^output\//, '');
-  return `${API_URL}/files/${relativePath}`;
-}
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -130,7 +125,7 @@ function CompletedCard({ generation, outputIndex, onGenerateVideo, onOpenDetail 
   const isVideo = output?.media_type === 'video' || ['t2v', 'i2v', 'r2v', 'v2v'].includes(mode);
   const [imgError, setImgError] = useState(false);
 
-  const mediaUrl = output?.media_path ? getMediaUrl(output.media_path) : null;
+  const mediaUrl = output?.media_path ? resolvePlaygroundMediaUrl(output.media_path) : null;
   const useResultAsReference = usePlaygroundStore((s) => s.useResultAsReference);
   const featuredByGen = usePlaygroundStore((s) => s.featuredByGen);
   const toggleFeatured = usePlaygroundStore((s) => s.toggleFeatured);
