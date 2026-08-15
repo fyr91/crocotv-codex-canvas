@@ -8,7 +8,7 @@ import { addResource, fileSize, listProjects, listResources, readProject, typeFr
 import { createStudioProject, deleteStudioProject, getStudioBackedProject, getStudioProject, listStudioAssetSources, listStudioProjectResponses, mutateStudioProject, updateStudioScript } from "./studio-commands";
 import { studioDocumentToText, studioTextToDocument } from "./studio-document";
 import {
-  analyzeStudioArtDirection, analyzeStudioStoryboard, clearStudioArtDirection, copyStudioFrame, createStudioEntity, createStudioFrame, createStudioVideoTasks,
+  analyzeStudioArtDirection, analyzeStudioStoryboard, applyStudioEntityExtraction, clearStudioArtDirection, copyStudioFrame, createStudioEntity, createStudioFrame, createStudioVideoTasks,
   deleteStudioEntity, deleteStudioFrame, extractStudioEntities, generateStudioAsset, generateStudioFrameAudio, mergeStudioProject, patchStudioEntity, patchStudioFrame,
   polishStudioText, previewStudioEntities, queueStudioAssetGeneration, queueStudioVideoTasks, renderStudioFrame, reorderStudioFrames, replaceStudioStoryboard, saveStudioArtDirection, selectStudioVideo, toggleStudioEntityFlag,
 } from "./studio-workflow";
@@ -69,6 +69,7 @@ studioApiRouter.get("/projects", route(async (_request, response) => response.js
 studioApiRouter.put("/projects/:id/text", projectRoute(async (request, response, id) => response.json(await updateStudioScript(id, request.body, clientId(request)))));
 studioApiRouter.put("/projects/:id/reparse", projectRoute(async (request, response, id) => response.json(await extractStudioEntities(id, String(request.body?.text || ""), clientId(request)))));
 studioApiRouter.post("/projects/:id/extract_preview", projectRoute(async (request, response, id) => response.json(await previewStudioEntities(id, String(request.body?.text || ""), clientId(request)))));
+studioApiRouter.post("/projects/:id/extraction/apply", projectRoute(async (request, response, id) => response.json(await applyStudioEntityExtraction(id, String(request.body?.text || ""), request.body?.extraction, clientId(request)))));
 studioApiRouter.post("/projects/:id/toggle_starred", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, starred: !state.starred }), { originClientId: clientId(request) }))));
 studioApiRouter.post("/projects/:id/sync_descriptions", projectRoute(async (_request, response, id) => response.json(await getStudioProject(id))));
 

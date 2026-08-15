@@ -93,6 +93,7 @@ const generationExecutionSchema = z.object({
   systemPromptSha256: z.string().regex(/^[a-f0-9]{64}$/),
   systemPromptNodeIds: z.array(boundedId).max(10),
   model: z.string().min(1).max(100),
+  thinking: z.enum(["enabled", "disabled", "auto"]).optional(),
   sourceNodeIds: z.array(boundedId).max(100),
   imageResourceIds: z.array(boundedId).max(16),
   videoResourceIds: z.array(boundedId).max(16),

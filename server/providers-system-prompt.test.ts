@@ -22,3 +22,24 @@ test("文本 Provider 保留 System Prompt 完整字节", { concurrency: false }
     else process.env.BIGMODEL_API_KEY = originalKey;
   }
 });
+
+test("DeepSeek thinking 模式按调用参数显式传递", { concurrency: false }, async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.ARK_API_KEY;
+  const requestBodies: any[] = [];
+  process.env.ARK_API_KEY = "test-key";
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    requestBodies.push(JSON.parse(String(init?.body || "{}")));
+    return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    await generateText("extract", "deepseek-v4-flash-ga-260731", [], [], "", { thinking: "disabled" });
+    await generateText("default", "deepseek-v4-flash-ga-260731");
+    assert.deepEqual(requestBodies[0].thinking, { type: "disabled" });
+    assert.deepEqual(requestBodies[1].thinking, { type: "enabled" });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.ARK_API_KEY;
+    else process.env.ARK_API_KEY = originalKey;
+  }
+});

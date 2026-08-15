@@ -313,6 +313,11 @@ export const api = {
         return res.data as { characters: any[]; scenes: any[]; props: any[] };
     },
 
+    applyExtraction: async (scriptId: string, text: string, extraction: { characters: any[]; scenes: any[]; props: any[] }) => {
+        const res = await axios.post(`${API_URL}/projects/${scriptId}/extraction/apply`, { text, extraction });
+        return { ...res.data, originalText: res.data.original_text };
+    },
+
     /** Persist `original_text` without LLM reparse. Used for textarea
      *  blur-saves so navigation/reload doesn't drop in-progress drafts. */
     updateScriptText: async (scriptId: string, text: string) => {
