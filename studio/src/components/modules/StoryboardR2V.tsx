@@ -181,7 +181,7 @@ export default function StoryboardR2V() {
         const frames: any[] = currentProject?.frames ?? [];
         for (const f of frames) {
             if (typeof f.workbench_generate_count === "number") {
-                out[f.id] = f.workbench_generate_count;
+                out[f.id] = Math.max(1, Math.min(3, Math.floor(f.workbench_generate_count)));
             }
         }
         return out;
@@ -1073,7 +1073,7 @@ export default function StoryboardR2V() {
 
         // Per-shot submission lockout (Issue 17). The earlier in-flight guard
         // (`shot.videoStatus === "pending"|"processing"`) had a false positive
-        // problem: when a shot has multiple tasks (batch ×4), one fails + others
+        // problem: when a shot has multiple tasks (batch ×N), one fails + others
         // still processing, retrying the failed one was BLOCKED by the others'
         // status. Replace with a 500ms debounce on the SHOT specifically — that
         // catches double-clicks / strict-mode double-fires without entangling
@@ -1499,7 +1499,7 @@ export default function StoryboardR2V() {
         return {
             model: modelId,
             duration: shot.duration ?? videoConfig.duration,
-            count: shotCounts[shot.id] ?? 1,
+            count: Math.max(1, Math.min(3, Math.floor(shotCounts[shot.id] ?? 1))),
             // Per-shot seed override (Sweep G fix); undefined means
             // "random per generation".
             seed: shotSeeds[shot.id],

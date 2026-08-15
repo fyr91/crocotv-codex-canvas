@@ -215,6 +215,7 @@ export async function patchStudioFrame(projectId: string, frameId: string, raw: 
   return mutateStudioProject(projectId, (state) => {
     const current = requiredFrame(state, frameId);
     const patch = { ...raw, prompt: String(raw?.prompt ?? raw?.image_prompt ?? current.prompt), title: String(raw?.title || current.title) };
+    if (raw?.workbench_generate_count != null) patch.workbench_generate_count = boundedCount(raw.workbench_generate_count);
     return { ...state, frames: state.frames.map((frame) => frame.id === frameId ? { ...frame, ...patch, id: frame.id, order: frame.order } : frame) };
   }, { originClientId });
 }

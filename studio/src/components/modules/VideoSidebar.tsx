@@ -341,7 +341,7 @@ export default function VideoSidebar({ tasks, onRemix, params, setParams }: Vide
                                 <div>
                                     <label className="block text-sm text-text-secondary mb-2">{tm("batchSize")}</label>
                                     <div className="grid grid-cols-3 gap-2">
-                                        {[1, 2, 4].map(size => (
+                                        {[1, 2, 3].map(size => (
                                             <button
                                                 key={size}
                                                 onClick={() => updateParam("batchSize", size)}

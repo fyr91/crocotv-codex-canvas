@@ -425,7 +425,7 @@ export const api = {
      *  batch-count whenever the user changes them. Server clamps:
      *    t2i_image_urls ≤ 10 FIFO,
      *    t2i_selected_index ∈ [0, len-1],
-     *    workbench_generate_count ∈ [1, 6].
+     *    workbench_generate_count ∈ [1, 3].
      *  Unknown tab_mode returns 400. */
     updateFrameWorkbench: async (
         scriptId: string,

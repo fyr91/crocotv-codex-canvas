@@ -11,7 +11,7 @@ import { useTranslations } from 'next-intl';
 // ---------------------------------------------------------------------------
 
 const VIDEO_MODES = new Set(['t2v', 'i2v', 'r2v', 'v2v']);
-const BATCH_OPTIONS = [1, 2, 4] as const;
+const BATCH_OPTIONS = [1, 2, 3] as const;
 const PARAM_CONTROL_HEIGHT = 'h-10';
 const PARAM_PILL_BUTTON = 'h-full !min-h-0 py-0';
 

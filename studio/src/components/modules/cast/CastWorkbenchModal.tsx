@@ -328,7 +328,7 @@ export default function CastWorkbenchModal({ isOpen, kind, entityId, onClose }: 
             // Refresh failed — proceed with cached data; backend will reject
             // if the entity truly is stale and the poll surfaces the error.
         }
-        const effectiveBatchSize = Math.max(1, Math.min(4, batchSize));
+        const effectiveBatchSize = Math.max(1, Math.min(3, batchSize));
         addGeneratingTask(entity.id, kind === "character" ? "reference_sheet" : "all", effectiveBatchSize);
 
         const progressId = toast.progress(t("toastGenStart", { kind: t(`kind.${kind}`) }), {
@@ -735,7 +735,7 @@ export default function CastWorkbenchModal({ isOpen, kind, entityId, onClose }: 
                                         {t("batchLabel")}
                                     </label>
                                     <div className="flex items-center gap-2">
-                                        {[1, 2, 4].map((n) => (
+                                        {[1, 2, 3].map((n) => (
                                             <button
                                                 key={n}
                                                 onClick={() => setBatchSize(n)}

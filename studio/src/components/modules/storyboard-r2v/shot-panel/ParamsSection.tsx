@@ -74,7 +74,7 @@ interface ParamsSectionProps {
 }
 
 // COUNT_OPTIONS removed in PR-3c — count selector relocated to ShotCard's
-// inline generation row. ShotCard owns the canonical [1,2,4,6] list now.
+// inline generation row. ShotCard owns the canonical [1,2,3] list now.
 
 export default function ParamsSection({
     shotId,

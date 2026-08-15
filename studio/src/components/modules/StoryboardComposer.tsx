@@ -445,7 +445,7 @@ export default function StoryboardComposer() {
                                                         </div>
                                                     ) : (
                                                         <>
-                                                            {[1, 2, 3, 4].map(size => (
+                                                            {[1, 2, 3].map(size => (
                                                                 <button
                                                                     key={size}
                                                                     onClick={(e) => { e.stopPropagation(); handleRenderFrame(frame, size); }}

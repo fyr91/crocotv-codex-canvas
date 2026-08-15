@@ -128,7 +128,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                 {/* Generation Controls */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 bg-elevated rounded-lg p-1 border border-glass-border">
-                        {[1, 2, 3, 4].map(size => (
+                        {[1, 2, 3].map(size => (
                             <button
                                 key={size}
                                 onClick={() => setBatchSize(size)}

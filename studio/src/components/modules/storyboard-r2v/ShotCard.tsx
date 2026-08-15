@@ -959,7 +959,7 @@ export default function ShotCard({
                                     {t("countLabel")}
                                 </span>
                                 <div className="flex items-center gap-0.5 shrink-0 p-[3px] rounded-full bg-surface-inset">
-                                    {[1, 2, 4, 6].map((n) => {
+                                    {[1, 2, 3].map((n) => {
                                         const active = generateCount === n;
                                         return (
                                             <button
