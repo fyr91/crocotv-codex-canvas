@@ -52,6 +52,37 @@ final result: passed
 
 ---
 
+# Playground Parameter Control Heights — Design QA
+
+## Comparison Target
+
+- Source report: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-ee1f5a33-568c-4bd8-95e8-9867cf2f7bed.png` (517 × 293 px).
+- Verified implementation crop: `/tmp/studio-parameter-controls-crop.png`, captured from the Studio production build at a 1280 × 720 CSS viewport.
+- Side-by-side comparison: `/tmp/studio-parameter-controls-comparison.png`; both captures use the dark theme and the same text-to-video parameter state.
+
+## Findings
+
+- The source defect was not isolated to the duration control: dropdowns, the duration stepper, and pill groups used three different effective heights because local padding compounded the global 40px minimum-height rule.
+- All default controls in `ParameterBar` now use the existing 40px Studio/Canvas control token. Runtime measurements confirm 40px for aspect ratio, resolution, duration, batch generation, and advanced pill groups.
+- Nested stepper inputs and selected pill buttons explicitly clear the global minimum height, so they fit within their 40px parent instead of expanding it.
+- The compact filters and timing controls elsewhere in Studio remain unchanged because they belong to the separate 32px compact density.
+
+## Interaction And Runtime Checks
+
+- Duration increment changed `6` to `7`; batch selection moved from `x1` to `x2`; the aspect-ratio menu opened; advanced parameters expanded.
+- Fresh production-preview console: no errors.
+- Component geometry test, all 55 Studio UI tests, Studio typecheck, color-token guard, Studio production build, and full repository build passed.
+- `GET /api/status` returned HTTP 200 from the running local API.
+- MCP surface is unchanged because this task only normalizes UI geometry and does not change persisted parameters, generation behavior, or remotely callable commands.
+
+## Issue Status
+
+- P0: none.
+- P1: none.
+- P2: none in the confirmed Playground parameter-bar scope.
+- Separate audit note: compact numeric fields in the Storyboard timing/shot panels can be normalized to their intended 32px density in a dedicated follow-up; they are not part of this 40px control group.
+---
+
 # Studio 品牌区与剧本编辑器视觉验收
 
 ## 对比目标
@@ -99,7 +130,6 @@ final result: passed
 - [x] 空白可编辑文档进入编辑模式并自动获得真实编辑焦点。
 - [x] 深浅主题、项目流程与编辑器空白态完成浏览器复验。
 - [x] 最终页面无控制台错误。
-
 final result: passed
 
 ---

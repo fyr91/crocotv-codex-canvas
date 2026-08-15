@@ -12,6 +12,8 @@ import { useTranslations } from 'next-intl';
 
 const VIDEO_MODES = new Set(['t2v', 'i2v', 'r2v', 'v2v']);
 const BATCH_OPTIONS = [1, 2, 4] as const;
+const PARAM_CONTROL_HEIGHT = 'h-10';
+const PARAM_PILL_BUTTON = 'h-full !min-h-0 py-0';
 
 const FALLBACK_RATIOS = ['16:9', '9:16', '1:1'];
 const FALLBACK_RESOLUTIONS = ['720P', '1080P'];
@@ -71,7 +73,7 @@ function ParamDropdown({
           type="button"
           disabled={disabled}
           onClick={() => !disabled && setOpen((o) => !o)}
-          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-surface-inset border border-border-subtle text-foreground text-sm font-medium transition cursor-pointer ${
+          className={`${PARAM_CONTROL_HEIGHT} w-full flex items-center justify-between px-3 py-0 rounded-xl bg-surface-inset border border-border-subtle text-foreground text-sm font-medium transition cursor-pointer ${
             disabled
               ? 'opacity-50 cursor-not-allowed'
               : 'hover:border-foreground/30'
@@ -128,11 +130,11 @@ function PillToggle({
   return (
     <div className="flex flex-col gap-[6px]">
       <span className="font-mono text-sm uppercase tracking-[0.08em] text-text-muted">{label}</span>
-      <div className="flex gap-[2px] p-[3px] bg-surface-inset rounded-full atelier-pill-tabs">
+      <div className={`${PARAM_CONTROL_HEIGHT} flex gap-[2px] p-[3px] bg-surface-inset rounded-full atelier-pill-tabs`}>
         <button
           type="button"
           onClick={() => onChange(true)}
-          className={`flex-1 rounded-full px-3 py-1.5 text-sm font-medium text-center cursor-pointer transition-all ${
+          className={`${PARAM_PILL_BUTTON} flex-1 rounded-full px-3 text-sm font-medium text-center cursor-pointer transition-all ${
             value
               ? 'bg-primary text-on-accent'
               : 'text-text-muted hover:text-foreground hover:bg-hover-bg'
@@ -143,7 +145,7 @@ function PillToggle({
         <button
           type="button"
           onClick={() => onChange(false)}
-          className={`flex-1 rounded-full px-3 py-1.5 text-sm font-medium text-center cursor-pointer transition-all ${
+          className={`${PARAM_PILL_BUTTON} flex-1 rounded-full px-3 text-sm font-medium text-center cursor-pointer transition-all ${
             !value
               ? 'bg-primary text-on-accent'
               : 'text-text-muted hover:text-foreground hover:bg-hover-bg'
@@ -188,23 +190,24 @@ function DurationStepper({
   return (
     <div className="flex flex-col gap-[6px]">
       <span className="font-mono text-sm uppercase tracking-[0.08em] text-text-muted">{t('parameters.duration')}</span>
-      <div className="flex items-center gap-0 rounded-xl border border-border-subtle bg-surface-inset overflow-hidden">
+      <div className={`${PARAM_CONTROL_HEIGHT} flex items-center gap-0 rounded-xl border border-border-subtle bg-surface-inset overflow-hidden`}>
         <button
           type="button"
           disabled={value <= min}
           onClick={() => onChange(Math.max(min, value - step))}
-          className="px-3 py-2.5 text-text-secondary hover:text-foreground hover:bg-hover-bg transition disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium shrink-0"
+          className="h-full !min-h-0 px-3 py-0 text-text-secondary hover:text-foreground hover:bg-hover-bg transition disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium shrink-0"
         >
           −
         </button>
-        <div className="flex-1 flex items-center justify-center gap-0.5 py-2.5">
+        <div className="h-full flex-1 flex items-center justify-center gap-0.5 py-0">
           <input
             type="text"
             inputMode="numeric"
             value={value}
             onChange={handleInputChange}
             onBlur={handleBlur}
-            className="w-8 bg-transparent text-center font-mono text-sm font-medium text-foreground outline-none"
+            aria-label={t('parameters.duration')}
+            className="h-full !min-h-0 w-8 bg-transparent text-center font-mono text-sm font-medium text-foreground outline-none"
           />
           <span className="text-sm text-text-muted font-mono">s</span>
         </div>
@@ -212,7 +215,7 @@ function DurationStepper({
           type="button"
           disabled={value >= max}
           onClick={() => onChange(Math.min(max, value + step))}
-          className="px-3 py-2.5 text-text-secondary hover:text-foreground hover:bg-hover-bg transition disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium shrink-0"
+          className="h-full !min-h-0 px-3 py-0 text-text-secondary hover:text-foreground hover:bg-hover-bg transition disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium shrink-0"
         >
           +
         </button>
@@ -319,13 +322,13 @@ export default function ParameterBar() {
   const batchPills = (
     <div className="flex flex-col gap-[6px]">
       <span className="font-mono text-sm uppercase tracking-[0.08em] text-text-muted">{t('parameters.batchSize')}</span>
-      <div className="flex gap-[2px] p-[3px] bg-surface-inset rounded-full atelier-pill-tabs">
+      <div className={`${PARAM_CONTROL_HEIGHT} flex gap-[2px] p-[3px] bg-surface-inset rounded-full atelier-pill-tabs`}>
         {BATCH_OPTIONS.map((n) => (
           <button
             key={n}
             type="button"
             onClick={() => setBatchSize(n)}
-            className={`flex-1 rounded-full px-3 py-1.5 font-mono text-sm font-medium cursor-pointer transition-all text-center ${
+            className={`${PARAM_PILL_BUTTON} flex-1 rounded-full px-3 font-mono text-sm font-medium cursor-pointer transition-all text-center ${
               batchSize === n
                 ? 'bg-primary text-on-accent'
                 : 'text-text-muted hover:text-foreground hover:bg-hover-bg'
@@ -418,20 +421,20 @@ export default function ParameterBar() {
             {durationFixed ? (
               <div className="flex flex-col gap-[6px]">
                 <span className="font-mono text-sm uppercase tracking-[0.08em] text-text-muted">{t('parameters.duration')}</span>
-                <div className="w-full flex items-center px-3 py-2.5 rounded-xl bg-surface-inset border border-border-subtle text-text-muted text-sm font-medium">
+                <div className={`${PARAM_CONTROL_HEIGHT} w-full flex items-center px-3 py-0 rounded-xl bg-surface-inset border border-border-subtle text-text-muted text-sm font-medium`}>
                   {durationValue}s {t('parameters.durationFixedSuffix')}
                 </div>
               </div>
             ) : modelDuration?.type === 'buttons' ? (
               <div className="flex flex-col gap-[6px]">
                 <span className="font-mono text-sm uppercase tracking-[0.08em] text-text-muted">{t('parameters.duration')}</span>
-                <div className="flex gap-[2px] p-[3px] bg-surface-inset rounded-full atelier-pill-tabs">
+                <div className={`${PARAM_CONTROL_HEIGHT} flex gap-[2px] p-[3px] bg-surface-inset rounded-full atelier-pill-tabs`}>
                   {modelDuration.options.map((n) => (
                     <button
                       key={n}
                       type="button"
                       onClick={() => updateParam('duration', n)}
-                      className={`flex-1 rounded-full px-3 py-1.5 font-mono text-sm font-medium cursor-pointer transition-all text-center ${
+                      className={`${PARAM_PILL_BUTTON} flex-1 rounded-full px-3 font-mono text-sm font-medium cursor-pointer transition-all text-center ${
                         durationValue === n
                           ? 'bg-primary text-on-accent'
                           : 'text-text-muted hover:text-foreground hover:bg-hover-bg'
