@@ -80,7 +80,7 @@ export default function TaskQueuePanel({
             />
             <aside
                 role="region"
-                aria-label="Task queue"
+                aria-label={t("queueTitle")}
                 className={[
                     // Always: flex layout, glass surface, slide-in entry.
                     "flex h-full shrink-0 flex-col border-l border-glass-border bg-surface/55 backdrop-blur-xl",
@@ -106,7 +106,7 @@ export default function TaskQueuePanel({
                 trailing={(
                     <button
                         type="button"
-                        aria-label="Close queue"
+                        aria-label={t("queueClose")}
                         onClick={onClose}
                         className="p-1.5 hover:bg-hover-bg rounded-md text-text-secondary hover:text-foreground transition-colors"
                     >
@@ -308,7 +308,7 @@ function TaskRow({
                     {task.frame_id ? (
                         <button
                             type="button"
-                            aria-label="Jump to shot"
+                            aria-label={t("queueJumpToShot")}
                             title={t("queueJumpToShot")}
                             onClick={() => onJumpToShot(task.frame_id!)}
                             className="-m-1 grid h-7 w-7 place-items-center rounded text-text-muted transition-colors duration-fast ease-out-quart hover:bg-hover-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
@@ -319,8 +319,8 @@ function TaskRow({
                     {isInFlight && onCancel ? (
                         <button
                             type="button"
-                            aria-label="Cancel task"
-                            title="Cancel"
+                            aria-label={t("queueCancelTask")}
+                            title={t("queueCancelTask")}
                             onClick={() => { void onCancel(task); }}
                             className="-m-1 grid h-7 w-7 place-items-center rounded text-text-muted transition-colors duration-fast ease-out-quart hover:bg-status-failed-bg hover:text-status-failed-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-failed-border"
                         >
@@ -335,12 +335,12 @@ function TaskRow({
                 <div className="flex items-start gap-2">
                     <div className="h-[36px] w-[64px] shrink-0 overflow-hidden rounded border border-glass-border bg-black/40">
                         {isCompleted && outputVideoUrl ? (
-                            <PreviewVideo src={outputVideoUrl} alt="output" className="h-full w-full" hoverPlay={false} alwaysShowMagnify clickToLightbox />
+                            <PreviewVideo src={outputVideoUrl} alt={t("queueOutput")} className="h-full w-full" hoverPlay={false} alwaysShowMagnify clickToLightbox />
                         ) : inputThumbUrl ? (
-                            <PreviewImage src={inputThumbUrl} alt="input" className="h-full w-full" alwaysShowMagnify clickToLightbox />
+                            <PreviewImage src={inputThumbUrl} alt={t("queueInput")} className="h-full w-full" alwaysShowMagnify clickToLightbox />
                         ) : (
                             <div className="grid h-full w-full place-items-center font-mono text-sm uppercase text-text-muted">
-                                no thumb
+                                {t("queueNoThumbnail")}
                             </div>
                         )}
                     </div>
@@ -351,7 +351,7 @@ function TaskRow({
                         <p className="truncate font-mono text-chrome-sm tracking-tight text-text-muted">
                             {task.model || "—"}
                             {task.resolution ? ` · ${task.resolution}` : ""}
-                            {` · ${elapsedLabel} ago`}
+                            {` · ${t("queueAgo", { time: elapsedLabel })}`}
                         </p>
                     </div>
                 </div>
@@ -364,17 +364,17 @@ function TaskRow({
                         <div className="flex flex-wrap items-start gap-2">
                             {inputThumbUrl ? (
                                 <div className="space-y-0.5">
-                                    <p className="font-mono text-sm uppercase tracking-wider text-text-muted">input</p>
+                                    <p className="font-mono text-sm uppercase tracking-wider text-text-muted">{t("queueInput")}</p>
                                     <div className="h-[68px] w-[120px] overflow-hidden rounded border border-glass-border bg-black/40">
-                                        <PreviewImage src={inputThumbUrl} alt="input" className="h-full w-full" alwaysShowMagnify clickToLightbox />
+                                        <PreviewImage src={inputThumbUrl} alt={t("queueInput")} className="h-full w-full" alwaysShowMagnify clickToLightbox />
                                     </div>
                                 </div>
                             ) : null}
                             {isCompleted && outputVideoUrl ? (
                                 <div className="space-y-0.5">
-                                    <p className="font-mono text-sm uppercase tracking-wider text-text-muted">output</p>
+                                    <p className="font-mono text-sm uppercase tracking-wider text-text-muted">{t("queueOutput")}</p>
                                     <div className="h-[68px] w-[120px] overflow-hidden rounded border border-glass-border bg-black/40">
-                                        <PreviewVideo src={outputVideoUrl} alt="output" className="h-full w-full" alwaysShowMagnify clickToLightbox />
+                                        <PreviewVideo src={outputVideoUrl} alt={t("queueOutput")} className="h-full w-full" alwaysShowMagnify clickToLightbox />
                                     </div>
                                 </div>
                             ) : null}
@@ -384,7 +384,7 @@ function TaskRow({
                     {/* Full prompt — preserves whitespace, no clamp */}
                     {fullPrompt ? (
                         <div className="space-y-0.5">
-                            <p className="font-mono text-sm uppercase tracking-wider text-text-muted">prompt</p>
+                            <p className="font-mono text-sm uppercase tracking-wider text-text-muted">{t("queuePrompt")}</p>
                             <p className="whitespace-pre-wrap rounded border border-glass-border/60 bg-black/30 px-2 py-1.5 font-sans text-body-sm leading-snug text-foreground">
                                 {fullPrompt}
                             </p>
@@ -397,14 +397,14 @@ function TaskRow({
                         {task.resolution ? <span>· {task.resolution}</span> : null}
                         {task.duration ? <span>· {task.duration}s</span> : null}
                         {typeof task.seed === "number" ? <span>· seed {task.seed}</span> : null}
-                        <span>· {elapsedLabel} ago</span>
+                        <span>· {t("queueAgo", { time: elapsedLabel })}</span>
                         {task.generation_mode ? <span>· {task.generation_mode}</span> : null}
                     </div>
 
                     {/* Failure — full error text wrap */}
                     {isFailed && task.error ? (
                         <div className="space-y-0.5">
-                            <p className="font-mono text-sm uppercase tracking-wider text-status-failed-fg/80">error</p>
+                            <p className="font-mono text-sm uppercase tracking-wider text-status-failed-fg/80">{t("queueError")}</p>
                             <p className="whitespace-pre-wrap rounded border border-status-failed-border/40 bg-status-failed-bg/60 px-2 py-1.5 font-mono text-chrome-sm leading-snug text-status-failed-fg">
                                 ⚠ {task.error}
                             </p>
@@ -425,7 +425,7 @@ function TaskRow({
                                         type="button"
                                         onClick={() => void handleCopy("providerId", task.provider_task_id!)}
                                         title={t("queueCopyTaskId")}
-                                        aria-label="Copy task ID"
+                                        aria-label={t("queueCopyTaskId")}
                                         className="-m-1 grid h-6 w-6 place-items-center rounded text-text-muted transition-colors duration-fast ease-out-quart hover:bg-hover-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
                                     >
                                         {copiedField === "providerId" ? <Check size={10} /> : <Copy size={10} />}
@@ -442,7 +442,7 @@ function TaskRow({
                                         type="button"
                                         onClick={() => void handleCopy("providerRequest", task.provider_request_id!)}
                                         title={t("queueCopyRequestId")}
-                                        aria-label="Copy request ID"
+                                        aria-label={t("queueCopyRequestId")}
                                         className="-m-1 grid h-6 w-6 place-items-center rounded text-text-muted transition-colors duration-fast ease-out-quart hover:bg-hover-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
                                     >
                                         {copiedField === "providerRequest" ? <Check size={10} /> : <Copy size={10} />}
@@ -473,8 +473,8 @@ function TaskRow({
                             {isFailed && onRetry ? (
                                 <button
                                     type="button"
-                                    aria-label="Retry task"
-                                    title="Retry"
+                                    aria-label={t("queueRetryTask")}
+                                    title={t("queueRetryTask")}
                                     disabled={retrying}
                                     onClick={() => void handleRetry()}
                                     className="inline-flex min-h-[24px] items-center gap-1 rounded border border-status-failed-border bg-status-failed-bg px-2 py-[2px] font-mono text-chrome-sm font-medium uppercase text-status-failed-fg transition-colors duration-fast ease-out-quart hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-failed-border disabled:cursor-not-allowed disabled:opacity-70"
@@ -484,7 +484,7 @@ function TaskRow({
                                     ) : (
                                         <RefreshCw size={10} />
                                     )}
-                                    {retrying ? "Retrying…" : "Retry"}
+                                    {retrying ? t("queueRetrying") : t("retry")}
                                 </button>
                             ) : null}
                         </div>

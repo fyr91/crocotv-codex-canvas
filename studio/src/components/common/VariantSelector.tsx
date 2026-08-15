@@ -83,7 +83,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                     <>
                         <img
                             src={displayUrl}
-                            alt="Selected Variant"
+                            alt={t("selectedVariantAlt")}
                             className="w-full h-full object-contain"
                         />
                         {/* Zoom hint */}
@@ -175,7 +175,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                                         {/* Clickable image area */}
                                         <img
                                             src={url}
-                                            alt="Variant"
+                                            alt={t("variantAlt")}
                                             loading="lazy"
                                             className="w-full h-full object-cover cursor-pointer"
                                             onClick={() => onSelect(variant.id)}
@@ -249,7 +249,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                     </button>
                     <img
                         src={zoomedImage}
-                        alt="Zoomed View"
+                        alt={t("zoomedViewAlt")}
                         className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
                         onClick={(e) => e.stopPropagation()}
                     />

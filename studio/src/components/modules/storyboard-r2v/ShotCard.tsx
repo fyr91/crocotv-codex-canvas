@@ -308,7 +308,7 @@ export default function ShotCard({
                 return (
                     <PreviewVideo
                         src={shot.videoUrl}
-                        alt={t("generatedVideo") || "Generated video"}
+                        alt={t("generatedVideo")}
                         className="w-full aspect-video"
                     />
                 );
@@ -351,7 +351,7 @@ export default function ShotCard({
                     <div className="w-full aspect-video relative">
                         <PreviewImage
                             src={shot.t2iImageUrl}
-                            alt={t("t2iCompleted") || "First frame"}
+                            alt={t("t2iCompleted")}
                             className="w-full h-full"
                         />
                         <div className="absolute bottom-2 left-2 text-sm px-1.5 py-0.5 rounded-full bg-status-completed-bg/90 text-white font-medium backdrop-blur-sm pointer-events-none">
@@ -400,7 +400,7 @@ export default function ShotCard({
             return (
                 <PreviewVideo
                     src={shot.videoUrl}
-                    alt={t("generatedVideo") || "Generated video"}
+                    alt={t("generatedVideo")}
                     className="w-full aspect-video"
                 />
             );
@@ -568,7 +568,7 @@ export default function ShotCard({
                             {String(index + 1).padStart(2, "0")}
                         </div>
                         <div className="font-mono text-sm uppercase tracking-[0.08em] text-text-muted leading-tight">
-                            <span>SHOT</span>
+                            <span>{t("shot")}</span>
                             {shot.shotSize ? (
                                 <span className="ml-1.5 text-text-secondary font-medium">· {shot.shotSize}</span>
                             ) : null}
@@ -967,7 +967,7 @@ export default function ShotCard({
                                                 type="button"
                                                 onClick={() => onSetGenerateCount?.(n)}
                                                 aria-pressed={active}
-                                                aria-label={`Generate ${n} at a time`}
+                                                aria-label={t("genCandidatesEachTooltip", { n })}
                                                 title={t("genCandidatesEachTooltip", { n })}
                                                 className={`grid h-7 min-w-[28px] place-items-center rounded-full font-mono text-sm font-medium transition-colors duration-fast ease-out-quart focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55 ${
                                                     active

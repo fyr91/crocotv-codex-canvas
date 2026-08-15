@@ -597,7 +597,7 @@ export default function ArtDirection() {
                     </div>
                 ) : (
                     <span className="font-mono text-sm uppercase tracking-[0.18em] text-text-muted">
-                        select a style →
+                        {ta("selectStyleArrow")}
                     </span>
                 )}
                 <WorkflowActionButton
@@ -671,7 +671,7 @@ export default function ArtDirection() {
                             </div>
                             <button
                                 onClick={cancelOverrideConfirm}
-                                aria-label="Close"
+                                aria-label={ta("closeAria")}
                                 className="p-1.5 rounded-lg hover:bg-hover-bg text-text-muted hover:text-foreground transition-colors"
                             >
                                 <X size={15} />

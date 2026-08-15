@@ -434,12 +434,12 @@ export default function CharacterWorkbench({ asset, onClose, onUpdateDescription
                     <div className="px-6 py-3 flex items-start gap-4">
                         {/* User's Negative Prompt (Editable) */}
                         <div className="flex-1">
-                            <label className="text-sm font-medium text-text-muted uppercase mb-2 block">{tc("workbench")}</label>
+                            <label className="text-sm font-medium text-text-muted uppercase mb-2 block">{tc("negativePromptLabel")}</label>
                             <textarea
                                 value={negativePrompt}
                                 onChange={(e) => setNegativePrompt(e.target.value)}
                                 className="w-full h-16 bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-text-secondary resize-none focus:outline-none focus:border-primary/50 font-mono"
-                                placeholder="Enter your negative prompt (avoid unwanted elements)..."
+                                placeholder={tc("negativePromptPlaceholder")}
                             />
                         </div>
 
@@ -454,7 +454,7 @@ export default function CharacterWorkbench({ asset, onClose, onUpdateDescription
                                     className="rounded border-glass-border bg-elevated text-primary focus:ring-primary w-4 h-4"
                                 />
                                 <label htmlFor="applyStyleFooter" className="text-sm font-medium text-text-secondary cursor-pointer select-none whitespace-nowrap">
-                                    {tc("workbench")}
+                                    {tc("applyStyle")}
                                 </label>
                             </div>
                         </div>
@@ -469,7 +469,7 @@ export default function CharacterWorkbench({ asset, onClose, onUpdateDescription
                             >
                                 <div className="flex items-center gap-2">
                                     <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-primary" />
-                                    <span className="text-sm font-medium text-text-secondary uppercase">Art Direction Style (Will Be Appended)</span>
+                                    <span className="text-sm font-medium text-text-secondary uppercase">{tc("artDirectionStyleAppend")}</span>
                                 </div>
                                 <ChevronRight size={14} className={`text-text-muted transform transition-transform ${showStyleExpanded ? 'rotate-90' : ''}`} />
                             </button>
@@ -486,7 +486,7 @@ export default function CharacterWorkbench({ asset, onClose, onUpdateDescription
                                             <div className="bg-gradient-to-r from-primary/10 to-primary/10 border border-glass-border rounded-lg p-4">
                                                 {stylePrompt && (
                                                     <div className="mb-3">
-                                                        <span className="text-sm font-medium text-status-completed-fg block mb-1">+ Style Prompt:</span>
+                                                        <span className="text-sm font-medium text-status-completed-fg block mb-1">{tc("stylePromptLabel")}</span>
                                                         <p className="text-sm text-text-secondary font-mono bg-surface p-2 rounded border border-border-subtle leading-relaxed">
                                                             {stylePrompt}
                                                         </p>
@@ -495,7 +495,7 @@ export default function CharacterWorkbench({ asset, onClose, onUpdateDescription
 
                                                 {styleNegativePrompt && (
                                                     <div>
-                                                        <span className="text-sm font-medium text-status-failed-fg block mb-1">+ Negative Prompt:</span>
+                                                        <span className="text-sm font-medium text-status-failed-fg block mb-1">{tc("negativePromptAppliedLabel")}</span>
                                                         <p className="text-sm text-text-secondary font-mono bg-surface p-2 rounded border border-border-subtle leading-relaxed">
                                                             {styleNegativePrompt}
                                                         </p>
@@ -586,7 +586,7 @@ function WorkbenchPanel({
                                     }`}
                             >
                                 <PhotoIcon size={12} />
-                                Static
+                                {tc("staticMode")}
                             </button>
                             <button
                                 onClick={(e) => {
@@ -619,7 +619,7 @@ function WorkbenchPanel({
                     <div className="absolute inset-0 bg-overlay z-20 flex items-center justify-center text-center p-6">
                         <div className="text-text-muted flex flex-col items-center gap-2">
                             <Lock size={32} />
-                            <span className="text-sm">Generate Master Asset first</span>
+                            <span className="text-sm">{tc("masterRequired")}</span>
                         </div>
                     </div>
                 )}
@@ -630,17 +630,17 @@ function WorkbenchPanel({
                         <div className="flex flex-col items-center gap-3 bg-overlay backdrop-blur-md rounded-xl p-6 border border-primary/30 pointer-events-auto">
                             <div className="flex items-center gap-2 text-primary">
                                 <RefreshCw size={20} />
-                                <span className="text-sm font-medium">Upload Detected</span>
+                                <span className="text-sm font-medium">{tc("uploadDetected")}</span>
                             </div>
                             <p className="text-sm text-text-secondary max-w-[200px]">
-                                Generate Full Body from your uploaded reference image
+                                {tc("generateFromUpload")}
                             </p>
                             {reverseReferenceUrl && (
                                 <img
                                     src={typeof reverseReferenceUrl === 'string' && reverseReferenceUrl.startsWith('http')
                                         ? reverseReferenceUrl
                                         : `${window.location.origin}/${reverseReferenceUrl}`}
-                                    alt="Reference"
+                                    alt={tc("referenceAlt")}
                                     className="w-16 h-16 rounded-lg object-cover border border-glass-border"
                                 />
                             )}
@@ -668,14 +668,14 @@ function WorkbenchPanel({
                                             <div className="absolute inset-0 blur-xl bg-primary/30 animate-pulse"></div>
                                         </div>
                                         <div className="flex flex-col items-center">
-                                            <span className="text-sm font-medium text-foreground uppercase tracking-widest animate-pulse">Generating Video</span>
-                                            <span className="text-sm text-primary/60 mt-1">AI is processing motion...</span>
+                                            <span className="text-sm font-medium text-foreground uppercase tracking-widest animate-pulse">{tc("generatingVideo")}</span>
+                                            <span className="text-sm text-primary/60 mt-1">{tc("processingMotion")}</span>
                                         </div>
                                     </div>
                                 ) : isVideoLoading && motionRefVideos?.length > 0 ? (
                                     <div className="absolute inset-0 z-10 bg-overlay backdrop-blur-sm flex flex-col items-center justify-center gap-3">
                                         <RefreshCw size={32} className="text-text-secondary animate-spin" />
-                                        <span className="text-sm text-text-secondary font-medium">Loading Video File...</span>
+                                        <span className="text-sm text-text-secondary font-medium">{tc("loadingVideo")}</span>
                                     </div>
                                 ) : null}
 
@@ -694,15 +694,15 @@ function WorkbenchPanel({
                                 ) : !isGeneratingMotion && (
                                     <div className="w-full h-full flex flex-col items-center justify-center text-text-muted gap-2">
                                         <Video size={40} className="opacity-50" />
-                                        <span className="text-sm">No motion reference yet</span>
-                                        <span className="text-sm opacity-70">Generate one below</span>
+                                        <span className="text-sm">{tc("noMotionReference")}</span>
+                                        <span className="text-sm opacity-70">{tc("generateBelow")}</span>
                                     </div>
                                 )}
                             </div>
 
                             <div className="bg-surface rounded-lg border border-glass-border p-3">
-                                <label className="text-sm font-medium text-text-muted uppercase mb-2 block">Audio Input (Optional)</label>
-                                <p className="text-sm text-text-muted mb-3">Upload audio to drive lip-sync or body rhythm</p>
+                                <label className="text-sm font-medium text-text-muted uppercase mb-2 block">{tc("audioInputOptional")}</label>
+                                <p className="text-sm text-text-muted mb-3">{tc("audioInputHint")}</p>
 
                                 <label className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed cursor-pointer transition-all ${audioUrl
                                     ? 'border-status-completed-border bg-status-completed-bg text-status-completed-fg'
@@ -721,17 +721,17 @@ function WorkbenchPanel({
                                     {isUploadingAudio ? (
                                         <>
                                             <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary/30 border-t-primary"></div>
-                                            <span className="text-sm">Uploading...</span>
+                                            <span className="text-sm">{tc("uploading")}</span>
                                         </>
                                     ) : audioUrl ? (
                                         <>
                                             <Check size={14} />
-                                            <span className="text-sm font-medium">Audio Uploaded</span>
+                                            <span className="text-sm font-medium">{tc("audioUploaded")}</span>
                                         </>
                                     ) : (
                                         <>
                                             <ImageIcon size={14} />
-                                            <span className="text-sm">Upload Audio File</span>
+                                            <span className="text-sm">{tc("uploadAudio")}</span>
                                         </>
                                     )}
                                 </label>
@@ -740,24 +740,24 @@ function WorkbenchPanel({
                             {/* Motion Prompt */}
                             <div className="flex flex-col gap-2">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium text-text-muted uppercase">Motion Prompt</label>
+                                    <label className="text-sm font-medium text-text-muted uppercase">{tc("motionPrompt")}</label>
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             onResetPrompt?.();
                                         }}
                                         className="text-sm text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
-                                        title="Reset to recommended prompt"
+                                        title={tc("resetPromptTitle")}
                                     >
                                         <RefreshCw size={10} />
-                                        Reset
+                                        {tc("resetPrompt")}
                                     </button>
                                 </div>
                                 <textarea
                                     value={motionPrompt}
                                     onChange={(e) => setMotionPrompt?.(e.target.value)}
                                     className="w-full h-24 bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-text-secondary resize-none focus:outline-none focus:border-primary/50 font-mono leading-relaxed"
-                                    placeholder="Describe the motion you want..."
+                                    placeholder={tc("motionPromptPlaceholder")}
                                 />
                             </div>
 
@@ -771,7 +771,7 @@ function WorkbenchPanel({
                                     }`}
                             >
                                 <Video size={16} />
-                                Generate Motion Reference
+                                {tc("generateRef")}
                             </button>
                         </div>
                     ) : isVideo ? (
@@ -804,7 +804,7 @@ function WorkbenchPanel({
                     <div className="absolute top-4 right-4 z-10">
                         <div className="bg-status-starred-bg border border-status-starred-border px-3 py-1 rounded-lg flex items-center gap-2 backdrop-blur-sm">
                             <RefreshCw size={12} className="text-status-starred-fg" />
-                            <span className="text-sm font-medium text-status-starred-fg">Update Recommended</span>
+                            <span className="text-sm font-medium text-status-starred-fg">{tc("updateRecommended")}</span>
                         </div>
                     </div>
                 )}
@@ -813,14 +813,14 @@ function WorkbenchPanel({
             {/* Prompt Editor (Bottom) */}
             <div className="h-1/3 border-t border-glass-border flex flex-col bg-surface">
                 <div className="p-2 border-b border-border-subtle flex justify-between items-center bg-surface">
-                    <span className="text-sm font-medium text-text-muted uppercase px-2">Prompt</span>
+                    <span className="text-sm font-medium text-text-muted uppercase px-2">{tc("prompt")}</span>
                 </div>
                 <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     disabled={isLocked}
                     className="flex-1 w-full bg-transparent p-4 text-sm text-text-secondary resize-none focus:outline-none focus:bg-glass font-mono leading-relaxed"
-                    placeholder="Enter prompt description..."
+                    placeholder={tc("promptPlaceholder")}
                 />
             </div>
         </div>

@@ -124,11 +124,11 @@ export default function AssetPickerModal({
       setAssets(items);
     } catch (err) {
       console.error('[AssetPickerModal] fetch failed:', err);
-      setError('Failed to load assets');
+      setError(t('assetPicker.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (isOpen) {

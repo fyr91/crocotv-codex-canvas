@@ -632,7 +632,7 @@ export default function CastWorkbenchModal({ isOpen, kind, entityId, onClose }: 
                                                         </span>
                                                     )}
                                                     {isLocked && (
-                                                        <span className="absolute top-1.5 right-1.5 text-sm text-text-muted font-mono uppercase">Soon</span>
+                                                        <span className="absolute top-1.5 right-1.5 text-sm text-text-muted font-mono uppercase">{t("soon")}</span>
                                                     )}
                                                 </button>
                                             );

@@ -265,7 +265,7 @@ export default function AssetLibraryPage() {
       <header className="px-4 md:px-7 pt-5 md:pt-6 pb-3 flex items-end gap-5">
         <div className="flex-1 min-w-0">
           <div className="font-mono text-sm font-medium uppercase tracking-[0.2em] text-text-muted">
-            ASSET LIBRARY · <span className="text-primary font-medium">{t("gallery") || "画廊"}</span>
+            {t("eyebrow")} · <span className="text-primary font-medium">{t("gallery")}</span>
           </div>
           <h1 className="text-[2rem] md:text-[2.25rem] font-display atelier-display font-medium text-foreground leading-[1.15] tracking-[-0.025em] mt-1">
             {t("title")}
@@ -438,7 +438,7 @@ export default function AssetLibraryPage() {
               <div className="glass-panel atelier-card p-10 rounded-2xl border border-glass-border text-center max-w-[620px] w-full relative overflow-hidden">
                 <div className="relative z-[1] flex flex-col items-center gap-4">
                   <div className="font-mono text-sm uppercase tracking-[0.22em] text-text-muted">
-                    CAST · SCENES · PROPS
+                    {t("categoriesEyebrow")}
                   </div>
                   <p className="text-4xl font-display atelier-display font-medium italic leading-[1.25] tracking-tight text-foreground">
                     {t("emptyQuote")}

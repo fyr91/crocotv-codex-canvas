@@ -127,6 +127,7 @@ function PillToggle({
   value: boolean;
   onChange: (v: boolean) => void;
 }) {
+  const t = useTranslations('playground');
   return (
     <div className="flex flex-col gap-[6px]">
       <span className="font-mono text-sm uppercase tracking-[0.08em] text-text-muted">{label}</span>
@@ -140,7 +141,7 @@ function PillToggle({
               : 'text-text-muted hover:text-foreground hover:bg-hover-bg'
           }`}
         >
-          ON
+          {t("parameters.toggleOn")}
         </button>
         <button
           type="button"
@@ -151,7 +152,7 @@ function PillToggle({
               : 'text-text-muted hover:text-foreground hover:bg-hover-bg'
           }`}
         >
-          OFF
+          {t("parameters.toggleOff")}
         </button>
       </div>
     </div>

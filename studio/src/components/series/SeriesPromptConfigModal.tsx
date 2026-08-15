@@ -22,18 +22,18 @@ interface PromptDefaults {
 const SECTIONS = [
     {
         key: 'storyboard_polish' as const,
-        label: 'Storyboard Polish (Prompt C)',
-        description: 'System prompt for storyboard/image prompt polishing. Placeholders: {ASSETS} (asset context), {DRAFT} (user draft prompt).',
+        labelKey: 'promptSectionStoryboardLabel',
+        descriptionKey: 'promptSectionStoryboardDesc',
     },
     {
         key: 'video_polish' as const,
-        label: 'Video I2V Polish (Prompt D)',
-        description: 'System prompt for Image-to-Video prompt polishing. No dynamic placeholders needed.',
+        labelKey: 'promptSectionVideoLabel',
+        descriptionKey: 'promptSectionVideoDesc',
     },
     {
         key: 'r2v_polish' as const,
-        label: 'Video R2V Polish (Prompt E)',
-        description: 'System prompt for Reference-to-Video prompt polishing. Placeholder: {SLOTS} (character slot context).',
+        labelKey: 'promptSectionR2vLabel',
+        descriptionKey: 'promptSectionR2vDesc',
     },
 ];
 
@@ -63,7 +63,7 @@ export default function SeriesPromptConfigModal({ isOpen, onClose, seriesId, onS
                 })
                 .finally(() => setIsLoading(false));
         }
-    }, [isOpen, seriesId]);
+    }, [isOpen, seriesId, t]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -149,10 +149,10 @@ export default function SeriesPromptConfigModal({ isOpen, onClose, seriesId, onS
                                         onChange={(e) => setConfig(prev => ({ ...prev, polish_model: e.target.value }))}
                                         className="w-full bg-input-bg border border-glass-border rounded-lg px-3 py-2 text-sm text-text-secondary focus:outline-none focus:border-primary/50"
                                     >
-                                        <option value="qwen3.7-plus">qwen3.7-plus · 通义千问 3.7 Plus（最新）</option>
-                                        <option value="qwen3.6-plus">qwen3.6-plus · 通义千问 3.6 Plus（视觉）</option>
-                                        <option value="qwen3.6-flash">qwen3.6-flash · 通义千问 3.6 Flash（更快）</option>
-                                        <option value="kimi-k2.6">kimi-k2.6 · Moonshot Kimi K2.6（视觉）</option>
+                                        <option value="qwen3.7-plus">{t("polishModelQwenLatest")}</option>
+                                        <option value="qwen3.6-plus">{t("polishModelQwenVision")}</option>
+                                        <option value="qwen3.6-flash">{t("polishModelQwenFast")}</option>
+                                        <option value="kimi-k2.6">{t("polishModelKimiVision")}</option>
                                     </select>
                                     <div className="border-b border-border-subtle pt-1" />
                                 </div>
@@ -161,8 +161,8 @@ export default function SeriesPromptConfigModal({ isOpen, onClose, seriesId, onS
                                     <div key={section.key} className="space-y-2">
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <h3 className="text-sm font-medium text-foreground">{section.label}</h3>
-                                                <p className="text-sm text-text-secondary mt-0.5">{section.description}</p>
+                                                <h3 className="text-sm font-medium text-foreground">{t(section.labelKey)}</h3>
+                                                <p className="text-sm text-text-secondary mt-0.5">{t(section.descriptionKey)}</p>
                                             </div>
                                             <button
                                                 onClick={() => handleReset(section.key)}
@@ -176,7 +176,7 @@ export default function SeriesPromptConfigModal({ isOpen, onClose, seriesId, onS
                                         <textarea
                                             value={config[section.key]}
                                             onChange={(e) => setConfig(prev => ({ ...prev, [section.key]: e.target.value }))}
-                                            placeholder={defaults ? defaults[section.key].slice(0, 150) + '...' : 'Loading default...'}
+                                            placeholder={defaults ? defaults[section.key].slice(0, 150) + '...' : t("loadingDefaultPrompt")}
                                             className="w-full h-32 bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-text-secondary resize-y focus:outline-none focus:border-primary/50 font-mono placeholder-text-muted"
                                         />
 

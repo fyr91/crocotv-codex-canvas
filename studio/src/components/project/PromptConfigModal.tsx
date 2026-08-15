@@ -210,7 +210,7 @@ export default function PromptConfigModal({ isOpen, onClose }: PromptConfigModal
 
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-3">
-                    <label htmlFor="project-prompt-body" className="text-sm font-medium text-foreground">System Prompt · {selectedVersion}</label>
+                    <label htmlFor="project-prompt-body" className="text-sm font-medium text-foreground">{t("systemPromptLabel")} · {selectedVersion}</label>
                     {!editing ? <button type="button" onClick={() => setEditing(true)} className="rounded-lg border border-glass-border px-3 py-1.5 text-sm text-foreground hover:bg-hover-bg">{t("promptCreateProjectVersion")}</button> : null}
                   </div>
                   <textarea id="project-prompt-body" value={draft} onChange={(event) => setDraft(event.target.value)} readOnly={!editing} className="min-h-[360px] w-full resize-y rounded-xl border border-glass-border bg-surface p-4 font-mono text-sm leading-relaxed text-foreground outline-none focus:border-primary/60 read-only:text-text-secondary" />

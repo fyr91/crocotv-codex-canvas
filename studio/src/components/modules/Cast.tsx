@@ -351,7 +351,7 @@ function AddCastPlaceholderModal({
             const result = await api.uploadFile(file);
             setImageUrl(result.url || "");
         } catch (err: any) {
-            setError(err?.response?.data?.detail || err?.message || "Upload failed");
+            setError(err?.response?.data?.detail || err?.message || t("uploadFailed"));
         } finally {
             setUploading(false);
         }
@@ -381,7 +381,7 @@ function AddCastPlaceholderModal({
             reset();
             onClose();
         } catch (err: any) {
-            setError(err?.response?.data?.detail || err?.message || "Create failed");
+            setError(err?.response?.data?.detail || err?.message || t("createFailed"));
         } finally {
             setSubmitting(false);
         }
@@ -969,10 +969,10 @@ function CharacterHistoryPopover({ seriesId, characterId, onClose }: { seriesId:
         let cancelled = false;
         api.getCharacterAppearances(seriesId, characterId)
             .then(d => { if (!cancelled) setData(d); })
-            .catch(err => { if (!cancelled) setError(err?.response?.data?.detail || err?.message || "Load failed"); })
+            .catch(err => { if (!cancelled) setError(err?.response?.data?.detail || err?.message || t("loadFailed")); })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [seriesId, characterId]);
+    }, [seriesId, characterId, t]);
 
     return (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-overlay backdrop-blur-sm" onClick={onClose}>
@@ -989,7 +989,7 @@ function CharacterHistoryPopover({ seriesId, characterId, onClose }: { seriesId:
                             {data?.character?.name || t("loading")}
                         </h3>
                         {data?.character?.persona && (
-                            <p className="text-sm text-text-secondary mt-0.5">Persona · {data.character.persona}</p>
+                            <p className="text-sm text-text-secondary mt-0.5">{t("fieldPersona")} · {data.character.persona}</p>
                         )}
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-hover-bg rounded-lg text-text-muted hover:text-foreground transition-colors">

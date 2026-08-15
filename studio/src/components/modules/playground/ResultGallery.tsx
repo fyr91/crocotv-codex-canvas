@@ -218,7 +218,7 @@ export default function ResultGallery() {
       <div className="px-7 py-4 flex items-center justify-between border-b border-border-subtle shrink-0">
         <div className="flex flex-col gap-1">
           <span className="font-mono text-sm uppercase tracking-[0.18em] text-text-muted">
-            RESULTS
+            {t('results.eyebrow')}
           </span>
           <div className="flex items-center gap-2">
             <span className="text-4xl leading-[1.1] font-medium tracking-[-0.02em] text-foreground font-display atelier-display">

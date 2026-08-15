@@ -226,17 +226,17 @@ export default function SettingsPage() {
       </FormRow>
 
       <FormRow label={t("storyboardAspectLabel")} hint={t("storyboardAspectHint")}>
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground"><Layout size={15} className="text-primary" />Storyboard</div>
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground"><Layout size={15} className="text-primary" />{t("storyboardAspectLabel")}</div>
         {aspectButtons("storyboard_aspect_ratio")}
       </FormRow>
 
       <FormRow label={t("i2vModelLabel")} hint={t("i2vModelHint")}>
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground"><Video size={15} className="text-primary" />Image-to-Video</div>
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground"><Video size={15} className="text-primary" />{t("i2vModelLabel")}</div>
         <GroupedModelGrid models={GLOBAL_I2V_MODELS} selectedId={modelSettings.i2v_model} onSelect={(id) => setModelSettings((current) => ({ ...current, i2v_model: id }))} />
       </FormRow>
 
       <FormRow label={t("r2vModelLabel")} hint={t("r2vModelHint")}>
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground"><Video size={15} className="text-primary" />Reference-to-Video</div>
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground"><Video size={15} className="text-primary" />{t("r2vModelLabel")}</div>
         <GroupedModelGrid models={GLOBAL_R2V_MODELS} selectedId={modelSettings.r2v_model ?? ""} onSelect={(id) => setModelSettings((current) => ({ ...current, r2v_model: id }))} />
       </FormRow>
 
@@ -367,7 +367,7 @@ export default function SettingsPage() {
       <header className="relative z-10 flex-shrink-0 border-b border-glass-border px-4 pb-4 pt-5 md:px-7">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="font-mono text-sm font-medium uppercase tracking-[0.2em] text-text-muted">SETTINGS</div>
+            <div className="font-mono text-sm font-medium uppercase tracking-[0.2em] text-text-muted">{t("title")}</div>
             <h1 className="font-display atelier-display mt-2 text-[2rem] font-medium leading-[1.15] tracking-[-0.025em] text-foreground md:text-[2.25rem]">{t("title")}</h1>
           </div>
           <div className="flex items-center gap-2" aria-label={t("appearance")}>

@@ -143,7 +143,7 @@ export default function ScriptEditorShell({
                 type="button"
                 onClick={toggleLeft}
                 className="text-text-muted hover:text-foreground transition-colors"
-                aria-label="Toggle left sidebar"
+                aria-label={t('shell.toggleLeftSidebar')}
               >
                 {leftCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
               </button>
@@ -164,7 +164,7 @@ export default function ScriptEditorShell({
                 type="button"
                 onClick={toggleRight}
                 className="text-text-muted hover:text-foreground transition-colors"
-                aria-label="Toggle right sidebar"
+                aria-label={t('shell.toggleRightSidebar')}
               >
                 {rightCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
               </button>
@@ -291,7 +291,16 @@ export default function ScriptEditorShell({
           <span className="text-foreground/20">|</span>
           <ContinuityIndicator report={continuityReport} />
           <span className="ml-auto text-text-muted/60">
-            {currentFormat} / {currentRendering}
+            {{
+              hollywood: t('formats.hollywood'),
+              chinese_film: t('formats.chinese_film'),
+              chinese_short: t('formats.chinese_short'),
+              japanese_anime: t('formats.japanese_anime'),
+            }[currentFormat]} / {{
+              latin: t('renderings.latin'),
+              cjk_zh: t('renderings.cjk_zh'),
+              cjk_ja: t('renderings.cjk_ja'),
+            }[currentRendering]}
           </span>
         </div>
       )}

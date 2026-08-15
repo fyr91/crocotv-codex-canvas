@@ -33,7 +33,7 @@ export default function VideoQueue({ tasks, onRemix }: VideoQueueProps) {
                     <h3 className="font-display font-medium text-foreground">{tv("taskQueue")}</h3>
                     <div className="text-sm font-mono text-text-muted flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${processingCount > 0 ? "bg-status-completed-bg animate-pulse" : "bg-elevated"}`} />
-                        GPU: {processingCount > 0 ? "Running" : "Idle"}
+                        GPU: {processingCount > 0 ? tv("running") : tv("idle")}
                     </div>
                 </div>
 
@@ -104,7 +104,7 @@ function TaskCard({ task, onRemix }: { task: VideoTask; onRemix: (t: VideoTask) 
                         {task.image_url ? (
                             <img
                                 src={getDisplayUrl(task.image_url)}
-                                alt="Input"
+                                alt={tv("input")}
                                 className="w-full h-full object-cover opacity-60"
                             />
                         ) : (
@@ -140,7 +140,7 @@ function TaskCard({ task, onRemix }: { task: VideoTask; onRemix: (t: VideoTask) 
                                 className="text-sm flex items-center gap-1 text-text-secondary hover:text-foreground transition-colors"
                                 title={tv("remixTitle")}
                             >
-                                <RefreshCw size={12} /> Remix
+                                <RefreshCw size={12} /> {tv("remix")}
                             </button>
                         </div>
                     </div>
@@ -150,7 +150,7 @@ function TaskCard({ task, onRemix }: { task: VideoTask; onRemix: (t: VideoTask) 
                         {/* Input Image/Videos (Left) */}
                         <div className="w-1/2 relative border-r border-glass-border">
                             {task.image_url ? (
-                                <img src={getDisplayUrl(task.image_url)} alt="Input" className="w-full h-full object-cover" />
+                                <img src={getDisplayUrl(task.image_url)} alt={tv("input")} className="w-full h-full object-cover" />
                             ) : task.reference_video_urls && task.reference_video_urls.length > 0 ? (
                                 /* R2V: Show reference video thumbnails */
                                 <div className="w-full h-full grid grid-cols-2 gap-0.5 bg-primary/20">
@@ -170,10 +170,10 @@ function TaskCard({ task, onRemix }: { task: VideoTask; onRemix: (t: VideoTask) 
                                 </div>
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary/50 text-sm font-medium">
-                                    R2V Input
+                                    {tv("r2vInput")}
                                 </div>
                             )}
-                            <div className="absolute top-2 left-2 bg-surface px-1.5 py-0.5 rounded text-sm text-text-secondary">Input</div>
+                            <div className="absolute top-2 left-2 bg-surface px-1.5 py-0.5 rounded text-sm text-text-secondary">{tv("input")}</div>
                         </div>
 
                         {/* Output Video (Right) */}
@@ -186,10 +186,10 @@ function TaskCard({ task, onRemix }: { task: VideoTask; onRemix: (t: VideoTask) 
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-status-failed-fg text-sm">
-                                    Error
+                                    {tv("genFailed")}
                                 </div>
                             )}
-                            <div className="absolute top-2 right-2 bg-primary/80 px-1.5 py-0.5 rounded text-sm text-foreground">Result</div>
+                            <div className="absolute top-2 right-2 bg-primary/80 px-1.5 py-0.5 rounded text-sm text-foreground">{tv("result")}</div>
                         </div>
                     </div>
 

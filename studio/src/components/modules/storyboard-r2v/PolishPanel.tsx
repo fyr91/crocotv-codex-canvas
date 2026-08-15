@@ -127,7 +127,7 @@ export default function PolishPanel({
                 setError({
                     reason: "missing_keys",
                     messageZh: t("polishErrorMissingKeys"),
-                    messageEn: "Model returned incomplete bilingual result. Please retry.",
+                    messageEn: t("polishErrorMissingKeysEn"),
                 });
             }
         } catch (err: any) {

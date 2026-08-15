@@ -164,7 +164,7 @@ export const VideoVariantSelector: React.FC<VideoVariantSelectorProps> = ({
                                         {/* Thumbnail */}
                                         <img
                                             src={thumbUrl}
-                                            alt="Video Thumbnail"
+                                            alt={t("videoThumbnailAlt")}
                                             className="w-full h-full object-cover opacity-70 group-hover/variant:opacity-100 transition-opacity"
                                         />
 

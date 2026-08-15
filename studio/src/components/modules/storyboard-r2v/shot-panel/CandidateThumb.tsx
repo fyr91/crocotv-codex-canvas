@@ -12,6 +12,7 @@
  * Always shows status; PendingTaskAffordance handles stuck > 60s.
  */
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Loader2, Star, AlertCircle, Check, Pencil, Pin } from "lucide-react";
 import { PendingTaskAffordance } from "@/components/shared/PendingTaskAffordance";
 import PreviewVideo from "@/components/shared/preview/PreviewVideo";
@@ -53,6 +54,7 @@ export default function CandidateThumb({
     onCancel,
     onRetry,
 }: CandidateThumbProps) {
+    const t = useTranslations("storyboardR2V");
     const status = task.status;
     const isProcessing = status === "pending" || status === "processing";
     const isFailed = status === "failed";
@@ -130,7 +132,7 @@ export default function CandidateThumb({
                     <div className="grid h-full w-full place-items-center">
                         {isProcessing ? (
                             <PendingTaskAffordance
-                                statusLabel={status === "pending" ? "Queued" : "Generating"}
+                                statusLabel={status === "pending" ? t("statusPending") : t("statusProcessing")}
                                 taskId={task.id}
                                 compact
                                 onCancel={onCancel ? () => onCancel(task) : undefined}
@@ -139,7 +141,7 @@ export default function CandidateThumb({
                             <div className="flex flex-col items-center gap-1 px-2 text-center">
                                 <AlertCircle size={14} className="text-status-failed-fg" aria-hidden="true" />
                                 <span className="font-mono text-chrome-sm font-medium uppercase text-status-failed-fg">
-                                    Failed
+                                    {t("statusFailed")}
                                 </span>
                                 {onRetry ? (
                                     <button
@@ -150,7 +152,7 @@ export default function CandidateThumb({
                                         }}
                                         className="rounded border border-status-failed-border bg-status-failed-bg px-1.5 py-[1px] font-mono text-chrome-sm font-medium uppercase text-status-failed-fg transition-colors duration-fast ease-out-quart hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-failed-border"
                                     >
-                                        Retry
+                                        {t("retry")}
                                     </button>
                                 ) : null}
                             </div>
@@ -168,7 +170,7 @@ export default function CandidateThumb({
                     <button
                         type="button"
                         aria-pressed={isActive}
-                        aria-label={isActive ? "Active take (click to keep pinned)" : "Set as active take"}
+                        aria-label={isActive ? t("activeTakeAria") : t("setActiveTakeAria")}
                         onClick={(e) => {
                             e.stopPropagation();
                             void onSetActive(task);
@@ -200,7 +202,7 @@ export default function CandidateThumb({
                 <button
                     type="button"
                     aria-pressed={task.is_starred}
-                    aria-label={task.is_starred ? "Unstar candidate" : "Star candidate"}
+                    aria-label={task.is_starred ? t("unstarCandidate") : t("starCandidate")}
                     onClick={(e) => {
                         e.stopPropagation();
                         void onToggleStar(task, !task.is_starred);
@@ -253,7 +255,7 @@ export default function CandidateThumb({
                             setLabelDraft(task.label ?? "");
                         }
                     }}
-                    placeholder="short note"
+                    placeholder={t("candidateLabelPlaceholder")}
                     className="rounded border border-primary/55 bg-black/30 px-1.5 py-[3px] font-mono text-chrome text-foreground placeholder:text-text-muted outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
                 />
             ) : (
@@ -264,14 +266,14 @@ export default function CandidateThumb({
                         setEditingLabel(true);
                     }}
                     className="group/label flex min-h-[24px] items-center gap-1 truncate rounded px-1.5 py-[2px] text-left font-mono text-chrome tracking-tight text-text-secondary transition-colors duration-fast ease-out-quart hover:bg-hover-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-                    title="Click to edit label (≤20 chars)"
+                    title={t("candidateLabelEditTitle")}
                 >
                     {task.label ? (
                         <span className="truncate">{task.label}</span>
                     ) : (
                         <>
                             <Pencil size={9} className="text-text-muted opacity-0 transition-opacity duration-fast ease-out-quart group-hover/label:opacity-100" aria-hidden="true" />
-                            <span className="text-text-muted italic">add label…</span>
+                            <span className="text-text-muted italic">{t("candidateAddLabel")}</span>
                         </>
                     )}
                 </button>

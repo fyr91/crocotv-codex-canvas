@@ -115,7 +115,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
             updateProject(currentProject.id, updatedProject);
         } catch (error: any) {
             console.error("Failed to extract last frame:", error);
-            alert(error?.response?.data?.detail || "Failed to extract last frame");
+            alert(error?.response?.data?.detail || tc("extractLastFrameFailed"));
         } finally {
             setExtractingFrameId(null);
         }
@@ -605,7 +605,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                 <h2 className="text-xl font-display font-medium text-foreground mb-6 flex items-center gap-3">
                     <div className="w-2 h-8 bg-primary rounded-full" />
                     {tc("title")}
-                    <span className="text-sm font-mono text-text-muted bg-glass px-2 py-1 rounded">Motion</span>
+                    <span className="text-sm font-mono text-text-muted bg-glass px-2 py-1 rounded">{tc("motionBadge")}</span>
                 </h2>
 
                 <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full pb-8">
@@ -705,11 +705,11 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                             />
                                                         ) : (
                                                             <div className="w-full h-full bg-glass flex items-center justify-center text-sm text-text-muted">
-                                                                No Image
+                                                                {tc("noImage")}
                                                             </div>
                                                         )}
                                                         <div className="absolute inset-0 bg-overlay opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <span className="text-sm text-foreground font-medium">Select</span>
+                                                            <span className="text-sm text-foreground font-medium">{tc("select")}</span>
                                                         </div>
                                                         {/* Frame Number Badge */}
                                                         <div className="absolute top-1 left-1 bg-surface px-1.5 rounded text-sm text-text-secondary backdrop-blur-sm">
@@ -730,9 +730,9 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                                 {isExtracting ? (
                                                                     <Loader2 size={10} className="animate-spin" />
                                                                 ) : hasExtracted ? (
-                                                                    <><Check size={10} /> Applied</>
+                                                                    <><Check size={10} /> {tc("applied")}</>
                                                                 ) : (
-                                                                    <><Film size={10} /> Prev End Frame</>
+                                                                    <><Film size={10} /> {tc("previousEndFrame")}</>
                                                                 )}
                                                             </button>
                                                         )}
@@ -744,14 +744,14 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                         })() : (
                                             <div className="flex flex-col items-center justify-center h-[200px] text-text-muted gap-2">
                                                 <Layout size={32} className="opacity-20" />
-                                                <p className="text-sm">No storyboard frames found.</p>
+                                                <p className="text-sm">{tc("noStoryboardFrames")}</p>
                                             </div>
                                         )}
 
                                         {/* Selected Preview (Storyboard Mode) */}
                                         {selectedImages.length > 0 && (
                                             <div className="pt-4 border-t border-glass-border">
-                                                <p className="text-sm text-text-muted mb-2">Selected for Generation:</p>
+                                                <p className="text-sm text-text-muted mb-2">{tc("selectedForGeneration")}</p>
                                                 <div className="flex gap-2 flex-wrap">
                                                     {selectedImages.map((img, idx) => {
                                                         // Find frame to get updated_at for cache busting
@@ -761,7 +761,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                             <div key={idx} className="relative w-24 aspect-video rounded-lg overflow-hidden border border-glass-border">
                                                                 <img
                                                                     src={timestamp ? getAssetUrlWithTimestamp(img, timestamp) : getAssetUrl(img)}
-                                                                    alt="Selected"
+                                                                    alt={tc("selectedAlt")}
                                                                     className="w-full h-full object-cover"
                                                                 />
                                                                 <button
@@ -816,14 +816,14 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                     onChange={(e) => handleImageSelect(e.target.files)}
                                                 />
                                                 <Plus className="text-text-secondary mb-2" size={24} />
-                                                <p className="text-text-secondary text-sm font-medium">Add Image</p>
+                                                <p className="text-text-secondary text-sm font-medium">{tc("addImage")}</p>
                                             </div>
                                         </div>
 
                                         {/* Quick Select from Assets (Only in Upload Mode) */}
                                         {availableAssets.length > 0 && (
                                             <div className="mt-4 pt-4 border-t border-glass-border">
-                                                <p className="text-sm text-text-muted mb-2">Quick Select from Assets:</p>
+                                                <p className="text-sm text-text-muted mb-2">{tc("quickSelectAssets")}</p>
                                                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                                     {availableAssets.slice(0, 10).map((asset, i) => (
                                                         <div
@@ -848,7 +848,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                         <div className="space-y-6">
                             {/* Frame Description Cards */}
                             <div className="space-y-3">
-                                <label className="text-sm font-medium text-text-secondary">{tc("noFrameSelected", { defaultMessage: "Select Frame" })}</label>
+                                <label className="text-sm font-medium text-text-secondary">{tc("noFrameSelected")}</label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
                                     {currentProject?.frames && currentProject.frames.length > 0 ? (
                                         currentProject.frames.map((frame: any) => (
@@ -971,7 +971,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                                     ))}
                                                                 </select>
                                                                 {slotIndex === 0 && (
-                                                                    <p className="text-sm text-status-processing-fg mt-1">Required</p>
+                                                                    <p className="text-sm text-status-processing-fg mt-1">{tc("required")}</p>
                                                                 )}
                                                             </div>
                                                         )}
@@ -992,7 +992,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                         <div className="grid grid-cols-3 gap-4">
                                             {[0, 1, 2].map((slotIndex) => {
                                                 const slot = castSlots[slotIndex];
-                                                const slotTitle = slotIndex === 0 ? 'Protagonist' : 'Supporting';
+                                                const slotTitle = slotIndex === 0 ? tc("protagonist") : tc("supporting");
                                                 const video = slot?.url ? availableReferenceVideos.find(v => v.url === slot.url) : null;
 
                                                 return (
@@ -1006,7 +1006,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                         {/* Slot Header */}
                                                         <div className="absolute top-2 left-2 z-10">
                                                             <span className="text-sm px-2 py-0.5 rounded-full bg-primary text-white font-medium">
-                                                                Character {slotIndex + 1}
+                                                                {tc("characterSlot", { index: slotIndex + 1 })}
                                                             </span>
                                                         </div>
 
@@ -1048,7 +1048,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                                     ))}
                                                                 </select>
                                                                 {slotIndex === 0 && (
-                                                                    <p className="text-sm text-status-processing-fg mt-2">Required</p>
+                                                                    <p className="text-sm text-status-processing-fg mt-2">{tc("required")}</p>
                                                                 )}
                                                             </div>
                                                         )}
@@ -1079,7 +1079,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                             onClick={() => promptBuilderRef.current?.insertCamera()}
                                             className="text-sm flex items-center gap-1 px-2 py-1 rounded transition-colors text-text-secondary hover:text-foreground hover:bg-glass"
                                         >
-                                            <Video size={12} /> Camera
+                                            <Video size={12} /> {tc("camera")}
                                         </button>
                                     </div>
                                 )}
@@ -1094,9 +1094,9 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                 <button
                                     onClick={() => setSegments([{ type: "text", value: "", id: "init" }])}
                                     className="text-sm text-text-secondary hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-glass transition-colors"
-                                    title="Clear Prompt"
+                                    title={tc("clearPrompt")}
                                 >
-                                    <Eraser size={12} /> Clear
+                                    <Eraser size={12} /> {tc("clear")}
                                 </button>
                             </div>
                         </div>
@@ -1123,7 +1123,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                             ) : (
                                                 <span className="w-4 h-4 rounded-full bg-primary/30 flex items-center justify-center text-sm">+</span>
                                             )}
-                                            <span>Insert {slot?.name || `Char ${idx + 1}`}</span>
+                                            <span>{tc("insertCharacter", { name: slot?.name || tc("characterShort", { index: idx + 1 }) })}</span>
                                         </button>
                                     );
                                 })}
@@ -1166,11 +1166,11 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                     {/* Chinese Prompt */}
                                     <div className="space-y-1">
                                         <div className="flex justify-between items-center">
-                                            <span className="text-sm font-medium text-text-muted uppercase">CN (Preview)</span>
+                                            <span className="text-sm font-medium text-text-muted uppercase">{tc("cnPreview")}</span>
                                             <button
                                                 onClick={() => {
                                                     navigator.clipboard.writeText(polishedPrompt.cn);
-                                                    alert("CN prompt copied");
+                                                    alert(tc("cnCopied"));
                                                 }}
                                                 className="text-sm text-text-secondary hover:text-foreground bg-surface px-2 py-0.5 rounded"
                                             >
@@ -1185,16 +1185,16 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                     {/* English Prompt */}
                                     <div className="space-y-1">
                                         <div className="flex justify-between items-center">
-                                            <span className="text-sm font-medium text-text-muted uppercase">EN (Generation)</span>
+                                            <span className="text-sm font-medium text-text-muted uppercase">{tc("enGeneration")}</span>
                                             <div className="flex gap-1">
                                                 <button
                                                     onClick={() => {
                                                         navigator.clipboard.writeText(polishedPrompt.en);
-                                                        alert("English prompt copied");
+                                                        alert(tc("enCopied"));
                                                     }}
                                                     className="text-sm text-text-secondary hover:text-foreground bg-surface px-2 py-0.5 rounded"
                                                 >
-                                                    Copy
+                                                    {tc("copy")}
                                                 </button>
                                                 <button
                                                     onClick={() => {
@@ -1203,7 +1203,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                     }}
                                                     className="text-sm text-foreground bg-primary hover:bg-primary/90 px-2 py-0.5 rounded font-medium"
                                                 >
-                                                    应用
+                                                    {tc("apply")}
                                                 </button>
                                             </div>
                                         </div>
@@ -1224,7 +1224,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                         handlePolish(feedbackText.trim());
                                                     }
                                                 }}
-                                                placeholder="Feedback for refinement..."
+                                                placeholder={tc("feedbackPlaceholder")}
                                                 className="flex-1 text-sm bg-input-bg border border-primary/20 rounded px-2 py-1.5 text-foreground placeholder-text-muted focus:outline-none focus:border-primary/50"
                                             />
                                             <button
@@ -1233,7 +1233,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                                                 className="text-sm text-foreground bg-primary hover:bg-primary/90 px-3 py-1.5 rounded font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                             >
                                                 {isPolishing ? <Loader2 size={10} className="animate-spin" /> : <Wand2 size={10} />}
-                                                再润色
+                                                {tc("refineAgain")}
                                             </button>
                                         </div>
                                     </div>
@@ -1261,7 +1261,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                             </>
                         ) : submitSuccess ? (
                             <>
-                                <Plus /> Queued
+                                <Plus /> {tc("queued")}
                             </>
                         ) : (
                             <>
@@ -1272,7 +1272,7 @@ export default function VideoCreator({ onTaskCreated, remixData, onRemixClear, p
                     <div className="flex justify-center mt-3">
                         <label className="flex items-center gap-2 text-sm text-text-muted cursor-pointer hover:text-text-secondary">
                             <input type="checkbox" className="rounded bg-glass border-glass-border" />
-                            Clear after submit
+                            {tc("clearAfterSubmit")}
                         </label>
                     </div>
                 </div>
