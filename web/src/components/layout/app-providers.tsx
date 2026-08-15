@@ -7,6 +7,7 @@ import zhCN from "antd/locale/zh_CN";
 
 import { useExclusiveMediaPlayback } from "@/hooks/use-exclusive-media-playback";
 import { getAntThemeConfig } from "@/lib/app-theme";
+import { initializeSharedTheme, readSharedThemeCookie, subscribeSharedTheme } from "@/lib/shared-theme";
 import { useConfigStore, type ProviderCatalogModel } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 
@@ -77,6 +78,7 @@ const localModels: ProviderCatalogModel[] = [
 export function AppProviders({ children }: { children: ReactNode }) {
     useExclusiveMediaPlayback();
     const theme = useThemeStore((state) => state.theme);
+    const setTheme = useThemeStore((state) => state.setTheme);
     const setProviderCatalog = useConfigStore((state) => state.setProviderCatalog);
     useEffect(() => {
         setProviderCatalog(localModels);
@@ -85,5 +87,24 @@ export function AppProviders({ children }: { children: ReactNode }) {
         document.documentElement.classList.toggle("dark", theme === "dark");
         document.documentElement.style.colorScheme = theme;
     }, [theme]);
+    useEffect(() => {
+        let active = true;
+        let receivedEvent = false;
+        const applyTheme = (nextTheme: "light" | "dark") => {
+            if (active && useThemeStore.getState().theme !== nextTheme) setTheme(nextTheme);
+        };
+        const unsubscribe = subscribeSharedTheme((nextTheme) => {
+            receivedEvent = true;
+            applyTheme(nextTheme);
+        });
+        const fallback = readSharedThemeCookie() ?? useThemeStore.getState().theme;
+        void initializeSharedTheme(fallback).then((nextTheme) => {
+            if (!receivedEvent) applyTheme(nextTheme);
+        });
+        return () => {
+            active = false;
+            unsubscribe();
+        };
+    }, [setTheme]);
     return <ConfigProvider locale={zhCN} theme={getAntThemeConfig(theme === "dark")}><ProConfigProvider dark={theme === "dark"}><App><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></App></ProConfigProvider></ConfigProvider>;
 }

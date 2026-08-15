@@ -3,6 +3,7 @@ import path from "node:path";
 import multer from "multer";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { applyCanvasOperations, type CanvasOperation } from "./canvas-commands";
+import { avoidStudioNodeOverlaps } from "./studio-node-placement";
 import { publishProjectUpdated } from "./canvas-events";
 import { runCanvasConfigNodes } from "./canvas-node-runtime";
 import { models } from "./providers";
@@ -64,7 +65,7 @@ async function processGeneration(projectId: string, id: string, raw: any, origin
   const prompt = `${String(raw?.prompt || "")}${inputNodes.map((nodeId) => `\n@[node:${nodeId}]`).join("")}`;
   operations.push({ op: "add_node", node: { id: configId, type: "config", title: `创作台 · ${mode}`, position: { x: right + 520, y: 160 }, width: 360, height: 390, metadata: { generationMode, model: generationMode === "video" ? "minimax-h3" : resolveImageModel(raw?.model_id), requestedModel: String(raw?.model_id || ""), composerContent: prompt, count: boundedCount(raw?.batch_size), videoCount: boundedCount(raw?.batch_size), seconds: Number(raw?.parameters?.duration) || 6, size: aspectSize(String(raw?.parameters?.aspect_ratio || raw?.parameters?.ratio || "1:1")), artifactType: "studio-playground-config", playgroundGenerationId: id, status: "idle" } } });
   for (const nodeId of inputNodes) operations.push({ op: "connect", from: nodeId, to: configId, fromPort: "workflow-output", toPort: "workflow-input" });
-  const added = await applyCanvasOperations(projectId, operations, Number(current.version)); publishProjectUpdated(added.project, originClientId);
+  const added = await applyCanvasOperations(projectId, avoidStudioNodeOverlaps(current.nodes, operations), Number(current.version)); publishProjectUpdated(added.project, originClientId);
   signal.throwIfAborted();
   await updateHistory(projectId, id, { canvas_node_ids: [configId, ...inputNodes] }, originClientId);
   const result = await runCanvasConfigNodes({ projectId, configNodeIds: [configId], concurrency: 1, originClientId, signal }); const run = result.results[0];

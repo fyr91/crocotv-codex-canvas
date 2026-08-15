@@ -4,6 +4,7 @@ import { publishProjectUpdated } from "./canvas-events";
 import { runCanvasConfigNodes } from "./canvas-node-runtime";
 import { dubCanvasVideo, mergeCanvasVideos, useCanvasVideoFrames } from "./canvas-video-tools";
 import { stableStudioNodeId } from "./studio-canvas-mapping";
+import { avoidStudioNodeOverlaps } from "./studio-node-placement";
 import { getStudioBackedProject, listStudioProjectResponses, mutateStudioProject } from "./studio-commands";
 import type { StudioImageAsset, StudioImageVariant, StudioNamedEntity, StudioProjectState, StudioStoryboardFrame, StudioVideoTask } from "./studio-types";
 import { models } from "./providers";
@@ -421,10 +422,10 @@ async function prepareStudioAssetVideo(projectId: string, raw: any, originClient
   const sourceNode = project.nodes.find((node: any) => node.id === imageNodeId);
   let created: Awaited<ReturnType<typeof applyCanvasOperations>>;
   try {
-    created = await applyCanvasOperations(projectId, [
+    created = await applyCanvasOperations(projectId, avoidStudioNodeOverlaps(project.nodes, [
       { op: "add_node", node: { id: configId, type: "config", title: `${entity.name} · 动态参考`, position: { x: Number(sourceNode.position?.x || 2300) + 420, y: Number(sourceNode.position?.y || 280) }, width: 360, height: 390, metadata: { generationMode: "video", model: "minimax-h3", composerContent: task.prompt, seconds: task.duration, videoCount: 1, vquality: String(raw?.resolution || "preview"), artifactType: "studio-asset-video-config", studioAssetId: entityId, studioAssetType: kind, status: "idle" } } },
       { op: "connect", from: imageNodeId, to: configId },
-    ], Number(project.version), { allowStudioManagedWrites: true });
+    ]), Number(project.version), { allowStudioManagedWrites: true });
   } catch (error) {
     await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((item) => item.id === task.id ? { ...item, status: "failed", error: error instanceof Error ? error.message : "动态参考任务准备失败" } : item) }), { originClientId }).catch(() => undefined);
     throw error;
@@ -541,7 +542,7 @@ export async function previewStudioVoice(projectId: string, voiceId: string, tex
   const project = await readProject(projectId) as any;
   const configId = randomUUID();
   const position = { x: Math.max(160, ...project.nodes.map((node: any) => Number(node.position?.x || 0) + Number(node.width || 0))) + 96, y: 160 };
-  const created = await applyCanvasOperations(projectId, [{ op: "add_node", node: { id: configId, type: "config", title: "Studio · 音色试听", position, width: 360, height: 390, metadata: { generationMode: "audio", model: "volc-speech", composerContent: text, audioVoice: voiceId, audioInstructions: instructions, artifactType: "studio-voice-preview", status: "idle" } } }], Number(project.version));
+  const created = await applyCanvasOperations(projectId, avoidStudioNodeOverlaps(project.nodes, [{ op: "add_node", node: { id: configId, type: "config", title: "Studio · 音色试听", position, width: 360, height: 390, metadata: { generationMode: "audio", model: "volc-speech", composerContent: text, audioVoice: voiceId, audioInstructions: instructions, artifactType: "studio-voice-preview", status: "idle" } } }]), Number(project.version));
   publishProjectUpdated(created.project, originClientId);
   let generatedIds: string[] = [];
   try {
@@ -624,7 +625,7 @@ async function configureStudioVideoNode(projectId: string, configId: string, fra
   const composerContent = [prompt, ...nodeIds.map((nodeId, index) => `${inputs[index].role}: @[node:${nodeId}]`)].join("\n");
   operations.push({ op: "update_node", nodeId: configId, patch: { metadata: { ...metadata, composerContent, videoInputMode: generationMode, orderedResourceIds: inputs.map((input) => input.resourceId), resourceRoles: inputs.map(({ resourceId, role, type }) => ({ resourceId, role, type })) } } });
   operations.push(...nodeIds.map((nodeId): CanvasOperation => ({ op: "connect", from: nodeId, to: configId })));
-  const result = await applyCanvasOperations(projectId, operations, Number(project.version), { allowStudioManagedWrites: true });
+  const result = await applyCanvasOperations(projectId, avoidStudioNodeOverlaps(project.nodes, operations), Number(project.version), { allowStudioManagedWrites: true });
   publishProjectUpdated(result.project, originClientId);
 }
 

@@ -8,6 +8,10 @@ const nextConfig = {
     async rewrites() {
         return [
             {
+                source: '/api/preferences/:path*',
+                destination: `${CROCO_API_ORIGIN}/api/preferences/:path*`,
+            },
+            {
                 source: '/api/studio/:path*',
                 destination: `${CROCO_API_ORIGIN}/api/studio/:path*`,
             },

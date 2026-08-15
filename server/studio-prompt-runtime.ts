@@ -9,6 +9,7 @@ import type { StudioGenerationExecution } from "./studio-types";
 import { readProject } from "./storage";
 import { models } from "./providers";
 import { stableStudioNodeId } from "./studio-canvas-mapping";
+import { avoidStudioNodeOverlaps } from "./studio-node-placement";
 
 export type StudioPromptOperation = keyof typeof STUDIO_PROMPT_TEMPLATE_MAP;
 
@@ -129,7 +130,7 @@ export async function executeStudioPrompt(input: StudioGenerationRequest): Promi
     { op: "connect", from: contextNodeId, to: input.configNodeId },
     ...(visualContextNodeId ? [{ op: "connect", from: visualContextNodeId, to: input.configNodeId } as CanvasOperation] : []),
   ];
-  const created = await applyCanvasOperations(input.projectId, operations, Number(project.version), { allowStudioManagedWrites: true });
+  const created = await applyCanvasOperations(input.projectId, avoidStudioNodeOverlaps(project.nodes, operations), Number(project.version), { allowStudioManagedWrites: true });
   publishProjectUpdated(created.project, input.originClientId);
 
   const runResult = await runCanvasConfigNodes({ projectId: input.projectId, configNodeIds: [input.configNodeId], concurrency: 1, originClientId: input.originClientId });
@@ -234,7 +235,7 @@ async function executeVisualContext(input: StudioGenerationRequest, project: any
     { op: "connect", from: inputNodeId, to: configNodeId },
     ...resources.map((resource): CanvasOperation => ({ op: "connect", from: resource.nodeId, to: configNodeId })),
   ];
-  const created = await applyCanvasOperations(input.projectId, operations, Number(project.version), { allowStudioManagedWrites: true });
+  const created = await applyCanvasOperations(input.projectId, avoidStudioNodeOverlaps(project.nodes, operations), Number(project.version), { allowStudioManagedWrites: true });
   publishProjectUpdated(created.project, input.originClientId);
   const result = await runCanvasConfigNodes({ projectId: input.projectId, configNodeIds: [configNodeId], concurrency: 1, originClientId: input.originClientId });
   const run = result.results[0];

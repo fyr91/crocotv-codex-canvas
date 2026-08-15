@@ -21,6 +21,7 @@ import { relayoutCanvasShotColumns, upsertCanvasShotColumn } from "./canvas-shot
 import { suiteCompatibility } from "./version";
 import { studioApiRouter } from "./studio-api";
 import { recoverInterruptedStudioGenerations } from "./studio-workflow";
+import { openAppThemeEventStream, parseAppTheme, readAppThemePreference, updateAppThemePreference } from "./app-preferences";
 
 await ensureStorage();
 await initializeCanvasRunJobs();
@@ -55,6 +56,12 @@ app.get("/api/status", (_request, response) => response.json({
   sunoCallback: sunoCallbackState(),
   models,
 }));
+app.get("/api/preferences/theme", asyncHandler(async (_request, response) => response.json(await readAppThemePreference())));
+app.put("/api/preferences/theme", asyncHandler(async (request, response) => response.json(await updateAppThemePreference(
+  parseAppTheme(request.body?.theme),
+  request.body?.initializeOnly === true,
+))));
+app.get("/api/preferences/events", asyncHandler(async (_request, response) => openAppThemeEventStream(response)));
 app.get("/brand/favicon.png", (_request, response) => response.sendFile(path.resolve("web/public/favicon.png")));
 
 app.get("/api/projects", asyncHandler(async (_request, response) => response.json(await listProjects())));

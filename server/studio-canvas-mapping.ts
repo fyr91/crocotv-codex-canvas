@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import type { CanvasOperation } from "./canvas-commands";
 import { models } from "./providers";
+import { avoidStudioNodeOverlaps } from "./studio-node-placement";
 import { STUDIO_MAPPING_VERSION, type StudioCanvasBinding, type StudioMappingEntityType, type StudioNamedEntity, type StudioProjectState, type StudioStoryboardFrame, type StudioVideoTask } from "./studio-types";
 
-type ExistingNode = { id: string; type: string; title?: string; metadata?: Record<string, unknown> };
+type ExistingNode = { id: string; type: string; title?: string; position?: { x: number; y: number }; width?: number; height?: number; metadata?: Record<string, unknown> };
 type ExistingConnection = { id: string; fromNodeId: string; toNodeId: string; fromPort?: string; toPort?: string };
 type DesiredNode = { id: string; type: string; title: string; position: { x: number; y: number }; width: number; height: number; metadata: Record<string, unknown> };
 
@@ -70,7 +71,7 @@ export function studioMappingOperations(input: {
       toPort: edge.toPort || "workflow-input",
     });
   }
-  return operations;
+  return avoidStudioNodeOverlaps(input.nodes, operations);
 }
 
 // Kept as the narrow compatibility name used by the first integration slice.
@@ -82,11 +83,11 @@ function projectGraph(projectId: string, state: StudioProjectState) {
   const nodes: DesiredNode[] = [];
   const edges: Array<Pick<StudioCanvasBinding, "fromNodeId" | "toNodeId" | "fromPort" | "toPort">> = [];
   const groups = {
-    script: group(projectId, "script", "script", "Studio · Script", 160, 160, 760, 560),
-    art: group(projectId, "art-direction", "art-direction", "Studio · Art Direction", 1040, 160, 760, 620),
-    cast: group(projectId, "character", "cast", "Studio · Cast & Assets", 1920, 160, 760, Math.max(620, 240 + (state.characters.length + state.scenes.length + state.props.length) * 300)),
-    storyboard: group(projectId, "frame", "storyboard", "Studio · Storyboard", 2800, 160, 820, Math.max(700, 240 + state.frames.length * 980)),
-    assembly: group(projectId, "assembly", "assembly", "Studio · Assembly", 3740, 160, 760, 680),
+    script: group(projectId, "script", "script", "Studio · Script", 160, 160, 760, 920),
+    art: group(projectId, "art-direction", "art-direction", "Studio · Art Direction", 1040, 160, 760, 960),
+    cast: group(projectId, "character", "cast", "Studio · Cast & Assets", 1920, 160, 760, Math.max(920, 240 + (state.characters.length + state.scenes.length + state.props.length) * 760)),
+    storyboard: group(projectId, "frame", "storyboard", "Studio · Storyboard", 2800, 160, 2600, Math.max(1800, 700 + state.frames.length * 1700)),
+    assembly: group(projectId, "assembly", "assembly", "Studio · Assembly", 5440, 160, 760, 920),
   };
   nodes.push(...Object.values(groups));
 
@@ -120,7 +121,7 @@ function projectGraph(projectId: string, state: StudioProjectState) {
   for (const [kind, entities] of [["character", state.characters], ["scene", state.scenes], ["prop", state.props]] as const) {
     for (const entity of entities) {
       const ids = addEntity(nodes, edges, projectId, groups.cast.id, artId, kind, entity, castY, state);
-      castY += ids.hasAsset ? 580 : 310;
+      castY += ids.blockHeight;
     }
   }
 
@@ -133,22 +134,21 @@ function projectGraph(projectId: string, state: StudioProjectState) {
   edges.push({ fromNodeId: scriptId, toNodeId: storyboardAnalysisId }, { fromNodeId: artId, toNodeId: storyboardAnalysisId });
   const globalPromptRevisionId = stableStudioNodeId(projectId, "frame", projectId, "prompt-revision-config");
   const globalVisualContextId = stableStudioNodeId(projectId, "frame", projectId, "visual-context-config");
-  nodes.push(node(projectId, "frame", projectId, "visual-context-config", "config", "视频素材视觉上下文", 3232, frameY, 340, 390, {
+  nodes.push(node(projectId, "frame", projectId, "visual-context-config", "config", "视频素材视觉上下文", 3744, frameY, 340, 390, {
     groupId: groups.storyboard.id, artifactType: "studio-visual-context-config", stage: "storyboard", generationMode: "text", model: "glm-5v-turbo", composerContent: state.originalText || "等待参考素材", count: 1, status: "idle", layoutSection: "visual-context", layoutOrder: 1,
   }));
   edges.push({ fromNodeId: storyboardAnalysisId, toNodeId: globalVisualContextId });
-  nodes.push(node(projectId, "frame", projectId, "prompt-revision-config", "config", "视频 Prompt 生成", 3616, frameY, 340, 390, {
+  nodes.push(node(projectId, "frame", projectId, "prompt-revision-config", "config", "视频 Prompt 生成", 4560, frameY, 340, 390, {
     groupId: groups.storyboard.id, artifactType: "studio-video-prompt-config", stage: "storyboard", generationMode: "text", model: "doubao-seed-2-1-turbo-260628", composerContent: state.originalText || "等待 Prompt 输入", count: 1, status: "idle", layoutSection: "prompt-revision", layoutOrder: 1,
   }));
   edges.push({ fromNodeId: storyboardAnalysisId, toNodeId: globalPromptRevisionId }, { fromNodeId: globalVisualContextId, toNodeId: globalPromptRevisionId });
   frameY += 460;
   for (const frame of [...state.frames].sort((a, b) => a.order - b.order)) {
-    addFrame(nodes, edges, projectId, groups.storyboard.id, artId, frame, frameY, state);
-    frameY += 980;
+    frameY += addFrame(nodes, edges, projectId, groups.storyboard.id, artId, frame, frameY, state);
   }
 
   const assemblyId = stableStudioNodeId(projectId, "assembly", projectId, "timeline");
-  nodes.push(node(projectId, "assembly", projectId, "timeline", "text", "剪辑与混音", 3788, 280, 664, 300, {
+  nodes.push(node(projectId, "assembly", projectId, "timeline", "text", "剪辑与混音", 5488, 280, 664, 300, {
     groupId: groups.assembly.id, artifactType: "studio-assembly", stage: "assembly",
     content: JSON.stringify({ orderedFrameIds: state.assembly.orderedFrameIds, mergedVideoUrl: state.assembly.mergedVideoUrl, bgmUrl: state.assembly.bgmUrl, mixSettings: state.assembly.mixSettings }, null, 2),
     status: state.assembly.mergedVideoUrl ? "success" : "idle", layoutSection: "assembly", layoutOrder: 1,
@@ -159,7 +159,7 @@ function projectGraph(projectId: string, state: StudioProjectState) {
   }
   if (state.assembly.mergedVideoResourceId) {
     const outputId = stableStudioNodeId(projectId, "assembly", projectId, "merged-output");
-    nodes.push(node(projectId, "assembly", projectId, "merged-output", "video", "合成视频", 3788, 620, 664, 420, resourceMetadata(state.assembly.mergedVideoResourceId, state.assembly.mergedVideoUrl || "", groups.assembly.id, "assembly", 2)));
+    nodes.push(node(projectId, "assembly", projectId, "merged-output", "video", "合成视频", 5488, 620, 664, 420, resourceMetadata(state.assembly.mergedVideoResourceId, state.assembly.mergedVideoUrl || "", groups.assembly.id, "assembly", 2)));
     edges.push({ fromNodeId: assemblyId, toNodeId: outputId });
   }
   return { nodes, edges: edges.filter((edge) => nodes.some((node) => node.id === edge.fromNodeId) && nodes.some((node) => node.id === edge.toNodeId)) };
@@ -190,7 +190,8 @@ function addEntity(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNo
     nodes.push(node(projectId, kind, entity.id, "image-output-imported", "image", `${entity.name} · 形象`, 2312, y + 280, 320, 320, resourceMetadata(directResourceId, entity.image_url || "", groupId, kind, y + 2)));
     edges.push({ fromNodeId: configId, toNodeId: imageId });
   }
-  return { hasAsset: Boolean(variants.length || directResourceId) };
+  const assetRows = Math.max(1, variants.length || (directResourceId ? 1 : 0));
+  return { blockHeight: Math.max(710, 640 + (assetRows - 1) * 350) + 40 };
 }
 
 function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNodeId: string }>, projectId: string, groupId: string, artId: string, frame: StudioStoryboardFrame, y: number, state: StudioProjectState) {
@@ -203,12 +204,12 @@ function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNod
   nodes.push(node(projectId, "frame", frame.id, "image-config", "config", `${frame.title} · 首帧`, 2848, y + 300, 340, 390, imageConfigMetadata(groupId, `${stylePrefix(state)}${frame.prompt}`, "frame", frame.order * 10 + 1, frame.id, state)));
   edges.push({ fromNodeId: promptId, toNodeId: imageConfigId });
   const visualContextConfigId = stableStudioNodeId(projectId, "frame", frame.id, "visual-context-config");
-  nodes.push(node(projectId, "frame", frame.id, "visual-context-config", "config", `${frame.title} · 视觉上下文`, 3232, y, 340, 390, {
+  nodes.push(node(projectId, "frame", frame.id, "visual-context-config", "config", `${frame.title} · 视觉上下文`, 3744, y, 340, 390, {
     groupId, artifactType: "studio-visual-context-config", stage: "storyboard", generationMode: "text", model: "glm-5v-turbo", composerContent: frame.prompt || "提取镜头素材的客观视觉上下文", count: 1, status: "idle", shotId: frame.id, layoutSection: "visual-context", layoutOrder: frame.order * 10 + 1,
   }));
   edges.push({ fromNodeId: promptId, toNodeId: visualContextConfigId });
   const revisionConfigId = stableStudioNodeId(projectId, "frame", frame.id, "prompt-revision-config");
-  nodes.push(node(projectId, "frame", frame.id, "prompt-revision-config", "config", `${frame.title} · Prompt 返修`, 3616, y, 340, 390, {
+  nodes.push(node(projectId, "frame", frame.id, "prompt-revision-config", "config", `${frame.title} · Prompt 返修`, 4560, y, 340, 390, {
     groupId, artifactType: "studio-shot-revision-config", stage: "storyboard", generationMode: "text", model: "glm-5.2", composerContent: frame.prompt || "等待返修输入", count: 1, status: "idle", shotId: frame.id, layoutSection: "prompt-revision", layoutOrder: frame.order * 10 + 2,
   }));
   edges.push({ fromNodeId: promptId, toNodeId: revisionConfigId });
@@ -217,7 +218,7 @@ function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNod
   imageVariants.forEach((variant, index) => {
     const role = `image-output-${variant.id}`;
     const candidateId = stableStudioNodeId(projectId, "frame", frame.id, role);
-    nodes.push(node(projectId, "frame", frame.id, role, "image", `${frame.title} · 首帧 ${index + 1}`, 3232, y + 300 + index * 350, 340, 320,
+    nodes.push(node(projectId, "frame", frame.id, role, "image", `${frame.title} · 首帧 ${index + 1}`, 3744, y + 430 + index * 360, 340, 320,
       variant.resource_id ? resourceMetadata(variant.resource_id, variant.url || "", groupId, "image", frame.order * 10 + 2 + index, frame.id) : pendingResourceMetadata(groupId, "image", frame.order * 10 + 2 + index, frame.id)));
     nodes[nodes.length - 1].metadata.selected = variant.id === frame.image_asset?.selected_id;
     edges.push({ fromNodeId: imageConfigId, toNodeId: candidateId });
@@ -226,26 +227,31 @@ function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNod
   const directImageResourceId = stringValue(frame.image_resource_id);
   if (!imageVariants.length && directImageResourceId) {
     imageId = stableStudioNodeId(projectId, "frame", frame.id, "image-output-imported");
-    nodes.push(node(projectId, "frame", frame.id, "image-output-imported", "image", `${frame.title} · 首帧`, 3232, y + 300, 340, 320, resourceMetadata(directImageResourceId, frame.image_url || "", groupId, "image", frame.order * 10 + 2, frame.id)));
+    nodes.push(node(projectId, "frame", frame.id, "image-output-imported", "image", `${frame.title} · 首帧`, 3744, y + 430, 340, 320, resourceMetadata(directImageResourceId, frame.image_url || "", groupId, "image", frame.order * 10 + 2, frame.id)));
     edges.push({ fromNodeId: imageConfigId, toNodeId: imageId });
   }
   const videoConfigId = stableStudioNodeId(projectId, "frame", frame.id, "video-config");
-  nodes.push(node(projectId, "frame", frame.id, "video-config", "config", `${frame.title} · 视频`, 2848, y + 720, 340, 390, {
+  nodes.push(node(projectId, "frame", frame.id, "video-config", "config", `${frame.title} · 视频`, 2848, y + 730, 340, 390, {
     ...managed(projectId, "frame", frame.id, "video-config"), groupId, artifactType: "studio-video-config", stage: "storyboard", generationMode: "video", model: "minimax-h3", composerContent: frame.prompt,
     seconds: Number(frame.duration) || 6, videoCount: 1, status: "idle", shotId: frame.id, layoutSection: "video", layoutOrder: frame.order * 10 + 3,
   }));
   edges.push({ fromNodeId: promptId, toNodeId: videoConfigId });
   if (imageId) edges.push({ fromNodeId: imageId, toNodeId: videoConfigId });
-  for (const task of state.videoTasks.filter((item) => item.frame_id === frame.id)) {
+  const imageRows = Math.max(imageVariants.length, directImageResourceId ? 1 : 0);
+  const imageBottom = imageRows ? 430 + (imageRows - 1) * 360 + 320 : 390;
+  const frameTasks = state.videoTasks.filter((item) => item.frame_id === frame.id);
+  const videoOutputY = y + Math.max(790, imageBottom + 40);
+  for (const [index, task] of frameTasks.entries()) {
     const takeId = stableStudioNodeId(projectId, "take", task.id, "video-output");
-    nodes.push(node(projectId, "take", task.id, "video-output", "video", `${frame.title} · 候选`, 3232, y + 680, 340, 300, {
+    nodes.push(node(projectId, "take", task.id, "video-output", "video", `${frame.title} · 候选`, 3744, videoOutputY + index * 340, 340, 300, {
       ...(task.resource_id ? resourceMetadata(task.resource_id, task.video_url || "", groupId, "video", frame.order * 10 + 4, frame.id) : pendingResourceMetadata(groupId, "video", frame.order * 10 + 4, frame.id)), studioTaskSnapshot: safeSnapshot(task), selected: task.id === frame.selected_video_id || task.id === frame.selectedTakeId,
     }));
     edges.push({ fromNodeId: videoConfigId, toNodeId: takeId });
   }
+  const audioOutputY = Math.max(y + 1160, videoOutputY + frameTasks.length * 340 + 40);
   if (frame.audio_resource_id) {
     const audioId = stableStudioNodeId(projectId, "audio", frame.id, "dialogue-output");
-    nodes.push(node(projectId, "audio", frame.id, "dialogue-output", "audio", `${frame.title} · 配音`, 3232, y + 1020, 340, 180, resourceMetadata(frame.audio_resource_id, frame.audio_url || "", groupId, "audio", frame.order * 10 + 5, frame.id)));
+    nodes.push(node(projectId, "audio", frame.id, "dialogue-output", "audio", `${frame.title} · 配音`, 3744, audioOutputY, 340, 180, resourceMetadata(frame.audio_resource_id, frame.audio_url || "", groupId, "audio", frame.order * 10 + 5, frame.id)));
     edges.push({ fromNodeId: promptId, toNodeId: audioId });
   }
   const dialogue = frameDialogue(frame);
@@ -258,12 +264,13 @@ function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNod
   edges.push({ fromNodeId: promptId, toNodeId: audioConfigId });
   if (!frame.audio_resource_id && frame.audio_status === "queued") {
     const audioId = stableStudioNodeId(projectId, "audio", frame.id, "dialogue-output");
-    nodes.push(node(projectId, "audio", frame.id, "dialogue-output", "audio", `${frame.title} · 配音`, 3232, y + 1140, 340, 180, pendingResourceMetadata(groupId, "audio", frame.order * 10 + 6, frame.id)));
+    nodes.push(node(projectId, "audio", frame.id, "dialogue-output", "audio", `${frame.title} · 配音`, 3744, audioOutputY, 340, 180, pendingResourceMetadata(groupId, "audio", frame.order * 10 + 6, frame.id)));
     edges.push({ fromNodeId: audioConfigId, toNodeId: audioId });
   } else if (frame.audio_resource_id) {
     const audioId = stableStudioNodeId(projectId, "audio", frame.id, "dialogue-output");
     edges.push({ fromNodeId: audioConfigId, toNodeId: audioId });
   }
+  return Math.max(1630, audioOutputY - y + 260);
 }
 
 function group(projectId: string, entityType: StudioMappingEntityType, entityId: string, title: string, x: number, y: number, width: number, height: number): DesiredNode {

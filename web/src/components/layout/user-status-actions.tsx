@@ -3,6 +3,7 @@ import { Keyboard } from "lucide-react";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { publishSharedTheme } from "@/lib/shared-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 
 type UserStatusActionsProps = {
@@ -18,10 +19,16 @@ export function UserStatusActions({ variant = "default", onOpenShortcuts }: User
     const setTheme = useThemeStore((state) => state.setTheme);
     const canvasTheme = canvasThemes[theme];
     const iconStyle: CSSProperties | undefined = variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
+    const handleThemeChange = (nextTheme: "light" | "dark") => {
+        setTheme(nextTheme);
+        void publishSharedTheme(nextTheme).then((resolvedTheme) => {
+            if (resolvedTheme !== useThemeStore.getState().theme) setTheme(resolvedTheme);
+        });
+    };
 
     return (
         <div className="inline-flex shrink-0 items-center gap-1">
-            <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={NATURAL_ICON_BUTTON_CLASS} style={iconStyle} aria-label={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} />
+            <AnimatedThemeToggler theme={theme} onThemeChange={handleThemeChange} className={NATURAL_ICON_BUTTON_CLASS} style={iconStyle} aria-label={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} />
             {onOpenShortcuts ? (
                 <button type="button" className={NATURAL_ICON_BUTTON_CLASS} style={iconStyle} onClick={onOpenShortcuts} aria-label="快捷键" title="快捷键">
                     <Keyboard className="size-4" />

@@ -8,8 +8,9 @@
         <title>CrocoTV</title>
         <script>
             try {
+                var c = document.cookie.match(/(?:^|; )croco_theme=(light|dark)(?:;|$)/);
                 var s = JSON.parse(localStorage.getItem("crocotv:theme_store") || "{}");
-                var t = s.state && s.state.theme === "light" ? "light" : "dark";
+                var t = c ? c[1] : s.state && s.state.theme === "light" ? "light" : "dark";
                 document.documentElement.classList.toggle("dark", t === "dark");
                 document.documentElement.style.colorScheme = t;
             } catch (e) {}

@@ -30,6 +30,14 @@ test("rich Studio stages project assets, shots, takes, and assembly into one man
   assert.ok(nodes.some((node) => node.metadata?.studioRole === "prompt-revision-config" && node.metadata.artifactType === "studio-shot-revision-config"));
   assert.ok(nodes.some((node) => node.metadata?.studioEntityId === projectId && node.metadata.artifactType === "studio-video-prompt-config"));
   assert.ok(operations.some((operation) => operation.op === "connect" && operation.to === stableStudioNodeId(projectId, "assembly", projectId, "timeline")));
+  const leaves = nodes.filter((node) => node.type !== "group");
+  for (let left = 0; left < leaves.length; left += 1) for (let right = left + 1; right < leaves.length; right += 1) {
+    const a = leaves[left];
+    const b = leaves[right];
+    const overlaps = a.position!.x < b.position!.x + b.width! && a.position!.x + a.width! > b.position!.x
+      && a.position!.y < b.position!.y + b.height! && a.position!.y + a.height! > b.position!.y;
+    assert.equal(overlaps, false, `${a.title} overlaps ${b.title}`);
+  }
 });
 
 test("Studio full mapping becomes updates when managed nodes already exist", () => {
