@@ -19,7 +19,6 @@ export default function PipelineLinkDialog({ open, onClose, onLink }: PipelineLi
   const t = useTranslations('scriptEditor');
   const [mode, setMode] = useState<LinkMode>('existing');
   const [newProjectName, setNewProjectName] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
@@ -33,30 +32,28 @@ export default function PipelineLinkDialog({ open, onClose, onLink }: PipelineLi
     return projects.filter((p) => p.title.toLowerCase().includes(q));
   }, [projects, searchQuery]);
 
-  const handleConfirm = async () => {
-    if (mode === 'create') {
-      if (!newProjectName.trim()) return;
-      setIsCreating(true);
-      try {
-        await createProject(newProjectName.trim(), '', true);
-        // After creation, the new project will be currentProject
-        const current = useProjectStore.getState().currentProject;
-        if (current) {
-          setProjectId(current.id);
-          onLink(current.id);
-        }
-      } finally {
-        setIsCreating(false);
-      }
-    } else {
-      if (!selectedProjectId) return;
-      setProjectId(selectedProjectId);
-      onLink(selectedProjectId);
-    }
+  const enterProjectEditor = (projectId: string) => {
+    setProjectId(projectId);
     onClose();
+    onLink(projectId);
   };
 
-  const canConfirm = mode === 'create' ? newProjectName.trim().length > 0 : selectedProjectId !== null;
+  const handleCreate = async () => {
+    if (!newProjectName.trim()) return;
+    setIsCreating(true);
+    try {
+      await createProject(newProjectName.trim(), '', true);
+      // After creation, the new project will be currentProject.
+      const current = useProjectStore.getState().currentProject;
+      if (current) {
+        enterProjectEditor(current.id);
+      }
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const canCreate = newProjectName.trim().length > 0;
 
   return (
     <AnimatePresence>
@@ -152,12 +149,8 @@ export default function PipelineLinkDialog({ open, onClose, onLink }: PipelineLi
                             <button
                               key={project.id}
                               type="button"
-                              onClick={() => setSelectedProjectId(project.id)}
-                              className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                                selectedProjectId === project.id
-                                  ? 'bg-primary/20 text-primary border border-primary/30'
-                                  : 'text-text-secondary hover:bg-hover-bg/50 border border-transparent'
-                              }`}
+                              onClick={() => enterProjectEditor(project.id)}
+                              className="flex w-full items-center gap-3 rounded-md border border-transparent px-3 py-2 text-left text-sm text-text-secondary transition-colors hover:border-primary/20 hover:bg-primary/10 hover:text-foreground"
                             >
                               <div className="flex-1 min-w-0">
                                 <p className="truncate font-medium">{project.title}</p>
@@ -210,15 +203,17 @@ export default function PipelineLinkDialog({ open, onClose, onLink }: PipelineLi
                 >
                   {t('dialogs.pipeline.cancel')}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  disabled={!canConfirm || isCreating}
-                  className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isCreating && <Loader2 size={14} className="animate-spin" />}
-                  {mode === 'create' ? t('dialogs.pipeline.createAndLink') : t('dialogs.pipeline.confirmLink')}
-                </button>
+                {mode === 'create' ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleCreate()}
+                    disabled={!canCreate || isCreating}
+                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isCreating && <Loader2 size={14} className="animate-spin" />}
+                    {t('dialogs.pipeline.createAndLink')}
+                  </button>
+                ) : null}
               </div>
             </div>
           </motion.div>
