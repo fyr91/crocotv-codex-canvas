@@ -13,6 +13,7 @@ import {
 } from "./studio-workflow";
 import { studioCompatRouter } from "./studio-compat-api";
 import { studioPlaygroundRouter } from "./studio-playground-api";
+import { getPromptTemplate, listPromptTemplates } from "./prompt-registry";
 
 export const studioApiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
@@ -39,6 +40,17 @@ const PROMPT_DEFAULTS = {
 studioApiRouter.get("/health", route(async (_request, response) => response.json({ ok: true, time: Date.now() / 1000, log_file: "data/runtime/server.log", log_dir: "data/runtime", studio_projects: (await listStudioProjectResponses({ kind: "episode" })).length })));
 studioApiRouter.get("/system/check", route(async (_request, response) => response.json({ status: "ok", system_info: { runtime: "Croco Canvas" }, dependencies: { ffmpeg: { available: true, message: "由 Croco Canvas 运行时管理", path: "ffmpeg" } } })));
 studioApiRouter.get("/diagnose/log_tail", route(async (_request, response) => response.json({ path: "data/runtime", lines: [], errors: [], missing: false, total_lines: 0, returned_lines: 0 })));
+studioApiRouter.get("/prompt-registry", route(async (request, response) => response.json({
+  schemaVersion: 1,
+  templates: await listPromptTemplates({
+    includeLegacy: request.query.include_legacy === "true",
+    includeInactive: request.query.include_inactive === "true",
+  }),
+})));
+studioApiRouter.get("/prompt-registry/:templateKey", route(async (request, response) => response.json(await getPromptTemplate(
+  param(request.params.templateKey),
+  typeof request.query.version === "string" ? request.query.version : undefined,
+))));
 
 studioApiRouter.post("/projects", route(async (request, response) => response.status(201).json(await createStudioProject(request.body, clientId(request)))));
 studioApiRouter.get("/projects/", route(async (_request, response) => response.json(await listStudioProjectResponses({ kind: "episode" }))));

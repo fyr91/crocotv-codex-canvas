@@ -38,6 +38,8 @@ description: Use when planning or producing a single-topic educational or scienc
 | P5 | [图像模型路由](references/图像模型路由规范.md)、[Storyboard Prompt](references/Storyboard基础提示词.md)与[验收](references/Storyboard验收规范.md) |
 | P6、P8 | [H3 Prompt/视频与综合评估](references/H3视频生成规范.md)；所有输入模式统一使用 [Ref2VA 通用 System Prompt](references/H3-Ref2VA-System-Prompt.txt)，形成 Prompt 时才加载 `minimax-video-prompt-optimizer`；P8 由 Codex 按[视频综合评估规范](references/P8-视频综合评估规范.md)直接理解真实视频 |
 
+正式 System Prompt 的键、版本、模型策略和输入输出契约以 [Prompt Registry](references/prompt-registry.json) 为准。必须按 Registry 指向的源文件读取完整字节；不得复制、裁剪、翻译或拼接隐藏 system 指令。艺术方向候选使用 [P3 艺术方向选项](references/P3-艺术方向选项-System-Prompt.md)，单镜头反馈返修使用 [P4 单镜头返修](references/P4-单镜头返修-System-Prompt.md)。
+
 正式 Speech 启用时才读取[情景化语音](references/情景化语音任务规范.md)与 `character-speaking`；同步角色时才读取技能 `pull-latest-characters`。
 
 H3 输入模式只决定真实媒体引用和请求参数，不选择 System Prompt 或输出结构。P6 由豆包使用同一 Ref2VA 六段式 System Prompt 生成正式 Prompt；Result 不再经过本地或外部内容 validator，也不做事后格式修订。P6 之后直接运行 P8，不再执行 P7 Trailer/Pre-roll。P8 生成后由 Codex 对真实 Video 做统一综合评估，同时覆盖内容、导演实现、连续性、视听与技术质量；除非用户明确指定，否则不外调视频理解模型。失败时按归因选择重生成、从 P6 拆分/扩展生成片段或停止上报，不改 P4 的整体分镜规划。旧 T2VA/I2VA/FL2VA/L2VA 模板仅用于历史项目核对。

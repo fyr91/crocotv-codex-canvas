@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "templates": [
+    {
+      "templateKey": "croco.p2.theme-outline",
+      "templateVersion": "1.0.0",
+      "title": "主题分析与内容大纲",
+      "stage": "P2",
+      "sourceFile": "P2-主题与大纲-System-Prompt.md",
+      "contentSha256": "6344551b965159b9ffa30dc2a38c7399858128f05728e49449ae02f107af2ba0",
+      "modelPolicy": { "defaultModel": "google:gemini@3.1-pro", "modelFamily": "gemini", "allowOverride": true },
+      "inputModes": ["text", "structured"],
+      "inputSchema": { "type": "object", "required": ["projectBrief"], "properties": { "projectBrief": { "type": "string" }, "resourceContext": { "type": "object" } } },
+      "outputSchema": { "type": "object", "required": ["themeAnalysis", "outline"] },
+      "active": true
+    },
+    {
+      "templateKey": "croco.p2.script-draft",
+      "templateVersion": "1.0.1",
+      "title": "剧本初稿",
+      "stage": "P2",
+      "sourceFile": "P2-剧本初稿-System-Prompt.md",
+      "contentSha256": "a47d601e2accbda6a5110528392c0e0e467837bb8b42895eb34895f46fd63919",
+      "modelPolicy": { "defaultModel": "google:gemini@3.1-pro", "modelFamily": "gemini", "allowOverride": true },
+      "inputModes": ["text", "structured"],
+      "inputSchema": { "type": "object", "required": ["verifiedOutline"], "properties": { "verifiedOutline": { "type": "object" }, "constraints": { "type": "object" } } },
+      "outputSchema": { "type": "object", "required": ["script"] },
+      "active": true
+    },
+    {
+      "templateKey": "croco.p2.script-calibration",
+      "templateVersion": "1.0.0",
+      "title": "剧本校定",
+      "stage": "P2",
+      "sourceFile": "P2-剧本校定-System-Prompt.md",
+      "contentSha256": "006781e7409ee8b60cad3c12b061c3af8f62ec00b649f8922e10cfeb5bddcf2f",
+      "modelPolicy": { "defaultModel": "glm-5.2", "modelFamily": "glm", "allowOverride": true },
+      "inputModes": ["text", "structured"],
+      "inputSchema": { "type": "object", "required": ["draftScript"], "properties": { "draftScript": { "type": "string" }, "verifiedOutline": { "type": "object" }, "characterVoiceRules": { "type": "object" } } },
+      "outputSchema": { "type": "object", "required": ["calibratedScript", "changeSummary"] },
+      "active": true
+    },
+    {
+      "templateKey": "croco.p3.production-design",
+      "templateVersion": "1.0.0",
+      "title": "综合生产设计",
+      "stage": "P3",
+      "sourceFile": "P3-综合生产设计-System-Prompt.md",
+      "contentSha256": "b74cc9cac3f70e9549a36964616039127b06fde79c6897a56fa3677e49721216",
+      "modelPolicy": { "defaultModel": "google:gemini@3.1-pro", "modelFamily": "gemini", "allowOverride": true },
+      "inputModes": ["text", "structured"],
+      "inputSchema": { "type": "object", "required": ["lockedScript"], "properties": { "lockedScript": { "type": "string" }, "existingResources": { "type": "array" }, "missingItems": { "type": "array" } } },
+      "outputSchema": { "type": "object", "required": ["characters", "scenes", "props"] },
+      "active": true
+    },
+    {
+      "templateKey": "croco.p3.art-direction-options",
+      "templateVersion": "1.0.0",
+      "title": "艺术方向选项",
+      "stage": "P3",
+      "sourceFile": "P3-艺术方向选项-System-Prompt.md",
+      "contentSha256": "0cb3e0399d76b71ba466a3b1605025b8977c663a240ecd4d055c1f48a48e53f9",
+      "modelPolicy": { "defaultModel": "google:gemini@3.1-pro", "modelFamily": "gemini", "allowOverride": true },
+      "inputModes": ["text", "structured"],
+      "inputSchema": { "type": "object", "required": ["lockedContent"], "properties": { "lockedContent": { "type": "string" }, "existingResources": { "type": "array" }, "visualConstraints": { "type": "object" } } },
+      "outputSchema": { "type": "object", "required": ["options"], "properties": { "options": { "type": "array", "minItems": 3, "maxItems": 3 } } },
+      "active": true
+    },
+    {
+      "templateKey": "croco.p4.director-planning",
+      "templateVersion": "1.1.0",
+      "title": "导演策划",
+      "stage": "P4",
+      "sourceFile": "P4-导演策划-System-Prompt.md",
+      "contentSha256": "c7be2ef32996209070a1c7e63cfc4e63dd597165c37040b0ef025140b7a0ca6f",
+      "modelPolicy": { "defaultModel": "google:gemini@3.1-pro", "modelFamily": "gemini", "allowOverride": true },
+      "inputModes": ["text", "structured"],
+      "inputSchema": { "type": "object", "required": ["lockedScript", "productionDesign"], "properties": { "lockedScript": { "type": "string" }, "productionDesign": { "type": "object" }, "constraints": { "type": "object" } } },
+      "outputSchema": { "type": "object", "required": ["directorOverview", "shots"] },
+      "active": true
+    },
+    {
+      "templateKey": "croco.p4.cross-shot-audit",
+      "templateVersion": "1.0.0",
+      "title": "跨分镜审核",
+      "stage": "P4",
+      "sourceFile": "P4-跨分镜审核-System-Prompt.md",
+      "contentSha256": "61c181070b3e4f5f574352ac43bd70ee2357eb61c56f9c1404fd4edef90402de",
+      "modelPolicy": { "defaultModel": "glm-5.2", "modelFamily": "glm", "allowOverride": true },
+      "inputModes": ["text", "structured"],
+      "inputSchema": { "type": "object", "required": ["lockedScript", "shots"], "properties": { "lockedScript": { "type": "string" }, "shots": { "type": "array" }, "productionDesign": { "type": "object" } } },
+      "outputSchema": { "type": "object", "required": ["result", "shotIssues"] },
+      "active": true
+    },
+    {
+      "templateKey": "croco.p4.shot-revision",
+      "templateVersion": "1.0.0",
+      "title": "单镜头返修",
+      "stage": "P4",
+      "sourceFile": "P4-单镜头返修-System-Prompt.md",
+      "contentSha256": "73dc130c01ef460db6df068f8750c0bb106a5d1a7afa711015399286477fb9b9",
+      "modelPolicy": { "defaultModel": "glm-5.2", "modelFamily": "glm", "allowOverride": true },
+      "inputModes": ["text", "structured"],
+      "inputSchema": { "type": "object", "required": ["shotId", "currentShot", "feedback"], "properties": { "shotId": { "type": "string" }, "currentShot": { "type": "object" }, "previousVersion": { "type": "object" }, "feedback": { "type": "string" }, "adjacentShots": { "type": "array" } } },
+      "outputSchema": { "type": "object", "required": ["shotId", "revisedDescriptionCn", "revisedDescriptionEn", "appliedFeedback"] },
+      "active": true
+    },
+    {
+      "templateKey": "croco.h3.universal-ref2va",
+      "templateVersion": "2.0.0",
+      "title": "H3 通用 Ref2VA 视频提示词",
+      "stage": "H3",
+      "sourceFile": "H3-Ref2VA-System-Prompt.txt",
+      "contentSha256": "b280d74da086be0481eca13928b76591f1f14931853950d5fa13971405f8a4ad",
+      "modelPolicy": { "defaultModel": "doubao-seed-2-1-turbo-260628", "modelFamily": "doubao", "allowOverride": false },
+      "inputModes": ["text", "image", "video", "audio", "structured"],
+      "inputSchema": { "type": "object", "required": ["draftPrompt"], "properties": { "draftPrompt": { "type": "string" }, "orderedResourceIds": { "type": "array" }, "resourceRoles": { "type": "array" }, "durationSeconds": { "type": "integer", "minimum": 3, "maximum": 15 } } },
+      "outputSchema": { "type": "string" },
+      "active": true
+    }
+  ]
+}
