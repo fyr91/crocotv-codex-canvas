@@ -44,6 +44,12 @@ html.atelier-dark {
   --color-on-accent:     #0c0b0e;
   --color-on-warm:       oklch(0.18 0.01 280);
 
+  /* Cross-theme selection feedback stays green, independent of each theme's brand accent. */
+  --color-selection-indicator: oklch(0.78 0.17 155);
+  --color-selection-ink:       oklch(0.18 0.04 155);
+  --color-selection-border:    oklch(0.72 0.16 155 / 0.62);
+  --color-selection-bg:        oklch(0.72 0.16 155 / 0.08);
+
   /* body 渐变（保留现有机制，tokens.css 未含）*/
   --foreground-rgb:      242, 237, 228;
   --background-start-rgb: 12, 11, 14;
@@ -674,11 +680,7 @@ html.atelier-light .atelier-display {
   text-transform: none;
 }
 
-/* Slogan-style overlay: when font-mono + atelier-display sit together
-   (LumenXBranding's "Render Noise into Narrative"), bump the size and
-   slightly relax tracking so Fraunces stays legible at small mass.
-   This rule is doubly-scoped (both class names + atelier theme) so it
-   only fires on the brand slogan and only on atelier. */
+/* Slogan-style overlay retained for legacy editorial text in Atelier themes. */
 html.atelier-dark .font-mono.atelier-display,
 html.atelier-light .font-mono.atelier-display {
   font-size: 11px;
@@ -937,6 +939,25 @@ html.atelier-light .atelier-new-tile:hover > span:first-child {
   font-family: var(--script-font-family);
   font-size: var(--script-font-size);
   line-height: var(--script-line-height);
+  min-height: 60vh;
+  caret-color: var(--color-primary);
+  outline: none;
+}
+
+.script-editor-content {
+  width: 100%;
+}
+
+.script-editor-content[data-empty="true"] .ProseMirror {
+  cursor: text;
+}
+
+.script-editor .ProseMirror .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--color-text-muted);
+  pointer-events: none;
 }
 
 /* === Format-specific indentation === */

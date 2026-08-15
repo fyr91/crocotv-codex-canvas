@@ -417,6 +417,7 @@
     "editor": "Script Editor",
     "playground": "Playground",
     "settings": "Settings",
+    "brand": "Video Workshop",
     "workspaceAria": "Video Workshop · Workspace",
     "mainNavAria": "Main navigation"
   },
@@ -2117,7 +2118,7 @@
     },
     "placeholders": {
       "sceneHeading": "INT./EXT. SCENE - TIME",
-      "startTyping": "Start typing..."
+      "startTyping": "Start writing your script, or paste existing content…"
     }
   }
 }

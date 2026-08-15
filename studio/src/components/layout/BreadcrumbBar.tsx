@@ -1,8 +1,7 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
-import { useTranslations } from "next-intl";
 import ThemeToggle from "./ThemeToggle";
+import CrocoTVBranding from "./CrocoTVBranding";
 
 export interface BreadcrumbSegment {
   label: string;
@@ -15,30 +14,16 @@ interface BreadcrumbBarProps {
 }
 
 export default function BreadcrumbBar({ segments, actions }: BreadcrumbBarProps) {
-  const tc = useTranslations("common");
-  const handleBack = () => {
-    if (segments.length >= 2 && segments[segments.length - 2].hash) {
-      window.location.hash = segments[segments.length - 2].hash!;
-    } else if (segments[0]?.hash) {
-      window.location.hash = segments[0].hash;
-    } else {
-      window.location.hash = "";
-    }
-  };
-
   return (
-    <div className="relative z-30 flex items-center gap-3 px-4 py-2.5 bg-surface/80 backdrop-blur-sm border-b border-glass-border">
-      {/* Back arrow */}
-      <button
-        onClick={handleBack}
-        className="flex items-center text-text-secondary hover:text-foreground transition-colors"
-        title={tc("back")}
-      >
-        <ChevronLeft size={18} />
-      </button>
-
-      {/* Breadcrumb segments */}
-      <nav className="flex items-center gap-1.5 text-sm flex-1 min-w-0">
+    <div className="relative z-30 border-b border-glass-border bg-surface/80 px-4 py-3 backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-3">
+        <CrocoTVBranding />
+        <div className="flex shrink-0 items-center gap-1">
+          {actions}
+          <ThemeToggle />
+        </div>
+      </div>
+      <nav className="mt-1.5 flex min-w-0 items-center gap-1.5 px-2 text-sm">
         {segments.map((seg, i) => {
           const isLast = i === segments.length - 1;
           return (
@@ -60,19 +45,6 @@ export default function BreadcrumbBar({ segments, actions }: BreadcrumbBarProps)
           );
         })}
       </nav>
-
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <a
-          href="http://localhost:3000/canvas"
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground"
-          aria-label="返回 CrocoTV"
-        >
-          <ChevronLeft size={14} />
-          <span>CrocoTV</span>
-        </a>
-        {actions}
-        <ThemeToggle />
-      </div>
     </div>
   );
 }

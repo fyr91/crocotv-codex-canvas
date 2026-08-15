@@ -3,13 +3,12 @@
 import { motion } from "framer-motion";
 import {
     ChevronRight,
-    ChevronLeft,
     Lock,
     Check
 } from "lucide-react";
 import clsx from "clsx";
 import { useTranslations } from "next-intl";
-import LumenXBranding from "./LumenXBranding";
+import CrocoTVBranding from "./CrocoTVBranding";
 import type { BreadcrumbSegment } from "./BreadcrumbBar";
 import ThemeToggle from "./ThemeToggle";
 
@@ -45,18 +44,8 @@ interface PipelineSidebarProps {
 }
 
 export default function PipelineSidebar({ activeStep, onStepChange, steps, breadcrumbSegments, headerActions, topSlot, projectLabel, projectSubLabel }: PipelineSidebarProps) {
-    const tc = useTranslations("common");
+    const tn = useTranslations("nav");
     const tp = useTranslations("pipeline");
-    const handleBack = () => {
-        if (!breadcrumbSegments) return;
-        if (breadcrumbSegments.length >= 2 && breadcrumbSegments[breadcrumbSegments.length - 2].hash) {
-            window.location.hash = breadcrumbSegments[breadcrumbSegments.length - 2].hash!;
-        } else if (breadcrumbSegments[0]?.hash) {
-            window.location.hash = breadcrumbSegments[0].hash;
-        } else {
-            window.location.hash = "";
-        }
-    };
 
     return (
         <motion.aside
@@ -64,20 +53,16 @@ export default function PipelineSidebar({ activeStep, onStepChange, steps, bread
             animate={{ x: 0, opacity: 1 }}
             className="w-64 flex-1 min-h-0 border-r border-glass-border bg-surface backdrop-blur-xl flex flex-col z-50"
         >
-            {/* Header: breadcrumb navigation or branding */}
-            <div className="p-5 border-b border-glass-border">
-                {breadcrumbSegments ? (
-                    <div className="space-y-3">
-                        {/* Breadcrumb row */}
-                        <div className="flex items-center gap-1.5">
-                            <button
-                                onClick={handleBack}
-                                className="flex-shrink-0 text-text-secondary hover:text-foreground transition-colors"
-                                title={tc("back")}
-                            >
-                                <ChevronLeft size={16} />
-                            </button>
-                            <nav className="flex items-center gap-1 text-sm min-w-0 flex-1">
+            {/* Header: CrocoTV is the stable brand; Studio context lives below it. */}
+            <div className="border-b border-glass-border px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                    <CrocoTVBranding />
+                    <ThemeToggle />
+                </div>
+                <div className="mt-2 flex min-w-0 items-center gap-2 px-2">
+                    {breadcrumbSegments ? (
+                        <>
+                            <nav className="flex min-w-0 flex-1 items-center gap-1 text-sm">
                                 {breadcrumbSegments.map((seg, i) => {
                                     const isLast = i === breadcrumbSegments.length - 1;
                                     return (
@@ -102,26 +87,18 @@ export default function PipelineSidebar({ activeStep, onStepChange, steps, bread
                                     );
                                 })}
                             </nav>
-                        </div>
-                        {/* Actions row */}
-                        {headerActions && (
-                            <div className="flex items-center gap-1">
-                                <a
-                                    href="http://localhost:3000/canvas"
-                                    className="mr-auto inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-text-secondary transition-colors hover:bg-hover-bg hover:text-foreground"
-                                    aria-label="返回 CrocoTV"
-                                >
-                                    <ChevronLeft size={14} />
-                                    <span>CrocoTV</span>
-                                </a>
-                                {headerActions}
-                                <ThemeToggle />
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <LumenXBranding size="sm" />
-                )}
+                            {headerActions && <div className="flex shrink-0 items-center gap-1">{headerActions}</div>}
+                        </>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => { window.location.hash = "#/"; }}
+                            className="text-sm font-medium leading-6 text-foreground transition-colors hover:text-text-secondary"
+                        >
+                            {tn("brand")}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {topSlot}
@@ -153,7 +130,7 @@ export default function PipelineSidebar({ activeStep, onStepChange, steps, bread
                             {isActive && (
                                 <motion.div
                                     layoutId="active-pill"
-                                    className="absolute left-0 top-1/2 -translate-y-1/2 h-3/5 w-1 rounded-r-sm bg-primary shadow-none"
+                                    className="absolute left-0 top-[20%] bottom-[20%] w-1 rounded-r-sm bg-primary shadow-none"
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                 />

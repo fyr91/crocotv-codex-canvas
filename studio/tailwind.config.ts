@@ -35,6 +35,10 @@ const config: Config = {
         accent: semanticColor("--color-accent"),
         "accent-hover": semanticColor("--color-accent-hover"),
         "on-accent": semanticColor("--color-on-accent"),
+        "selection-indicator": semanticColor("--color-selection-indicator"),
+        "selection-ink": semanticColor("--color-selection-ink"),
+        "selection-border": semanticColor("--color-selection-border"),
+        "selection-bg": semanticColor("--color-selection-bg"),
         // Storyboard R2V workbench status semantic tokens. Replaces
         // 30+ scattered amber/emerald/red/blue arbitrary tints. Each
         // status carries -fg / -border / -bg variants; starred also

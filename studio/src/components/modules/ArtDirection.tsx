@@ -708,6 +708,17 @@ export default function ArtDirection() {
 
 // ─── Sub-components ────────────────────────────────────────────────────────
 
+function SelectionIndicator({ className = "" }: { className?: string }) {
+    return (
+        <div
+            aria-hidden="true"
+            className={`shrink-0 w-5 h-5 rounded-full bg-selection-indicator text-selection-ink ring-1 ring-selection-border flex items-center justify-center ${className}`}
+        >
+            <Check size={11} strokeWidth={2.75} />
+        </div>
+    );
+}
+
 function AIRecommendationCard({ style, isSelected, onClick }: {
     style: StyleConfig;
     isSelected: boolean;
@@ -719,7 +730,7 @@ function AIRecommendationCard({ style, isSelected, onClick }: {
             onClick={onClick}
             className={`group relative rounded-xl border overflow-hidden cursor-pointer transition-all ${
                 isSelected
-                    ? "border-border-strong shadow-lg shadow-none ring-1 ring-border-strong"
+                    ? "border-selection-border bg-selection-bg ring-1 ring-selection-border"
                     : "border-glass-border hover:border-foreground/30 hover:shadow-sm"
             }`}
         >
@@ -733,11 +744,7 @@ function AIRecommendationCard({ style, isSelected, onClick }: {
                     <h4 className="text-sm font-medium text-foreground leading-tight line-clamp-1 flex-1">
                         {style.name}
                     </h4>
-                    {isSelected && (
-                        <div className="shrink-0 w-5 h-5 rounded-full bg-hover-bg flex items-center justify-center">
-                            <Check size={11} className="text-black" />
-                        </div>
-                    )}
+                    {isSelected && <SelectionIndicator />}
                 </div>
 
                 {/* Description */}
@@ -925,14 +932,14 @@ export function StylePresetCard({ style, isSelected, onSelect }: any) {
             layout
             onClick={onSelect}
             className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${isSelected
-                ? "bg-primary/20 border-primary shadow-lg shadow-none"
+                ? "bg-selection-bg border-selection-border"
                 : "bg-surface border-glass-border hover:border-glass-border hover:bg-hover-bg"
                 }`}
         >
             <div className="flex items-center gap-3 mb-2">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isSelected ? 'bg-primary' : 'bg-hover-bg'}`}>
-                    {isSelected && <Check size={12} className="text-foreground" />}
-                </div>
+                {isSelected
+                    ? <SelectionIndicator />
+                    : <div className="shrink-0 w-5 h-5 rounded-full bg-hover-bg border border-glass-border" />}
                 <h4 className="font-medium text-foreground text-sm">{style.name}</h4>
             </div>
             {style.description && (
@@ -956,7 +963,7 @@ function StylePresetCardV2({ style, isSelected, onClick }: {
             onClick={onClick}
             className={`group relative rounded-xl border overflow-hidden cursor-pointer transition-all ${
                 isSelected
-                    ? "border-primary shadow-lg shadow-primary/20 ring-1 ring-primary/40"
+                    ? "border-selection-border bg-selection-bg ring-1 ring-selection-border"
                     : "border-glass-border hover:border-foreground/30 hover:shadow-sm"
             }`}
         >
@@ -974,11 +981,7 @@ function StylePresetCardV2({ style, isSelected, onClick }: {
                         <ImageIcon size={24} className="text-text-muted/40" />
                     </div>
                 )}
-                {isSelected && (
-                    <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-md">
-                        <Check size={11} className="text-foreground" />
-                    </div>
-                )}
+                {isSelected && <SelectionIndicator className="absolute top-2 right-2 shadow-md" />}
             </div>
 
             {/* Info strip */}
