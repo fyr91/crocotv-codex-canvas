@@ -53,7 +53,6 @@ function toGeneration(resp: PlaygroundGenerationResponse): PlaygroundGeneration 
       media_path: o.media_path,
       media_type: o.media_type as 'image' | 'video',
       thumbnail_path: o.thumbnail_path,
-      saved_to_library: o.saved_to_library,
     })),
     status: resp.status as PlaygroundGeneration['status'],
     error: resp.error,

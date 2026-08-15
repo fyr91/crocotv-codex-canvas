@@ -71,6 +71,26 @@ export async function listStudioProjectResponses(options: { kind?: "episode" | "
   return responses.filter((item): item is NonNullable<typeof item> => Boolean(item));
 }
 
+export async function listStudioAssetSources() {
+  const projects = await listStudioProjectResponses();
+  return projects
+    .filter((project) => project.project_kind !== "playground")
+    .filter((project) => project.characters.length + project.scenes.length + project.props.length > 0)
+    .map((project) => ({
+      source_id: project.id,
+      source_kind: project.project_kind === "series" ? "series" as const : project.series_id ? "episode" as const : "project" as const,
+      title: project.title,
+      series_id: project.series_id,
+      episode_number: project.episode_number,
+      characters: project.characters,
+      scenes: project.scenes,
+      props: project.props,
+    }))
+    .sort((left, right) => assetSourceOrder(left) - assetSourceOrder(right)
+      || Number(left.episode_number || 0) - Number(right.episode_number || 0)
+      || left.title.localeCompare(right.title, "zh-CN"));
+}
+
 export async function deleteStudioProject(projectId: string) {
   asStudioProject(await readProject(projectId));
   await trashProject(projectId);
@@ -87,6 +107,7 @@ export function studioProjectResponse(project: StudioBackedProject) {
   return {
     id: project.id,
     title: project.title,
+    project_kind: studio.projectKind,
     original_text: studio.originalText,
     workflow_mode: studio.workflowMode,
     characters: studio.characters,
@@ -116,6 +137,10 @@ export function studioProjectResponse(project: StudioBackedProject) {
     canvas_project_id: project.id,
     project_version: project.version,
   };
+}
+
+function assetSourceOrder(source: { source_kind: "series" | "project" | "episode" }) {
+  return source.source_kind === "series" ? 0 : source.source_kind === "project" ? 1 : 2;
 }
 
 function timestamp(value: string) {

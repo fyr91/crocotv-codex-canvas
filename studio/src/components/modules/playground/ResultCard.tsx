@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Download, Video, Copy, Check, Replace, Crown, Bookmark } from 'lucide-react';
+import { Download, Video, Copy, Check, Replace, Crown } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { API_URL, playgroundApi } from '@/lib/api';
+import { API_URL } from '@/lib/api';
 import { usePlaygroundStore, type PlaygroundGeneration } from './usePlaygroundStore';
 
 interface ResultCardProps {
@@ -128,12 +128,9 @@ function CompletedCard({ generation, outputIndex, onGenerateVideo, onOpenDetail 
   const t = useTranslations('playground');
   const output = outputs[outputIndex];
   const isVideo = output?.media_type === 'video' || ['t2v', 'i2v', 'r2v', 'v2v'].includes(mode);
-  const [saving, setSaving] = useState(false);
   const [imgError, setImgError] = useState(false);
 
-  const saved = output?.saved_to_library ?? false;
   const mediaUrl = output?.media_path ? getMediaUrl(output.media_path) : null;
-  const updateGeneration = usePlaygroundStore((s) => s.updateGeneration);
   const useResultAsReference = usePlaygroundStore((s) => s.useResultAsReference);
   const featuredByGen = usePlaygroundStore((s) => s.featuredByGen);
   const toggleFeatured = usePlaygroundStore((s) => s.toggleFeatured);
@@ -158,26 +155,6 @@ function CompletedCard({ generation, outputIndex, onGenerateVideo, onOpenDetail 
     }
   }, [mediaUrl, output]);
 
-  const handleSaveToLibrary = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!output || saving) return;
-    setSaving(true);
-    try {
-      const newSaved = !saved;
-      if (newSaved) {
-        await playgroundApi.saveToLibrary(generation.id, output.id);
-      }
-      const updatedOutputs = generation.outputs.map((o) =>
-        o.id === output.id ? { ...o, saved_to_library: newSaved } : o
-      );
-      updateGeneration({ ...generation, outputs: updatedOutputs });
-    } catch (err) {
-      console.error('[Playground] Save to library failed:', err);
-    } finally {
-      setSaving(false);
-    }
-  }, [generation, output, saved, saving, updateGeneration]);
-
   const handleUseAsReference = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (!output?.media_path) return;
@@ -186,7 +163,7 @@ function CompletedCard({ generation, outputIndex, onGenerateVideo, onOpenDetail 
 
   return (
     <div
-      className={`group rounded-2xl border bg-glass atelier-asset-card overflow-hidden transition cursor-pointer ${saved ? 'border-primary/40 ring-1 ring-primary/30' : 'border-glass-border hover:border-foreground/30'}`}
+      className="group rounded-2xl border border-glass-border bg-glass atelier-asset-card overflow-hidden transition cursor-pointer hover:border-foreground/30"
       onClick={() => onOpenDetail?.(generation, output.id)}
     >
       {/* Media area */}
@@ -210,11 +187,6 @@ function CompletedCard({ generation, outputIndex, onGenerateVideo, onOpenDetail 
           <div className="w-full h-full bg-gradient-to-br from-elevated to-surface" />
         )}
 
-        {/* Amber halation overlay — only when saved to library */}
-        {saved && (
-          <div className="atelier-proj-halation pointer-events-none absolute inset-0 z-[1]" />
-        )}
-
         {/* Top-left badges: featured (best-of-batch) + video mode */}
         {(featured || isVideo) && (
           <div className="absolute top-2 left-2 z-[3] flex items-center gap-1.5">
@@ -233,13 +205,6 @@ function CompletedCard({ generation, outputIndex, onGenerateVideo, onOpenDetail 
               </span>
             )}
           </div>
-        )}
-
-        {/* Saved pill top-right */}
-        {saved && (
-          <span className="absolute top-2 right-2 z-[2] atelier-badge font-mono text-sm bg-primary/15 text-primary border border-primary/30 rounded px-[6px] py-[2px] uppercase">
-            {t('card.saved')}
-          </span>
         )}
 
         {/* Bottom gradient toolbar — appears on hover */}
@@ -274,13 +239,6 @@ function CompletedCard({ generation, outputIndex, onGenerateVideo, onOpenDetail 
           >
             <Crown className={`w-3.5 h-3.5 ${featured ? 'text-status-starred-solid fill-status-starred-solid' : 'text-foreground'}`} />
           </button>
-          <button
-            onClick={handleSaveToLibrary}
-            className={`w-7 h-7 rounded-full backdrop-blur-sm flex items-center justify-center transition ${saved ? 'bg-primary/15' : 'bg-elevated hover:bg-hover-bg'}`}
-            title={saved ? t('card.saved') : t('card.saveToLibrary')}
-          >
-            <Bookmark className={`w-3.5 h-3.5 ${saved ? 'text-primary fill-current' : 'text-foreground'}`} />
-          </button>
         </div>
       </div>
 
@@ -307,11 +265,6 @@ function CompletedCard({ generation, outputIndex, onGenerateVideo, onOpenDetail 
             {MODE_LABELS[mode] || mode}
           </span>
           <span className="font-mono text-sm text-text-muted ml-auto">{formatTime(created_at)}</span>
-          {saved && (
-            <span className="flex items-center gap-0.5 text-sm text-primary">
-              <Bookmark className="w-2.5 h-2.5 fill-current" />
-            </span>
-          )}
         </div>
       </div>
     </div>

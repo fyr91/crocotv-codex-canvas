@@ -4,8 +4,8 @@ import multer from "multer";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { listCharacters } from "./characters";
 import { models } from "./providers";
-import { addResource, fileSize, listProjects, listResources, readProject, resourceById, typeFromMime, updateResource, writeGenerated } from "./storage";
-import { createStudioProject, deleteStudioProject, getStudioBackedProject, getStudioProject, listStudioProjectResponses, mutateStudioProject } from "./studio-commands";
+import { addResource, fileSize, listProjects, listResources, readProject, typeFromMime, writeGenerated } from "./storage";
+import { createStudioProject, deleteStudioProject, getStudioBackedProject, getStudioProject, listStudioAssetSources, listStudioProjectResponses, mutateStudioProject } from "./studio-commands";
 import {
   analyzeStudioArtDirection, analyzeStudioStoryboard, clearStudioArtDirection, copyStudioFrame, createStudioEntity, createStudioFrame, createStudioVideoTasks,
   deleteStudioEntity, deleteStudioFrame, extractStudioEntities, generateStudioAsset, generateStudioFrameAudio, mergeStudioProject, patchStudioEntity, patchStudioFrame,
@@ -202,11 +202,7 @@ studioApiRouter.post("/projects/:id/generate_audio", projectRoute(async (request
 studioApiRouter.post("/projects/:id/export", projectRoute(async (_request, response, id) => { const project = await getStudioProject(id); response.json({ project_id: id, canvas_url: `/canvas/${id}`, studio_url: `/#/project/${id}`, merged_video_url: project.merged_video_url || null, project }); }));
 
 studioApiRouter.post("/upload", upload.single("file"), route(async (request, response) => { const resource = await storeUpload(request); response.json({ url: resource.url, path: resource.url, resource_id: resource.id }); }));
-studioApiRouter.get("/library/assets", route(async (_request, response) => response.json(libraryResponse(await listResources()))));
-studioApiRouter.post("/library/assets/upload", upload.single("file"), route(async (request, response) => { const resource = await storeUpload(request); response.json({ image_url: resource.url, resource_id: resource.id }); }));
-studioApiRouter.post("/library/assets", route(async (request, response) => response.status(201).json(await createLibraryAsset(request.body))));
-studioApiRouter.put("/library/assets/:assetType/:assetId", route(async (request, response) => response.json(await updateLibraryAsset(param(request.params.assetType), param(request.params.assetId), request.body))));
-studioApiRouter.post("/library/assets/promote", route(async (request, response) => response.json(await promoteLibraryAsset(request.body))));
+studioApiRouter.get("/asset-sources", route(async (_request, response) => response.json(await listStudioAssetSources())));
 
 studioApiRouter.post("/projects/:id/document", projectRoute(async (request, response, id) => { const content = objectValue(request.body?.content || request.body); const updatedAt = new Date().toISOString(); await mutateStudioProject(id, (state) => ({ ...state, document: { ...state.document, content, updatedAt, snapshots: request.body?.create_snapshot && state.document.content ? [...state.document.snapshots, { timestamp: Date.now() / 1000, label: "自动快照", content: state.document.content }].slice(-500) : state.document.snapshots } }), { originClientId: clientId(request) }); response.json({ project_id: id, content, updated_at: updatedAt }); }));
 studioApiRouter.get("/projects/:id/document", projectRoute(async (_request, response, id) => { const document = (await getStudioBackedProject(id)).studio.document; response.json({ project_id: id, content: document.content || { type: "doc", content: [] }, updated_at: document.updatedAt || "" }); }));
@@ -368,36 +364,5 @@ async function findVideoTask(taskId: string) {
   for (const summary of await listProjects()) { const project = await readProject(String(summary!.id)).catch(() => null) as any; const task = project?.studio?.videoTasks?.find((item: any) => item.id === taskId); if (task) return task; }
   throw new Error(`任务不存在：${taskId}`);
 }
-function libraryResponse(resources: Awaited<ReturnType<typeof listResources>>) {
-  const result: Record<string, any[]> = { characters: [], scenes: [], props: [] };
-  for (const resource of resources.filter((item) => item.type === "image")) { const type = String(resource.metadata?.studioAssetType || "props"); const key = type.startsWith("character") ? "characters" : type.startsWith("scene") ? "scenes" : "props"; result[key].push({ id: resource.id, name: resource.name, description: String(resource.metadata?.description || ""), image_url: resource.url, resource_id: resource.id, source: "library" }); }
-  return result;
-}
-async function createLibraryAsset(raw: any) {
-  const kind = entityKind(raw?.asset_type);
-  let resource = await resourceFromUrl(String(raw?.image_url || ""));
-  if (!resource) {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><rect width="100%" height="100%" fill="#171717"/><text x="50%" y="50%" fill="#a3a3a3" font-family="sans-serif" font-size="52" text-anchor="middle">${escapeXml(String(raw?.name || "本地素材"))}</text></svg>`;
-    const stored = await writeGenerated("canvas", "svg", Buffer.from(svg));
-    resource = await addResource({ id: stored.id, name: `${String(raw?.name || "本地素材")}.svg`, type: "image", mimeType: "image/svg+xml", size: await fileSize(stored.target), fileName: stored.fileName, createdAt: new Date().toISOString(), source: "upload", metadata: { importedBy: "video-workshop" } });
-  }
-  resource = await updateResource(resource.id, { name: String(raw?.name || resource.name), metadata: { ...(resource.metadata || {}), studioAssetType: kind, description: String(raw?.description || ""), persona: String(raw?.persona || ""), voiceId: String(raw?.voice_id || "") } });
-  return libraryAssetResponse(resource, kind);
-}
-async function updateLibraryAsset(assetType: string, assetId: string, raw: any) {
-  const resource = await resourceById(assetId); if (!resource) throw new Error("本地素材不存在");
-  const updated = await updateResource(assetId, { name: raw?.name ? String(raw.name) : undefined, metadata: { ...(resource.metadata || {}), studioAssetType: entityKind(assetType), ...(raw?.description !== undefined ? { description: String(raw.description) } : {}), ...(raw?.persona !== undefined ? { persona: String(raw.persona) } : {}), ...(raw?.voice_id !== undefined ? { voiceId: String(raw.voice_id) } : {}), ...(raw?.starred !== undefined ? { starred: Boolean(raw.starred) } : {}), ...(raw?.locked !== undefined ? { locked: Boolean(raw.locked) } : {}) } });
-  return libraryAssetResponse(updated, entityKind(assetType));
-}
-async function promoteLibraryAsset(raw: any) {
-  const source = await getStudioBackedProject(requiredId(raw?.source_id)); const kind = entityKind(raw?.asset_type); const entity = source.studio[collection(kind)].find((item) => item.id === String(raw?.asset_id)); if (!entity) throw new Error("来源资产不存在");
-  const variant = entity.image_asset?.variants.find((item) => item.id === entity.image_asset?.selected_id) || entity.image_asset?.variants.at(-1);
-  const resource = variant?.resource_id ? await resourceById(variant.resource_id) : await resourceFromUrl(String(entity.image_url || "")); if (!resource) throw new Error("来源资产尚未进入 Croco 本地素材库");
-  const updated = await updateResource(resource.id, { name: entity.name, metadata: { ...(resource.metadata || {}), studioAssetType: kind, description: entity.description, promotedFrom: { kind: raw?.source_kind, id: raw?.source_id, assetId: entity.id } } });
-  return libraryAssetResponse(updated, kind);
-}
-async function resourceFromUrl(url: string) { const match = url.match(/\/files\/by-id\/([A-Za-z0-9_-]+)/); return match ? resourceById(match[1]) : undefined; }
-function libraryAssetResponse(resource: Awaited<ReturnType<typeof resourceById>> & {}, requestedKind?: "character" | "scene" | "prop") { const kind = requestedKind || entityKind(resource.metadata?.studioAssetType || "prop"); return { id: resource.id, name: resource.name, description: String(resource.metadata?.description || ""), persona: String(resource.metadata?.persona || ""), voice_id: String(resource.metadata?.voiceId || ""), image_url: resource.url, resource_id: resource.id, starred: Boolean(resource.metadata?.starred), locked: Boolean(resource.metadata?.locked), asset_type: kind }; }
-function escapeXml(value: string) { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[character]!)); }
 function textToTiptap(text: string) { return { type: "doc", content: text.split(/\n{2,}/).filter(Boolean).map((paragraph) => ({ type: "paragraph", content: [{ type: "text", text: paragraph }] })) }; }
 function tiptapText(value: any): string { if (typeof value?.text === "string") return value.text; if (Array.isArray(value?.content)) return value.content.map(tiptapText).filter(Boolean).join(value.type === "doc" ? "\n\n" : ""); return ""; }

@@ -1115,9 +1115,9 @@
     "noAssetsHint": "Assets will appear here after being generated in series or projects",
     "series": "Series",
     "project": "Project",
+    "episode": "Episode",
     "gallery": "Gallery",
     "allLabel": "All",
-    "globalGroup": "Global / Shared",
     "viewLabel": "View",
     "viewByType": "By Type",
     "viewByProject": "By Project",
@@ -1134,11 +1134,6 @@
     "unstar": "Unstar",
     "loadFailed": "Failed to load library",
     "loadFailedBody": "Check your network or restart Video Studio, then try again.",
-    "promoteToGlobal": "Promote to Library",
-    "promoting": "Promoting…",
-    "promoteSuccess": "Promoted to global library",
-    "promoteSuccessBody": "{name} is now in the Global / Shared pool",
-    "promoteFailed": "Promote failed",
     "emptyQuote": "“Every character is waiting for the frame that's theirs.”",
     "noMatchTitle": "No matching assets",
     "timeToday": "Today",
@@ -1168,26 +1163,7 @@
     "generateMoreVariants": "Generate more variants",
     "genInEpisodeTooltip": "Generate variants inside the corresponding episode (the library doesn't generate for episodes directly)",
     "genInEpisodeBadge": "In-episode",
-    "download": "Download",
-    "newAsset": "New Asset",
-    "newAssetTitle": "New Library Asset",
-    "newAssetSubtitle": "Add directly to the Global / Shared pool",
-    "nameLabel": "Name",
-    "namePlaceholder": "Name this asset",
-    "nameRequired": "Please enter a name",
-    "descLabel": "Description",
-    "descPlaceholder": "Appearance, personality, or usage (optional)",
-    "imageLabel": "Image (optional)",
-    "uploadImageButton": "Upload local image",
-    "uploading": "Uploading…",
-    "uploadSuccess": "Image uploaded",
-    "uploadFailed": "Image upload failed",
-    "imageUrlLabel": "Image URL",
-    "imageUrlPlaceholder": "https://… (optional)",
-    "imageUrlHint": "Or paste an image URL directly",
-    "creating": "Creating…",
-    "createSuccess": "Asset created",
-    "createFailed": "Failed to create asset"
+    "download": "Download"
   },
   "voice": {
     "castingRoom": "Casting Room",
@@ -1694,8 +1670,6 @@
       "yesterday": "Yesterday"
     },
     "card": {
-      "saveToLibrary": "Save to library",
-      "saved": "Saved",
       "featured": "Featured",
       "useAsReference": "Use as reference",
       "download": "Download",
@@ -1800,11 +1774,8 @@
       "watermark": "Watermark"
     },
     "detail": {
-      "saving": "Saving…",
-      "savedCancel": "Saved (click to remove)",
-      "saveToLibrary": "Save to library",
       "parameters": "Parameters",
-      "markHint": "Save: archive to your asset library (reusable across projects) · Featured: mark the best of this batch"
+      "markHint": "Featured: mark the best result in this batch"
     },
     "gallery": {
       "viewDetail": "Click to view details"

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { X, Star, Download, Sparkles, Loader2, Globe } from "lucide-react";
+import { X, Star, Download, Sparkles, Loader2 } from "lucide-react";
 import type { Character, Scene, Prop, ImageAsset, ImageVariant } from "@/store/projectStore";
 import { characterImageAsset } from "@/lib/characterImage";
 import { api } from "@/lib/api";
@@ -29,13 +29,11 @@ interface AssetInspectorProps {
   sourceName: string;
   /** 裸 series/project id（调生成/刷新 API 用）。 */
   sourceId: string;
-  /** 资产归属：series/global 无生成端点 → 变体生成置灰。 */
-  sourceKind: "series" | "project" | "global";
+  /** 系列资产无生成端点；独立项目和剧集资产均走项目生成端点。 */
+  sourceKind: "series" | "project" | "episode";
   starred: boolean;
   onClose: () => void;
   onToggleStar: () => void;
-  /** 提升到全局成功后回调（父层刷新库以显示新入池资产）。可选。 */
-  onPromoted?: () => void;
 }
 
 /** Character 走 characterImageAsset（reference_sheet→full_body，归一化成 ImageAsset 形状）；scene/prop 用 image_asset。 */
@@ -91,7 +89,6 @@ export default function AssetInspector({
   starred,
   onClose,
   onToggleStar,
-  onPromoted,
 }: AssetInspectorProps) {
   const t = useTranslations("library");
   const TYPE_LABEL: Record<AssetTab, string> = {
@@ -120,7 +117,6 @@ export default function AssetInspector({
   const defaultId = imageAsset?.selected_id ?? baseVariants[0]?.id ?? null;
   const [activeVariantId, setActiveVariantId] = useState<string | null>(defaultId);
   const [generating, setGenerating] = useState(false);
-  const [promoting, setPromoting] = useState(false);
 
   // 切换选中资产时重置本地高亮的变体 + 丢弃上一个资产本地追加的变体。
   useEffect(() => {
@@ -217,13 +213,12 @@ export default function AssetInspector({
     throw new Error(t("genTimeout"));
   };
 
-  // 生成更多变体：仅 project 资产可用（series 无生成端点）。复用按项目 batch 生成管线，
+  // 生成更多变体：独立项目和剧集资产可用（series 无生成端点）。复用按项目 batch 生成管线，
   // 完成后 re-fetch 该项目，把新变体并入本地展示并高亮最新一张。
   const handleGenerateVariants = async () => {
-    if (sourceKind !== "project" || generating) return;
+    if (sourceKind === "series" || generating) return;
     const assetId = asset.id;
-    // 父层传入的是列表 key（`project-<id>`）；生成/刷新 API 需要裸 project id。
-    const projectId = sourceId.replace(/^project-/, "");
+    const projectId = sourceId;
     setGenerating(true);
     const tid = toast.progress(t("generatingVariants"), {
       body: t("generatingVariantsBody", { name: asset.name, count: VARIANT_BATCH }),
@@ -267,25 +262,6 @@ export default function AssetInspector({
       if (aliveRef.current) toast.update(tid, { kind: "error", title: t("variantsGenFailed"), body: msg, autoCloseMs: 0 });
     } finally {
       if (aliveRef.current) setGenerating(false);
-    }
-  };
-
-  // 提升到全局：把 project/series 来源资产 deep-copy 进全局共享池（global 来源不显示该按钮）。
-  // 成功后 toast 并回调父层刷新（新入池资产即出现在「全局 / 共享」分组）。
-  const handlePromote = async () => {
-    if (sourceKind === "global" || promoting) return;
-    // 父层传入的是列表 key（`project-<id>` / `series-<id>`）；promote API 需要裸 id。
-    const rawSourceId = sourceId.replace(/^(project|series)-/, "");
-    setPromoting(true);
-    try {
-      await api.promoteAssetToLibrary(sourceKind, rawSourceId, SINGULAR_TYPE[type], asset.id);
-      toast.success(t("promoteSuccess"), { body: t("promoteSuccessBody", { name: asset.name }) });
-      onPromoted?.();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : t("promoteFailed");
-      toast.error(t("promoteFailed"), { body: msg });
-    } finally {
-      setPromoting(false);
     }
   };
 
@@ -429,7 +405,7 @@ export default function AssetInspector({
           项目内进行），故置灰并提示在剧集内生成。「用于分镜」按钮已移除（占位、无落地路径）。
         */}
         <div className="flex flex-col gap-2">
-          {sourceKind === "project" ? (
+          {sourceKind !== "series" ? (
             <button
               type="button"
               onClick={handleGenerateVariants}
@@ -451,18 +427,6 @@ export default function AssetInspector({
               <span className="inline-flex items-center rounded-full px-1.5 py-0.5 font-mono text-sm font-medium tracking-[0.06em] text-status-pending-fg bg-status-pending-bg border border-status-pending-border">
                 {t("genInEpisodeBadge")}
               </span>
-            </button>
-          )}
-          {/* 提升到全局：project/series 来源可用；global 来源隐藏（无需自我提升）。 */}
-          {sourceKind !== "global" && (
-            <button
-              type="button"
-              onClick={handlePromote}
-              disabled={promoting}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-surface-inset border border-glass-border text-foreground text-sm font-medium hover:bg-hover-bg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {promoting ? <Loader2 size={15} className="animate-spin" /> : <Globe size={15} />}
-              {promoting ? t("promoting") : t("promoteToGlobal")}
             </button>
           )}
           {/* 下载：v1 实做 */}

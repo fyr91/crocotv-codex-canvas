@@ -6,7 +6,6 @@ import {
   X,
   Download,
   Crown,
-  Bookmark,
   Video,
   RotateCcw,
   Trash2,
@@ -76,16 +75,13 @@ export default function DetailPanel({
 }: DetailPanelProps) {
   const t = useTranslations('playground');
   const [copied, setCopied] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const updateGeneration = usePlaygroundStore((s) => s.updateGeneration);
   const history = usePlaygroundStore((s) => s.history);
   const featuredByGen = usePlaygroundStore((s) => s.featuredByGen);
   const toggleFeatured = usePlaygroundStore((s) => s.toggleFeatured);
 
-  // Always read the latest generation from store (so saved_to_library stays in sync)
+  // Always read the latest generation from the store.
   const generation = history.find((g) => g.id === generationProp.id) ?? generationProp;
-  const saved = generation.outputs[0]?.saved_to_library ?? false;
 
   // Determine media — focus the clicked output of a batch, else the first.
   const output =
@@ -144,25 +140,6 @@ export default function DetailPanel({
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  };
-
-  const handleSaveToLibrary = async () => {
-    if (!output || saving) return;
-    setSaving(true);
-    try {
-      const newSaved = !saved;
-      if (newSaved) {
-        await playgroundApi.saveToLibrary(generation.id, output.id);
-      }
-      const updatedOutputs = generation.outputs.map((o) =>
-        o.id === output.id ? { ...o, saved_to_library: newSaved } : o
-      );
-      updateGeneration({ ...generation, outputs: updatedOutputs });
-    } catch (err) {
-      console.error('[DetailPanel] Save to library failed:', err);
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleDelete = async () => {
@@ -234,11 +211,6 @@ export default function DetailPanel({
               <Video className="w-12 h-12" />
               <span className="font-mono text-sm">No media</span>
             </div>
-          )}
-
-          {/* Amber halation overlay — only when saved to library (mirrors ResultCard) */}
-          {saved && (
-            <div className="atelier-proj-halation pointer-events-none absolute inset-0 z-[1]" />
           )}
 
           {/* Navigation arrows */}
@@ -367,8 +339,8 @@ export default function DetailPanel({
 
           {/* ── Actions (flow after content; not pinned to bottom) ── */}
           <div className="border-t border-border-subtle px-6 py-4 space-y-2.5">
-            {/* Primary: Retry (failed) or Save to library */}
-            {generation.status === 'failed' && onRetry ? (
+            {/* Retry failed generations. */}
+            {generation.status === 'failed' && onRetry && (
               <button
                 onClick={() => onRetry(generation)}
                 className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-primary text-on-accent text-sm font-medium shadow-none hover:bg-primary-hover transition"
@@ -376,20 +348,7 @@ export default function DetailPanel({
                 <RotateCcw className="w-4 h-4" />
                 Retry
               </button>
-            ) : output ? (
-              <button
-                onClick={handleSaveToLibrary}
-                disabled={saving}
-                className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-wait ${
-                  saved
-                    ? 'bg-primary text-on-accent hover:bg-primary-hover'
-                    : 'bg-primary text-on-accent shadow-none hover:bg-primary-hover'
-                }`}
-              >
-                <Bookmark className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
-                {saving ? t('detail.saving') : saved ? t('detail.savedCancel') : t('detail.saveToLibrary')}
-              </button>
-            ) : null}
+            )}
 
             {/* Featured (best-of-batch) toggle — amber only when active */}
             {output && (

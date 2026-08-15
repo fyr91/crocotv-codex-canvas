@@ -1115,9 +1115,9 @@
     "noAssetsHint": "在系列或项目中生成资产后，它们会出现在这里",
     "series": "系列",
     "project": "项目",
+    "episode": "剧集",
     "gallery": "画廊",
     "allLabel": "全部",
-    "globalGroup": "全局 / 共享",
     "viewLabel": "视图",
     "viewByType": "按类型",
     "viewByProject": "按项目",
@@ -1134,11 +1134,6 @@
     "unstar": "取消加星",
     "loadFailed": "资产库加载失败",
     "loadFailedBody": "请检查网络，或重启视频工坊后重试。",
-    "promoteToGlobal": "提升到全局",
-    "promoting": "提升中…",
-    "promoteSuccess": "已提升到全局资产库",
-    "promoteSuccessBody": "{name} 现已出现在全局 / 共享池",
-    "promoteFailed": "提升失败",
     "emptyQuote": "“每一个角色，都在等待属于自己的那一格画面。”",
     "noMatchTitle": "没有匹配的资产",
     "timeToday": "今天",
@@ -1168,26 +1163,7 @@
     "generateMoreVariants": "生成更多变体",
     "genInEpisodeTooltip": "请在对应剧集内生成变体（资产库不直接对剧集生成）",
     "genInEpisodeBadge": "剧集内生成",
-    "download": "下载",
-    "newAsset": "新建资产",
-    "newAssetTitle": "新建全局资产",
-    "newAssetSubtitle": "直接录入全局 / 共享资产池",
-    "nameLabel": "名称",
-    "namePlaceholder": "为资产命名",
-    "nameRequired": "请输入名称",
-    "descLabel": "描述",
-    "descPlaceholder": "外观、性格或用途（可选）",
-    "imageLabel": "图片（可选）",
-    "uploadImageButton": "上传本地图片",
-    "uploading": "上传中…",
-    "uploadSuccess": "图片已上传",
-    "uploadFailed": "图片上传失败",
-    "imageUrlLabel": "图片 URL",
-    "imageUrlPlaceholder": "https://…（可选）",
-    "imageUrlHint": "或直接粘贴一个图片 URL",
-    "creating": "创建中…",
-    "createSuccess": "资产已创建",
-    "createFailed": "创建失败"
+    "download": "下载"
   },
   "voice": {
     "castingRoom": "角色配音",
@@ -1694,8 +1670,6 @@
       "yesterday": "昨天"
     },
     "card": {
-      "saveToLibrary": "保存到资产库",
-      "saved": "已保存",
       "featured": "精选",
       "useAsReference": "用作参考图",
       "download": "下载",
@@ -1800,11 +1774,8 @@
       "watermark": "水印"
     },
     "detail": {
-      "saving": "处理中...",
-      "savedCancel": "已收藏（点击取消）",
-      "saveToLibrary": "收藏到资产库",
       "parameters": "参数",
-      "markHint": "收藏：存入资产库，可跨项目复用 · 精选：标记本批最好的一张"
+      "markHint": "精选：标记本批最好的一张"
     },
     "gallery": {
       "viewDetail": "点击查看详情"

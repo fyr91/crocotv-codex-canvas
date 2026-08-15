@@ -136,6 +136,11 @@ server.registerTool("studio_get_project", {
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async ({ projectId }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}`)));
 
+server.registerTool("studio_list_asset_sources", {
+  description: "List Studio character, scene, and prop records grouped by their Studio business source: series, standalone project, or episode. This does not filter the Canvas-wide local resource library.",
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async () => toolResult(await api("/api/studio/asset-sources")));
+
 server.registerTool("studio_list_prompt_templates", {
   description: "List the authoritative versioned Croco Prompt Registry used by Video Workshop and Canvas runtimes. Returns metadata, hashes, model policy, and input modes without exposing or duplicating prompt bodies in browser storage.",
   inputSchema: { includeLegacy: z.boolean().default(false), includeInactive: z.boolean().default(false) },

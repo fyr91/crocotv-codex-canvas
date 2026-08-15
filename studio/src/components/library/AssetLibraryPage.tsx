@@ -2,15 +2,14 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { Search, Star, ArrowDownUp, ChevronDown, Check, Plus } from "lucide-react";
+import { Search, Star, ArrowDownUp, ChevronDown, Check } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Series, Project, Character, Scene, Prop, ImageAsset } from "@/store/projectStore";
+import type { Character, Scene, Prop, ImageAsset } from "@/store/projectStore";
 import { toast } from "@/store/toastStore";
 import { characterImageUrl, characterVariants } from "@/lib/characterImage";
 import { coverGradient, GRAIN_URL } from "@/lib/atelierCover";
 import { rovingKeyDown } from "@/lib/a11y";
 import AssetInspector from "./AssetInspector";
-import NewLibraryAssetDialog from "./NewLibraryAssetDialog";
 
 type AssetTab = "characters" | "scenes" | "props";
 type TypeFilter = AssetTab | "all";
@@ -20,10 +19,10 @@ type ViewAxis = "type" | "source";
 const SINGULAR: Record<AssetTab, string> = { characters: "character", scenes: "scene", props: "prop" };
 
 interface AssetSource {
-  id: string; // `series-X` / `project-X`（列表 key）
-  rawId: string; // 裸 series/project id（调 API 用）
+  id: string;
+  rawId: string;
   name: string;
-  kind: "series" | "project" | "global";
+  kind: "series" | "project" | "episode";
   characters: Character[];
   scenes: Scene[];
   props: Prop[];
@@ -96,7 +95,6 @@ export default function AssetLibraryPage() {
   const [viewAxis, setViewAxis] = useState<ViewAxis>("type");
   const [starredOnly, setStarredOnly] = useState(false);
   const [selected, setSelected] = useState<{ sourceId: string; assetId: string; type: AssetTab } | null>(null);
-  const [newAssetOpen, setNewAssetOpen] = useState(false);
 
   useEffect(() => {
     loadAssets();
@@ -105,61 +103,23 @@ export default function AssetLibraryPage() {
   const loadAssets = async () => {
     setLoading(true);
     try {
-      const [seriesList, projects, globalPool] = await Promise.all([
-        api.listSeries(),
-        api.getProjects(),
-        api.listLibraryAssets(),
-      ]);
-      const result: AssetSource[] = [];
-
-      for (const s of seriesList as Series[]) {
-        if ((s.characters?.length || 0) + (s.scenes?.length || 0) + (s.props?.length || 0) > 0) {
-          result.push({
-            id: `series-${s.id}`,
-            rawId: s.id,
-            name: s.title,
-            kind: "series",
-            characters: s.characters || [],
-            scenes: s.scenes || [],
-            props: s.props || [],
-          });
-        }
-      }
-
-      const standaloneProjects = (projects as Project[]).filter((p) => !p.series_id);
-      for (const p of standaloneProjects) {
-        if ((p.characters?.length || 0) + (p.scenes?.length || 0) + (p.props?.length || 0) > 0) {
-          result.push({
-            id: `project-${p.id}`,
-            rawId: p.id,
-            name: p.title,
-            kind: "project",
-            characters: p.characters || [],
-            scenes: p.scenes || [],
-            props: p.props || [],
-          });
-        }
-      }
-
-      // 全局/共享池作为一个 kind:"global" 源（空池则不加）。名称在加载时取 i18n，
-      // 与 series/project 的 data 名同样存进 source.name。
-      const g = (globalPool || {}) as { characters?: Character[]; scenes?: Scene[]; props?: Prop[] };
-      const gChars = g.characters ?? [];
-      const gScenes = g.scenes ?? [];
-      const gProps = g.props ?? [];
-      if (gChars.length + gScenes.length + gProps.length > 0) {
-        result.push({
-          id: "global",
-          rawId: "global",
-          name: t("globalGroup"),
-          kind: "global",
-          characters: gChars,
-          scenes: gScenes,
-          props: gProps,
-        });
-      }
-
-      setSources(result);
+      const result = await api.listStudioAssetSources() as Array<{
+        source_id: string;
+        source_kind: AssetSource["kind"];
+        title: string;
+        characters?: Character[];
+        scenes?: Scene[];
+        props?: Prop[];
+      }>;
+      setSources(result.map((source) => ({
+        id: `${source.source_kind}-${source.source_id}`,
+        rawId: source.source_id,
+        name: source.title,
+        kind: source.source_kind,
+        characters: source.characters || [],
+        scenes: source.scenes || [],
+        props: source.props || [],
+      })));
     } catch (error) {
       console.error("Failed to load asset library:", error);
       toast.error(t("loadFailed"), { body: t("loadFailedBody") });
@@ -216,7 +176,7 @@ export default function AssetLibraryPage() {
   // 渲染模型：两种轴。
   //  - "type"（默认）：按资产类型分 3 组（角色/场景/道具），每组含所有 source 的该类型资产，
   //    卡片副标题显示所属 source 名。
-  //  - "source"：按 source 分组（系列/项目/全局），保持原行为。
+  //  - "source"：按 Studio 业务来源分组（系列/独立项目/剧集）。
   // 两者都受 activeType pill + 搜索 + 星标过滤，并按 sortMode 排序。
   const groups = useMemo<RenderGroup[]>(() => {
     const scopedTypes: AssetTab[] = activeType === "all" ? ["characters", "scenes", "props"] : [activeType];
@@ -246,7 +206,7 @@ export default function AssetLibraryPage() {
     }
 
     const kindLabel = (k: AssetSource["kind"]) =>
-      k === "series" ? t("series") : k === "global" ? t("globalGroup") : t("project");
+      k === "series" ? t("series") : k === "episode" ? t("episode") : t("project");
     return sources
       .map((src): RenderGroup => {
         const items: RenderItem[] = [];
@@ -285,7 +245,6 @@ export default function AssetLibraryPage() {
     setSources(setStarredTo(!prevStarred)); // 乐观更新
     try {
       if (src.kind === "series") await api.toggleSeriesAssetStarred(src.rawId, assetId, SINGULAR[type]);
-      else if (src.kind === "global") await api.updateLibraryAsset(SINGULAR[type], assetId, { starred: !prevStarred });
       else await api.toggleAssetStarred(src.rawId, assetId, SINGULAR[type]);
     } catch (e) {
       console.error("toggle star failed", e);
@@ -316,14 +275,6 @@ export default function AssetLibraryPage() {
           <span className="font-mono text-sm text-text-muted tracking-[0.1em] uppercase">
             {t("assetCount", { count: visibleCount })}
           </span>
-          <button
-            type="button"
-            onClick={() => setNewAssetOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-primary text-on-accent text-sm font-medium hover:bg-primary-hover transition-colors"
-          >
-            <Plus size={14} />
-            {t("newAsset")}
-          </button>
         </div>
       </header>
 
@@ -641,20 +592,14 @@ export default function AssetLibraryPage() {
             asset={selectedAsset}
             type={selected.type}
             sourceName={selectedSource.name}
-            sourceId={selected.sourceId}
+            sourceId={selectedSource.rawId}
             sourceKind={selectedSource.kind}
             starred={!!selectedAsset.starred}
             onClose={() => setSelected(null)}
             onToggleStar={() => toggleStar(selected.sourceId, selected.assetId, selected.type)}
-            onPromoted={loadAssets}
           />
         )}
       </div>
-
-      {/* 新建全局资产弹窗（T6-entries） */}
-      {newAssetOpen && (
-        <NewLibraryAssetDialog onClose={() => setNewAssetOpen(false)} onCreated={loadAssets} />
-      )}
     </div>
   );
 }

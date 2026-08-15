@@ -1306,64 +1306,10 @@ export const api = {
         const response = await axios.get(`${API_URL}/series`);
         return response.data;
     },
-    /** Core 全局/共享资产池（跨系列/项目聚合）。后端：GET /library/assets → {characters, scenes, props}。 */
-    listLibraryAssets: async () => {
-        const res = await axios.get(`${API_URL}/library/assets`);
-        return res.data;
-    },
-    /** 新建一条全局/共享资产。后端：POST /library/assets。
-     *  assetType 为单数（"character"|"scene"|"prop"）。data 可含 name/description/persona/image_url/voice_id。 */
-    createLibraryAsset: async (
-        assetType: string,
-        data: { name: string; description?: string; persona?: string; image_url?: string; voice_id?: string },
-    ) => {
-        const res = await axios.post(`${API_URL}/library/assets`, { asset_type: assetType, ...data });
-        return res.data;
-    },
-    /** 上传一张本地图片到全局资产库，返回可被前端加载的 image_url。
-     *  后端契约：POST /library/assets/upload，multipart 字段名 "file" → { image_url }。
-     *  调用方拿到 image_url 后传给 createLibraryAsset。 */
-    uploadLibraryImage: async (file: File): Promise<{ image_url: string }> => {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await axios.post<{ image_url: string }>(`${API_URL}/library/assets/upload`, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-        });
-        return res.data;
-    },
-    /** 补丁更新全局资产（仅发送的字段生效，PATCH 语义）。后端：PUT /library/assets/{type}/{id}。assetType 单数。 */
-    updateLibraryAsset: async (
-        assetType: string,
-        assetId: string,
-        patch: {
-            name?: string;
-            description?: string;
-            persona?: string;
-            image_url?: string;
-            voice_id?: string;
-            starred?: boolean;
-            locked?: boolean;
-            visual_weight?: number;
-        },
-    ) => {
-        const res = await axios.put(`${API_URL}/library/assets/${assetType}/${assetId}`, patch);
-        return res.data;
-    },
-    /** 把项目/系列来源资产 deep-copy 提升进全局共享池。后端：POST /library/assets/promote。
-     *  sourceKind: "project"|"series"；assetType 单数。 */
-    promoteAssetToLibrary: async (
-        sourceKind: "project" | "series",
-        sourceId: string,
-        assetType: string,
-        assetId: string,
-    ) => {
-        const res = await axios.post(`${API_URL}/library/assets/promote`, {
-            source_kind: sourceKind,
-            source_id: sourceId,
-            asset_type: assetType,
-            asset_id: assetId,
-        });
-        return res.data;
+    /** Studio 资产只按 Studio 业务来源聚合；Canvas 本地资源库仍保持全量可见。 */
+    listStudioAssetSources: async () => {
+        const response = await axios.get(`${API_URL}/asset-sources`);
+        return response.data;
     },
     getSeries: async (seriesId: string) => {
         const response = await axios.get(`${API_URL}/series/${seriesId}`);
@@ -1683,7 +1629,6 @@ export interface PlaygroundGenerationResponse {
     media_path: string;
     media_type: string;
     thumbnail_path?: string;
-    saved_to_library: boolean;
   }>;
   status: string;
   error?: string;
@@ -1718,9 +1663,6 @@ export const playgroundApi = {
 
   deleteGeneration: (id: string) =>
     axios.delete(API_URL + "/playground/history/" + id).then(r => r.data),
-
-  saveToLibrary: (generationId: string, outputId: string, category?: string) =>
-    axios.post(API_URL + "/playground/history/" + generationId + "/outputs/" + outputId + "/save-to-library", { category: category || "general" }).then(r => r.data),
 
   getTemplates: () =>
     axios.get<PlaygroundTemplateResponse[]>(API_URL + "/playground/templates").then(r => r.data),
