@@ -1210,6 +1210,8 @@
     "entityKind_scenes": "Scenes",
     "entityKind_props": "Props",
     "noEntities": "None found",
+    "editEntityName": "Edit entity name",
+    "removeEntity": "Remove entity",
     "retry": "Retry",
     "saveFailed": "Save failed, please retry",
     "addEntity": "Add New Entity",

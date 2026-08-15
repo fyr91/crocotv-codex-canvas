@@ -52,6 +52,36 @@ final result: passed
 
 ---
 
+# Entity Extraction Inline Edit — Design QA
+
+## Evidence and state
+
+- Source visual truth: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-bc25e5e5-d8cb-4fe5-a5d1-0936e681e3ff.png` (302 × 270 px).
+- Full browser capture: `/Users/raymond/Projects/crocotv-codex-canvas/data/runtime/design-qa/entity-preview-inline-edit/entity-preview-before.png` (1280 × 720 px).
+- Focused dialog capture: `/Users/raymond/Projects/crocotv-codex-canvas/data/runtime/design-qa/entity-preview-inline-edit/entity-preview-dialog.png` (512 × 394 px).
+- Edit and removal states: `entity-preview-editing.png` and `entity-preview-after-remove.png` in the same runtime directory.
+- Browser: Codex In-app Browser; dark theme; 1280 × 720 CSS viewport; `devicePixelRatio = 1`; no density normalization required.
+- Primary interactions: click-to-edit, Enter commit, Escape/empty-value revert, per-entity removal, live count update, and Apply while an input is still active.
+- Runtime checks: meaningful page content, no Next.js error overlay, and no page console errors.
+
+## Fidelity review
+
+- Typography: existing Studio family, size, weight, line height, and hierarchy are preserved.
+- Spacing: section rhythm, chip height, radius, and wrapping match the source; the new `X` adds only compact horizontal space.
+- Colors: existing foreground, tertiary text, glass-border, hover, primary, elevated, and overlay tokens are reused.
+- Assets: existing Lucide icons are retained; no replacement raster or approximate asset was introduced.
+- Copy: entity content and existing actions are preserved; new accessible labels are localized in Chinese and English.
+
+## Findings and comparison history
+
+- No actionable P0, P1, or P2 differences.
+- Intentional difference: each chip includes the confirmed remove control and inline-edit focus treatment.
+- Pass 1 found no blocking visual issue, so no post-comparison fix iteration was required.
+
+final result: passed
+
+---
+
 # Playground Parameter Control Heights — Design QA
 
 ## Comparison Target

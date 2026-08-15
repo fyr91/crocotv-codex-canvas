@@ -1,5 +1,6 @@
 import axios from "axios";
 import { DEFAULT_I2V_MODEL_ID } from "@/lib/modelCatalog";
+import type { ExtractionPreview } from "@/types/entityExtraction";
 
 // Dynamic API URL detection (no port enumeration):
 // 1. Explicit override: NEXT_PUBLIC_API_URL (any env / proxy setup).
@@ -310,10 +311,10 @@ export const api = {
 
     extractPreview: async (scriptId: string, text: string) => {
         const res = await axios.post(`${API_URL}/projects/${scriptId}/extract_preview`, { text });
-        return res.data as { characters: any[]; scenes: any[]; props: any[] };
+        return res.data as ExtractionPreview;
     },
 
-    applyExtraction: async (scriptId: string, text: string, extraction: { characters: any[]; scenes: any[]; props: any[] }) => {
+    applyExtraction: async (scriptId: string, text: string, extraction: ExtractionPreview) => {
         const res = await axios.post(`${API_URL}/projects/${scriptId}/extraction/apply`, { text, extraction });
         return { ...res.data, originalText: res.data.original_text };
     },

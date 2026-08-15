@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api, API_URL } from '@/lib/api';
 import type { FrontendModelSettings } from '@/lib/modelCatalog';
+import type { ExtractionPreview } from '@/types/entityExtraction';
 export {
     I2I_MODELS,
     I2V_MODELS,
@@ -289,9 +290,9 @@ interface ProjectStore {
     isAnalyzingArtStyle: boolean;
 
     // Entity extraction confirmation (persists across step switches)
-    pendingExtraction: { characters: any[]; scenes: any[]; props: any[] } | null;
+    pendingExtraction: ExtractionPreview | null;
     pendingExtractionScript: string | null;
-    confirmExtraction: () => Promise<void>;
+    confirmExtraction: (extraction: ExtractionPreview) => Promise<void>;
     discardExtraction: () => void;
 
     // Global Selection State
@@ -395,12 +396,12 @@ export const useProjectStore = create<ProjectStore>()(
             // Entity extraction confirmation
             pendingExtraction: null,
             pendingExtractionScript: null,
-            confirmExtraction: async () => {
-                const { currentProject, pendingExtraction, pendingExtractionScript } = get();
-                if (!currentProject?.id || !pendingExtraction || !pendingExtractionScript) return;
+            confirmExtraction: async (extraction) => {
+                const { currentProject, pendingExtractionScript } = get();
+                if (!currentProject?.id || !pendingExtractionScript) return;
                 set({ isAnalyzing: true });
                 try {
-                    const project = await api.applyExtraction(currentProject.id, pendingExtractionScript, pendingExtraction);
+                    const project = await api.applyExtraction(currentProject.id, pendingExtractionScript, extraction);
                     set((state) => ({
                         projects: state.projects.map((p) =>
                             p.id === project.id ? { ...project, updatedAt: new Date().toISOString() } : p

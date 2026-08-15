@@ -6,6 +6,7 @@ import EntityConfirmModal from '@/components/modules/EntityConfirmModal';
 import ReconcileModal from '@/components/modules/ReconcileModal';
 import { useProjectStore } from '@/store/projectStore';
 import { toast } from '@/store/toastStore';
+import type { ExtractionPreview } from '@/types/entityExtraction';
 
 export default function ScriptEntityExtractionConfirm() {
   const t = useTranslations('script');
@@ -15,9 +16,9 @@ export default function ScriptEntityExtractionConfirm() {
   const discardExtraction = useProjectStore((state) => state.discardExtraction);
   const [reconcileOpen, setReconcileOpen] = useState(false);
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (preview: ExtractionPreview) => {
     try {
-      await confirmExtraction();
+      await confirmExtraction(preview);
       const refreshed = useProjectStore.getState().currentProject;
       if (refreshed?.series_id) {
         setReconcileOpen(true);
@@ -42,7 +43,7 @@ export default function ScriptEntityExtractionConfirm() {
           scenes: currentProject?.scenes?.length ?? 0,
           props: currentProject?.props?.length ?? 0,
         }}
-        onConfirm={() => void handleConfirm()}
+        onConfirm={(preview) => void handleConfirm(preview)}
         onDiscard={handleDiscard}
       />
       <ReconcileModal

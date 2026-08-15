@@ -1210,6 +1210,8 @@
     "entityKind_scenes": "场景",
     "entityKind_props": "道具",
     "noEntities": "未提取到",
+    "editEntityName": "编辑实体名称",
+    "removeEntity": "移除此实体",
     "retry": "重试",
     "saveFailed": "保存失败，请重试",
     "addEntity": "添加新实体",
