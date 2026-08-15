@@ -1682,7 +1682,8 @@
       "collapse": "收起",
       "failed": "生成失败",
       "queued": "排队中…",
-      "processing": "生成中…"
+      "processing": "生成中…",
+      "imageUnavailable": "预览图不可用"
     },
     "media": {
       "uploading": "上传中...",

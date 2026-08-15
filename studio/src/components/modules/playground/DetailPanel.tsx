@@ -13,9 +13,10 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { API_URL, playgroundApi } from '@/lib/api';
+import { playgroundApi } from '@/lib/api';
 import { useTranslations } from 'next-intl';
 import { usePlaygroundStore, type PlaygroundGeneration } from './usePlaygroundStore';
+import { resolvePlaygroundMediaUrl } from './media';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -43,11 +44,6 @@ const MODE_LABELS: Record<string, string> = {
   t2i: 'T2I',
   i2i: 'I2I',
 };
-
-function getMediaUrl(path: string): string {
-  const relativePath = path.replace(/^output\//, '');
-  return `${API_URL}/files/${relativePath}`;
-}
 
 function formatTimestamp(dateStr: string): string {
   const date = new Date(dateStr);
@@ -90,7 +86,7 @@ export default function DetailPanel({
   const isVideo =
     output?.media_type === 'video' ||
     ['t2v', 'i2v', 'r2v', 'v2v'].includes(generation.mode);
-  const mediaUrl = output?.media_path ? getMediaUrl(output.media_path) : null;
+  const mediaUrl = output?.media_path ? resolvePlaygroundMediaUrl(output.media_path) : null;
 
   // Navigation
   const currentIndex = allGenerations.findIndex((g) => g.id === generation.id);

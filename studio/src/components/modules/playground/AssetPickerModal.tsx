@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Image, Film, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { API_URL, playgroundApi } from '@/lib/api';
+import { playgroundApi } from '@/lib/api';
+import { resolvePlaygroundMediaType, resolvePlaygroundMediaUrl } from './media';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,12 +39,6 @@ function isVideoPath(path: string): boolean {
 function getFileName(path: string): string {
   const parts = path.split('/');
   return parts[parts.length - 1] || path;
-}
-
-/** Convert a media_path (e.g. "output/storyboard/foo.png") to a /files/ URL */
-function toFileUrl(mediaPath: string): string {
-  const relative = mediaPath.replace(/^output\//, '');
-  return API_URL + '/files/' + relative;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,11 +94,11 @@ export default function AssetPickerModal({
           if (!output.media_path || seen.has(output.media_path)) continue;
           seen.add(output.media_path);
 
-          const isVideo = isVideoPath(output.media_path);
+          const mediaType = resolvePlaygroundMediaType(output.media_type, output.media_path);
           items.push({
             id: output.id,
             path: output.media_path,
-            type: isVideo ? 'video' : 'image',
+            type: mediaType,
             thumbnail: output.thumbnail_path || undefined,
             label: getFileName(output.media_path),
           });
@@ -329,8 +324,8 @@ export default function AssetPickerModal({
                   {filteredAssets.map((asset) => {
                     const isSelected = selected === asset.path;
                     const thumbUrl = asset.thumbnail
-                      ? toFileUrl(asset.thumbnail)
-                      : toFileUrl(asset.path);
+                      ? resolvePlaygroundMediaUrl(asset.thumbnail)
+                      : resolvePlaygroundMediaUrl(asset.path);
 
                     return (
                       <button

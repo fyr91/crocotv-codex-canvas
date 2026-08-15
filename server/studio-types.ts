@@ -40,6 +40,7 @@ export type StudioVideoTask = Record<string, unknown> & {
   video_url?: string;
   resource_id?: string;
   selected?: boolean;
+  generation_job_id?: string;
 };
 
 export type StudioStoryboardFrame = Record<string, unknown> & {

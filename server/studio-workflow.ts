@@ -4,13 +4,47 @@ import { publishProjectUpdated } from "./canvas-events";
 import { runCanvasConfigNodes } from "./canvas-node-runtime";
 import { dubCanvasVideo, mergeCanvasVideos, useCanvasVideoFrames } from "./canvas-video-tools";
 import { stableStudioNodeId } from "./studio-canvas-mapping";
-import { getStudioBackedProject, mutateStudioProject } from "./studio-commands";
+import { getStudioBackedProject, listStudioProjectResponses, mutateStudioProject } from "./studio-commands";
 import type { StudioImageAsset, StudioImageVariant, StudioNamedEntity, StudioProjectState, StudioStoryboardFrame, StudioVideoTask } from "./studio-types";
 import { models } from "./providers";
 import { readProject, resourceById } from "./storage";
 import { executeStudioPrompt, type StudioPromptOperation } from "./studio-prompt-runtime";
+import { createStudioGenerationJob } from "./studio-generation-jobs";
 
 type EntityKind = "character" | "scene" | "prop";
+
+export async function recoverInterruptedStudioGenerations() {
+  for (const summary of await listStudioProjectResponses()) {
+    const project = await getStudioBackedProject(summary.id);
+    const playground = objectValue(project.studio.metadata.playground);
+    const history = Array.isArray(playground.history) ? playground.history as Array<Record<string, any>> : [];
+    const hasInterrupted = [...project.studio.characters, ...project.studio.scenes, ...project.studio.props].some((entity) => entity.status === "generating")
+      || project.studio.videoTasks.some((task) => task.status === "pending" || task.status === "processing")
+      || history.some((entry) => entry.status === "pending" || entry.status === "processing");
+    if (!hasInterrupted) continue;
+    await mutateStudioProject(project.id, (state) => {
+      const failEntity = (entity: StudioNamedEntity) => entity.status === "generating"
+        ? { ...entity, status: "failed", generation_job_id: undefined }
+        : entity;
+      const currentPlayground = objectValue(state.metadata.playground);
+      const currentHistory = Array.isArray(currentPlayground.history) ? currentPlayground.history as Array<Record<string, any>> : [];
+      return {
+        ...state,
+        characters: state.characters.map(failEntity),
+        scenes: state.scenes.map(failEntity),
+        props: state.props.map(failEntity),
+        videoTasks: state.videoTasks.map((task) => task.status === "pending" || task.status === "processing" ? { ...task, status: "failed", error: "本地服务重启，生成任务已中断" } : task),
+        metadata: {
+          ...state.metadata,
+          playground: {
+            ...currentPlayground,
+            history: currentHistory.map((entry) => entry.status === "pending" || entry.status === "processing" ? { ...entry, status: "failed", error: "本地服务重启，生成任务已中断" } : entry),
+          },
+        },
+      };
+    }, { originClientId: "studio-generation-recovery" });
+  }
+}
 
 export async function extractStudioEntities(projectId: string, text: string, originClientId: string) {
   await mutateStudioProject(projectId, (state) => ({ ...state, originalText: text }), { originClientId });
@@ -82,6 +116,27 @@ export async function toggleStudioEntityFlag(projectId: string, kind: EntityKind
 }
 
 export async function generateStudioAsset(projectId: string, raw: any, originClientId: string) {
+  const prepared = await prepareStudioAssetGeneration(projectId, raw, originClientId);
+  return executeStudioAssetGeneration(prepared, originClientId);
+}
+
+export async function queueStudioAssetGeneration(projectId: string, raw: any, originClientId: string) {
+  const jobId = randomUUID();
+  const prepared = await prepareStudioAssetGeneration(projectId, raw, originClientId, jobId);
+  const job = await createStudioGenerationJob({
+    id: jobId,
+    projectId,
+    operation: "asset-image",
+    metadata: { assetId: prepared.entityId, assetType: prepared.kind },
+    execute: async ({ signal }) => {
+      await executeStudioAssetGeneration(prepared, originClientId, signal);
+      return { assetId: prepared.entityId, assetType: prepared.kind };
+    },
+  });
+  return { ...prepared.response, _task_id: job.jobId, _generation_job: job };
+}
+
+async function prepareStudioAssetGeneration(projectId: string, raw: any, originClientId: string, generationJobId?: string) {
   const kind = normalizeEntityKind(raw?.asset_type);
   const entityId = requiredId(raw?.asset_id, "资产 ID");
   const initial = await getStudioBackedProject(projectId);
@@ -89,26 +144,36 @@ export async function generateStudioAsset(projectId: string, raw: any, originCli
   const resolvedPrompt = String(raw?.prompt || raw?.style_prompt || sourceEntity.description || sourceEntity.name);
   const count = boundedCount(raw?.batch_size);
   const variants: StudioImageVariant[] = Array.from({ length: count }, () => ({ id: randomUUID(), url: "", created_at: Date.now() / 1000, prompt_used: resolvedPrompt }));
-  await mutateStudioProject(projectId, (state) => {
+  const response = await mutateStudioProject(projectId, (state) => {
     const key = entityCollection(kind);
     const entity = requiredEntity(state[key], entityId);
     const imageAsset: StudioImageAsset = { selected_id: variants[0].id, variants: [...(entity.image_asset?.variants || []), ...variants] };
-    return { ...state, [key]: state[key].map((item) => item.id === entityId ? { ...item, image_asset: imageAsset, status: "generating" } : item) };
+    return { ...state, [key]: state[key].map((item) => item.id === entityId ? { ...item, image_asset: imageAsset, status: "generating", ...(generationJobId ? { generation_job_id: generationJobId } : {}) } : item) };
   }, { originClientId });
   const configId = stableStudioNodeId(projectId, kind, entityId, "image-config");
   const outputIds = variants.map((variant) => stableStudioNodeId(projectId, kind, entityId, `image-output-${variant.id}`));
-  await configureNode(projectId, configId, {
-    composerContent: resolvedPrompt,
-    model: resolveImageModel(raw?.model_name), count,
-    size: aspectSize(String(raw?.aspect_ratio || "1:1")),
-  }, originClientId);
-  try { await runTargets(projectId, configId, outputIds, originClientId); }
-  catch (error) { await mutateStudioProject(projectId, (state) => { const key = entityCollection(kind); return { ...state, [key]: state[key].map((entity) => entity.id === entityId ? { ...entity, status: "failed" } : entity) }; }, { originClientId }).catch(() => undefined); throw error; }
+  try {
+    await configureNode(projectId, configId, {
+      composerContent: resolvedPrompt,
+      model: resolveImageModel(raw?.model_name), count,
+      size: aspectSize(String(raw?.aspect_ratio || "1:1")),
+    }, originClientId);
+  } catch (error) {
+    await mutateStudioProject(projectId, (state) => { const key = entityCollection(kind); return { ...state, [key]: state[key].map((entity) => entity.id === entityId ? { ...entity, status: "failed", generation_job_id: undefined } : entity) }; }, { originClientId }).catch(() => undefined);
+    throw error;
+  }
+  return { projectId, kind, entityId, variants, configId, outputIds, response };
+}
+
+async function executeStudioAssetGeneration(prepared: Awaited<ReturnType<typeof prepareStudioAssetGeneration>>, originClientId: string, signal?: AbortSignal) {
+  const { projectId, kind, entityId, variants, configId, outputIds } = prepared;
+  try { await runTargets(projectId, configId, outputIds, originClientId, signal); }
+  catch (error) { await mutateStudioProject(projectId, (state) => { const key = entityCollection(kind); return { ...state, [key]: state[key].map((entity) => entity.id === entityId ? { ...entity, status: "failed", generation_job_id: undefined } : entity) }; }, { originClientId }).catch(() => undefined); throw error; }
   const results = await outputResources(projectId, outputIds);
-  return mutateStudioProject(projectId, (state) => {
+  const response = await mutateStudioProject(projectId, (state) => {
     const key = entityCollection(kind);
     return { ...state, [key]: state[key].map((entity) => entity.id === entityId ? {
-      ...entity, status: results.some((result) => !result.resourceId) ? "failed" : "ready",
+      ...entity, status: results.some((result) => !result.resourceId) ? "failed" : "ready", generation_job_id: undefined,
       image_url: results.find((result) => result.resourceId)?.url || entity.image_url,
       image_asset: { selected_id: results.find((result) => result.resourceId)?.variantId || variants[0].id, variants: (entity.image_asset?.variants || []).map((variant) => {
         const result = results.find((item) => item.variantId === variant.id);
@@ -116,6 +181,8 @@ export async function generateStudioAsset(projectId: string, raw: any, originCli
       }) },
     } : entity) };
   }, { originClientId });
+  if (results.some((result) => !result.resourceId)) throw new Error("Studio 资产图片没有生成完整的本地资源");
+  return response;
 }
 
 export async function analyzeStudioStoryboard(projectId: string, text: string, originClientId: string) {
@@ -201,6 +268,27 @@ export async function renderStudioFrame(projectId: string, raw: any, originClien
 }
 
 export async function createStudioVideoTasks(projectId: string, raw: any, originClientId: string) {
+  const prepared = await prepareStudioVideoTasks(projectId, raw, originClientId);
+  return executeStudioVideoTasks(prepared, originClientId);
+}
+
+export async function queueStudioVideoTasks(projectId: string, raw: any, originClientId: string) {
+  const jobId = randomUUID();
+  const prepared = await prepareStudioVideoTasks(projectId, raw, originClientId, jobId);
+  const job = await createStudioGenerationJob({
+    id: jobId,
+    projectId,
+    operation: "frame-video",
+    metadata: { frameId: prepared.frameId, taskIds: prepared.tasks.map((task) => task.id) },
+    execute: async ({ signal }) => {
+      await executeStudioVideoTasks(prepared, originClientId, signal);
+      return { frameId: prepared.frameId, taskIds: prepared.tasks.map((task) => task.id) };
+    },
+  });
+  return { tasks: prepared.tasks, job };
+}
+
+async function prepareStudioVideoTasks(projectId: string, raw: any, originClientId: string, generationJobId?: string) {
   const frameId = requiredId(raw?.frame_id, "镜头 ID");
   const initial = await getStudioBackedProject(projectId);
   const sourceFrame = requiredFrame(initial.studio, frameId);
@@ -212,20 +300,33 @@ export async function createStudioVideoTasks(projectId: string, raw: any, origin
     id: randomUUID(), project_id: projectId, frame_id: frameId, image_url: String(raw?.image_url || sourceFrame.image_url || ""), prompt: resolvedPrompt, status: "processing", created_at: Date.now() / 1000,
     duration: Number(raw?.duration) || 6, model: String(raw?.model || "minimax-h3"), generation_mode: generationMode, workbench_tab: raw?.workbench_tab,
     reference_resource_ids: videoInputs.map((input) => input.resourceId),
+    ...(generationJobId ? { generation_job_id: generationJobId } : {}),
   }));
   await mutateStudioProject(projectId, (state) => { requiredFrame(state, frameId); return { ...state, videoTasks: [...state.videoTasks, ...tasks] }; }, { originClientId });
   const configId = stableStudioNodeId(projectId, "frame", frameId, "video-config");
   const outputIds = tasks.map((task) => stableStudioNodeId(projectId, "take", task.id, "video-output"));
-  await configureStudioVideoNode(projectId, configId, frameId, resolvedPrompt, generationMode, videoInputs, { seconds: Number(raw?.duration) || 6, videoCount: count, vquality: String(raw?.resolution || "preview") }, originClientId);
-  try { await runTargets(projectId, configId, outputIds, originClientId); }
+  try {
+    await configureStudioVideoNode(projectId, configId, frameId, resolvedPrompt, generationMode, videoInputs, { seconds: Number(raw?.duration) || 6, videoCount: count, vquality: String(raw?.resolution || "preview") }, originClientId);
+  } catch (error) {
+    await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((task) => tasks.some((created) => created.id === task.id) ? { ...task, status: "failed", error: error instanceof Error ? error.message : "生成任务准备失败" } : task) }), { originClientId }).catch(() => undefined);
+    throw error;
+  }
+  return { projectId, frameId, tasks, configId, outputIds };
+}
+
+async function executeStudioVideoTasks(prepared: Awaited<ReturnType<typeof prepareStudioVideoTasks>>, originClientId: string, signal?: AbortSignal) {
+  const { projectId, frameId, tasks, configId, outputIds } = prepared;
+  try { await runTargets(projectId, configId, outputIds, originClientId, signal); }
   catch (error) { await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((task) => tasks.some((created) => created.id === task.id) ? { ...task, status: "failed", error: error instanceof Error ? error.message : "生成失败" } : task) }), { originClientId }).catch(() => undefined); throw error; }
   const results = await outputResources(projectId, outputIds, tasks.map((task) => task.id));
-  return mutateStudioProject(projectId, (state) => ({ ...state,
+  const response = await mutateStudioProject(projectId, (state) => ({ ...state,
     videoTasks: state.videoTasks.map((task) => {
       const result = results.find((item) => item.variantId === task.id); return result ? { ...task, status: result.resourceId ? "completed" : "failed", resource_id: result.resourceId, video_url: result.url } : task;
     }),
     frames: state.frames.map((frame) => frame.id === frameId ? { ...frame, selected_video_id: results.find((item) => item.resourceId)?.variantId || frame.selected_video_id } : frame),
   }), { originClientId });
+  if (results.some((result) => !result.resourceId)) throw new Error("Studio 视频任务没有生成完整的本地资源");
+  return response;
 }
 
 export async function selectStudioVideo(projectId: string, frameId: string, videoId: string | undefined, originClientId: string) {
@@ -270,6 +371,27 @@ export async function mergeStudioProject(projectId: string, originClientId: stri
 }
 
 export async function generateStudioAssetVideo(projectId: string, raw: any, originClientId: string) {
+  const prepared = await prepareStudioAssetVideo(projectId, raw, originClientId);
+  return executeStudioAssetVideo(prepared, originClientId);
+}
+
+export async function queueStudioAssetVideo(projectId: string, raw: any, originClientId: string) {
+  const taskId = randomUUID();
+  const prepared = await prepareStudioAssetVideo(projectId, raw, originClientId, taskId, taskId);
+  const job = await createStudioGenerationJob({
+    id: taskId,
+    projectId,
+    operation: "asset-video",
+    metadata: { assetId: prepared.entityId, assetType: prepared.kind, taskId },
+    execute: async ({ signal }) => {
+      await executeStudioAssetVideo(prepared, originClientId, signal);
+      return { assetId: prepared.entityId, assetType: prepared.kind, taskId };
+    },
+  });
+  return { ...prepared.response, _task_id: taskId, _generation_job: job };
+}
+
+async function prepareStudioAssetVideo(projectId: string, raw: any, originClientId: string, requestedTaskId?: string, generationJobId?: string) {
   const kind = normalizeEntityKind(raw?.asset_type);
   const entityId = requiredId(raw?.asset_id, "资产 ID");
   const initial = await getStudioBackedProject(projectId);
@@ -284,21 +406,41 @@ export async function generateStudioAssetVideo(projectId: string, raw: any, orig
       : "";
   if (!imageNodeId) throw new Error("资产尚无可用于视频生成的本地图片");
   const task: StudioVideoTask = {
-    id: randomUUID(), project_id: projectId, asset_id: entityId, asset_type: kind,
+    id: requestedTaskId || randomUUID(), project_id: projectId, asset_id: entityId, asset_type: kind,
     status: "processing", prompt: String(raw?.prompt || entity.description || entity.name), image_url: String(selectedVariant?.url || entity.image_url || ""),
     created_at: Date.now() / 1000, duration: Number(raw?.duration) || 5, model: "minimax-h3", generation_mode: "i2v",
+    ...(generationJobId ? { generation_job_id: generationJobId } : {}),
   };
-  await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: [...state.videoTasks, task] }), { originClientId });
+  const response = await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: [...state.videoTasks, task] }), { originClientId });
   const project = await readProject(projectId) as any;
-  if (!project.nodes.some((node: any) => node.id === imageNodeId && node.type === "image")) throw new Error("资产图片尚未映射到 Canvas");
+  if (!project.nodes.some((node: any) => node.id === imageNodeId && node.type === "image")) {
+    await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((item) => item.id === task.id ? { ...item, status: "failed", error: "资产图片尚未映射到 Canvas" } : item) }), { originClientId });
+    throw new Error("资产图片尚未映射到 Canvas");
+  }
   const configId = stableStudioNodeId(projectId, "take", task.id, "asset-video-config");
   const sourceNode = project.nodes.find((node: any) => node.id === imageNodeId);
-  const created = await applyCanvasOperations(projectId, [
-    { op: "add_node", node: { id: configId, type: "config", title: `${entity.name} · 动态参考`, position: { x: Number(sourceNode.position?.x || 2300) + 420, y: Number(sourceNode.position?.y || 280) }, width: 360, height: 390, metadata: { generationMode: "video", model: "minimax-h3", composerContent: task.prompt, seconds: task.duration, videoCount: 1, vquality: String(raw?.resolution || "preview"), artifactType: "studio-asset-video-config", studioAssetId: entityId, studioAssetType: kind, status: "idle" } } },
-    { op: "connect", from: imageNodeId, to: configId },
-  ], Number(project.version), { allowStudioManagedWrites: true });
+  let created: Awaited<ReturnType<typeof applyCanvasOperations>>;
+  try {
+    created = await applyCanvasOperations(projectId, [
+      { op: "add_node", node: { id: configId, type: "config", title: `${entity.name} · 动态参考`, position: { x: Number(sourceNode.position?.x || 2300) + 420, y: Number(sourceNode.position?.y || 280) }, width: 360, height: 390, metadata: { generationMode: "video", model: "minimax-h3", composerContent: task.prompt, seconds: task.duration, videoCount: 1, vquality: String(raw?.resolution || "preview"), artifactType: "studio-asset-video-config", studioAssetId: entityId, studioAssetType: kind, status: "idle" } } },
+      { op: "connect", from: imageNodeId, to: configId },
+    ], Number(project.version), { allowStudioManagedWrites: true });
+  } catch (error) {
+    await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((item) => item.id === task.id ? { ...item, status: "failed", error: error instanceof Error ? error.message : "动态参考任务准备失败" } : item) }), { originClientId }).catch(() => undefined);
+    throw error;
+  }
   publishProjectUpdated(created.project, originClientId);
-  const runResult = await runCanvasConfigNodes({ projectId, configNodeIds: [configId], concurrency: 1, originClientId });
+  return { projectId, kind, entityId, task, configId, response };
+}
+
+async function executeStudioAssetVideo(prepared: Awaited<ReturnType<typeof prepareStudioAssetVideo>>, originClientId: string, signal?: AbortSignal) {
+  const { projectId, kind, entityId, task, configId } = prepared;
+  let runResult: Awaited<ReturnType<typeof runCanvasConfigNodes>>;
+  try { runResult = await runCanvasConfigNodes({ projectId, configNodeIds: [configId], concurrency: 1, originClientId, signal }); }
+  catch (error) {
+    await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((item) => item.id === task.id ? { ...item, status: "failed", error: error instanceof Error ? error.message : "动态参考生成失败" } : item) }), { originClientId }).catch(() => undefined);
+    throw error;
+  }
   const run = runResult.results[0];
   if (!run || run.status === "error") {
     await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((item) => item.id === task.id ? { ...item, status: "failed", error: run?.error || "动态参考生成失败" } : item) }), { originClientId });
@@ -307,7 +449,10 @@ export async function generateStudioAssetVideo(projectId: string, raw: any, orig
   const canvas = await readProject(projectId) as any;
   const output = canvas.nodes.find((node: any) => node.id === run.outputNodeIds[0]);
   const resourceId = String(output?.metadata?.storageKey || "");
-  if (!resourceId) throw new Error("动态参考没有生成本地视频资源");
+  if (!resourceId) {
+    await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((item) => item.id === task.id ? { ...item, status: "failed", error: "动态参考没有生成本地视频资源" } : item) }), { originClientId });
+    throw new Error("动态参考没有生成本地视频资源");
+  }
   const completed = { ...task, status: "completed", resource_id: resourceId, video_url: String(output.metadata.content || `/files/by-id/${resourceId}`), canvas_node_id: output.id, config_node_id: configId };
   const response = await mutateStudioProject(projectId, (state) => ({
     ...state,
@@ -485,8 +630,8 @@ async function configureStudioVideoNode(projectId: string, configId: string, fra
 
 function valueArray(value: unknown): unknown[] { return Array.isArray(value) ? value : value == null || value === "" ? [] : [value]; }
 
-async function runTargets(projectId: string, configNodeId: string, outputNodeIds: string[], originClientId: string) {
-  const result = await runCanvasConfigNodes({ projectId, configNodeIds: [configNodeId], concurrency: 1, originClientId, targetOutputNodeIds: { [configNodeId]: outputNodeIds } });
+async function runTargets(projectId: string, configNodeId: string, outputNodeIds: string[], originClientId: string, signal?: AbortSignal) {
+  const result = await runCanvasConfigNodes({ projectId, configNodeIds: [configNodeId], concurrency: 1, originClientId, signal, targetOutputNodeIds: { [configNodeId]: outputNodeIds } });
   const run = result.results[0];
   if (!run || run.status === "error") throw new Error(run?.error || "Studio 生成任务失败");
 }
