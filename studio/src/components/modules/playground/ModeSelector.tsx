@@ -1,11 +1,12 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { Image as ImageIcon, Video } from 'lucide-react';
 import { usePlaygroundStore, type PlaygroundMode } from './usePlaygroundStore';
 
 const IMAGE_MODES: PlaygroundMode[] = ['t2i', 'i2i'];
-const VIDEO_MODES: PlaygroundMode[] = ['t2v', 'i2v', 'r2v', 'v2v'];
+const VIDEO_MODES: PlaygroundMode[] = ['t2v', 'i2v', 'r2v'];
 type ModeCategory = 'image' | 'video';
 
 function getModeCategory(mode: PlaygroundMode): ModeCategory {
@@ -16,6 +17,9 @@ export default function ModeSelector() {
   const t = useTranslations('playground');
   const mode = usePlaygroundStore((s) => s.mode);
   const setMode = usePlaygroundStore((s) => s.setMode);
+  useEffect(() => {
+    if (mode === 'v2v') setMode('t2v');
+  }, [mode, setMode]);
   const category = getModeCategory(mode);
 
   const selectCategory = (nextCategory: ModeCategory) => {

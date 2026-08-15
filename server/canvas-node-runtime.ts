@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { applyCanvasOperations, type CanvasOperation } from "./canvas-commands";
 import { publishProjectUpdated } from "./canvas-events";
+import { normalizeH3InputMode, prepareH3Prompt, type H3PromptPreparation } from "./h3-prompt";
 import { generateH3Video, generateImage, generateMusic, generateText, models, type H3GenerationProgress } from "./providers";
 import { generateSpeech, type SpeechGenerationProgress } from "./speech";
 import { readProject } from "./storage";
@@ -121,6 +122,23 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
   let inputs = resolveInputs(project, config, mode);
   const model = normalizeModel(String(config.metadata?.model || ""));
   validateModel(mode, model);
+  let h3Prompt: H3PromptPreparation | undefined;
+  if (mode === "video") {
+    if (inputs.videoIds.length) throw new Error("MiniMax H3 暂不支持视频参考或视频编辑；请改用图片、音频参考");
+    const inputMode = normalizeH3InputMode(config.metadata?.videoInputMode || config.metadata?.generation_mode);
+    if (inputMode === "firstFrame" && inputs.imageIds.length < 1) throw new Error("首帧生视频需要连接一张首帧图片");
+    if (inputMode === "firstLastFrame" && inputs.imageIds.length !== 2) throw new Error("首尾帧生视频需要按首帧、尾帧顺序连接两张图片");
+    h3Prompt = await prepareH3Prompt({
+      draftPrompt: inputs.prompt,
+      durationSeconds: videoDuration(config),
+      inputMode,
+      imageResourceIds: inputs.imageIds,
+      audioResourceIds: inputs.audioIds,
+      resourceRoles: h3ResourceRoles(config.metadata?.resourceRoles),
+      optimize: promptOptimizationEnabled(config.metadata?.videoPromptEnhance) && promptOptimizationEnabled(config.metadata?.prompt_extend),
+    });
+    inputs = { ...inputs, prompt: h3Prompt.prompt };
+  }
   const count = targetOutputNodeIds?.length || generationCount(config, mode);
   const outputType = mode === "audio" ? "audio" : mode;
   const outputIds = targetOutputNodeIds?.length ? [...new Set(targetOutputNodeIds)] : Array.from({ length: count }, () => randomUUID());
@@ -135,7 +153,7 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
   const initialOperations: CanvasOperation[] = [{
     op: "update_node",
     nodeId: config.id,
-    patch: { metadata: { status: "loading", generationState: "running", remoteOperationActive: remoteOperation, remoteOperationId: remoteOperation ? operationId : null, remoteOperationLabel: remoteOperation ? "MCP 正在执行生成模组" : "正在执行生成模组", errorDetails: "", resolvedPrompt: inputs.prompt, inputSnapshot } },
+    patch: { metadata: { status: "loading", generationState: "running", remoteOperationActive: remoteOperation, remoteOperationId: remoteOperation ? operationId : null, remoteOperationLabel: remoteOperation ? "MCP 正在执行生成模组" : "正在执行生成模组", errorDetails: "", resolvedPrompt: inputs.prompt, inputSnapshot, ...(h3Prompt ? { promptDraft: h3Prompt.draftPrompt, promptOptimization: promptPreparationMetadata(h3Prompt) } : {}) } },
   }];
 
   if (toneNodeId) {
@@ -186,7 +204,7 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
           sourceConfigNodeId: config.id,
           inputSnapshot,
           ...shotLayout.child(toneNodeId ? 2 + index : 1 + index),
-          ...(mode === "video" ? { seconds: String(videoDuration(config)), vquality: String(config.metadata?.vquality || "preview"), videoInputMode: "multimodal" } : {}),
+          ...(mode === "video" ? { seconds: String(videoDuration(config)), vquality: String(config.metadata?.vquality || "preview"), videoInputMode: h3Prompt?.inputMode || "text", promptOptimization: h3Prompt ? promptPreparationMetadata(h3Prompt) : undefined } : {}),
           ...(mode === "audio" ? { audioVoice: String(config.metadata?.audioVoice || "") } : {}),
         },
       };
@@ -223,17 +241,13 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
       const failure = await finishResourceOutputs(projectId, config.id, outputIds, settled, originClientId);
       if (failure) return { configNodeId, outputNodeIds: outputIds, status: "error", error: failure };
     } else if (mode === "video") {
-      const videoInputMode = String(config.metadata?.videoInputMode || config.metadata?.generation_mode || "").toLowerCase();
-      if (videoInputMode === "fl2v" && inputs.imageIds.length !== 2) throw new Error("FL2V 生成模组必须按首帧、尾帧顺序连接两张图片");
       const resources = await generateH3Video({
         prompt: inputs.prompt,
         duration: videoDuration(config),
         quality: String(config.metadata?.vquality || "preview"),
         count,
         imageResourceIds: inputs.imageIds,
-        videoResourceIds: inputs.videoIds,
         audioResourceIds: inputs.audioIds,
-        ...(videoInputMode === "fl2v" ? { firstFrameResourceId: inputs.imageIds[0], lastFrameResourceId: inputs.imageIds[1] } : {}),
         onProgress: (progress) => signal?.aborted ? undefined : publishVideoProgress(projectId, config.id, outputIds, progress, originClientId, remoteOperation, operationId),
       });
       signal?.throwIfAborted();
@@ -353,6 +367,28 @@ function resolvedInputSnapshot(inputs: ResolvedInput) {
   };
 }
 
+function h3ResourceRoles(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
+}
+
+function promptPreparationMetadata(prepared: H3PromptPreparation) {
+  return {
+    enabled: prepared.skippedReason !== "disabled",
+    optimized: prepared.optimized,
+    skippedReason: prepared.skippedReason || null,
+    templateKey: prepared.templateKey || null,
+    templateVersion: prepared.templateVersion || null,
+    systemPromptSha256: prepared.systemPromptSha256 || null,
+    model: prepared.model || null,
+    inputMode: prepared.inputMode,
+    resourceRoles: prepared.resourceRoles,
+  };
+}
+
+function promptOptimizationEnabled(value: unknown) {
+  return value !== false && String(value ?? "true").toLowerCase() !== "false";
+}
+
 function sha256Text(value: string) { return createHash("sha256").update(value, "utf8").digest("hex"); }
 
 function mediaIds(nodes: CanvasNode[]) {
@@ -455,7 +491,7 @@ function generationMode(node: CanvasNode): GenerationMode { const value = String
 function nodeText(node: CanvasNode) { return node.type === "text" ? String(node.metadata?.content || node.metadata?.prompt || "").trim() : ""; }
 function systemNodeText(node: CanvasNode) { return node.type === "text" ? String(node.metadata?.content || node.metadata?.prompt || "") : ""; }
 function mediaKind(node: CanvasNode): "image" | "video" | "audio" | undefined { if (node.type === "image") return "image"; if (node.type === "video") return "video"; if (node.type === "audio" || node.type === "music") return "audio"; return undefined; }
-function normalizeModel(value: string) { const decoded = value.includes("::") ? value.slice(value.indexOf("::") + 2) : value; const aliases: Record<string, string> = { "volc-doubao-turbo": models.volcengineLlm[0], "volc-deepseek-flash": models.volcengineLlm[1], "deepseek-v4-flash-260425": models.volcengineLlm[1], "volc-deepseek-pro": models.volcengineLlm[2], "bigmodel-glm-52": models.bigmodelLlm[0], "bigmodel-glm-5v": models.bigmodelLlm[1], "runware-gemini-pro": models.runwareLlm[0], "runware-gemini-flash": models.runwareLlm[1], "runware-gemini-flash-lite": models.runwareLlm[2], "runware-lite": models.image[0], "runware-nano": models.image[1], "runware-gpt-image-02": models.image[2], "minimax-h3": "minimax-h3", "volc-speech": "volcengine:seed-tts-2.0-expressive", "suno-music": String(models.music) }; return aliases[decoded] || decoded; }
+function normalizeModel(value: string) { const decoded = value.includes("::") ? value.slice(value.indexOf("::") + 2) : value; const aliases: Record<string, string> = { "volc-doubao-turbo": models.volcengineLlm[0], "volc-deepseek-flash": models.volcengineLlm[1], "deepseek-v4-flash-260425": models.volcengineLlm[1], "volc-deepseek-pro": models.volcengineLlm[2], "bigmodel-glm-52": models.bigmodelLlm[0], "bigmodel-glm-5v": models.bigmodelLlm[1], "runware-gemini-pro": models.runwareLlm[0], "runware-gemini-flash": models.runwareLlm[1], "runware-gemini-flash-lite": models.runwareLlm[2], "runware-lite": models.image[0], "runware-nano": models.image[1], "runware-gpt-image-02": models.image[2], "minimax-h3": "minimax-h3", "minimax-h3-r2v": "minimax-h3", "volc-speech": "volcengine:seed-tts-2.0-expressive", "suno-music": String(models.music) }; return aliases[decoded] || decoded; }
 function speechToneModel() { const configured = process.env.TTS_TONE_MODEL || "deepseek-v4-flash-ga-260731"; return configured === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : configured; }
 function validateModel(mode: GenerationMode, model: string) { if (!model) throw new Error("生成模组必须指定模型"); if (mode === "text" && ![...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(model)) throw new Error(`模型 ${model} 不是可用的文字模型`); if (mode === "image" && !models.image.includes(model)) throw new Error(`模型 ${model} 不是可用的图片模型`); if (mode === "video" && model !== "minimax-h3") throw new Error(`模型 ${model} 不是可用的视频模型`); }
 function textResourceIdsForModel(model: string, inputs: ResolvedInput) { if (models.runwareLlm.includes(model)) return [...inputs.imageIds, ...inputs.videoIds, ...inputs.audioIds]; if (model === "glm-5v-turbo") return [...inputs.imageIds, ...inputs.videoIds]; if (model === "doubao-seed-2-1-turbo-260628") return inputs.imageIds; return []; }

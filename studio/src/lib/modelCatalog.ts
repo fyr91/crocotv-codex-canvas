@@ -235,13 +235,13 @@ function getVisibleModels(group: SelectionGroup, surface: VisibilitySurface): Ca
     // capability. Without this, resolveModelId() always falls through to
     // catalog defaults — meaning user-picked t2i/i2i selections silently
     // revert on the next render. (See PR-3* assembly model picker bug.)
-    if (direct.length > 0 || (group !== 't2i' && group !== 'i2i')) {
+    if (direct.length > 0 || (group !== 't2i' && group !== 'i2i' && group !== 'r2v')) {
         return direct;
     }
-    const capability = group; // 't2i' | 'i2i'
+    const capability = group;
     return SORTED_MODEL_ENTRIES.filter(
         (model) =>
-            model.ui.selection_group === 'image' &&
+            (group === 'r2v' ? model.family === 'minimax' : model.ui.selection_group === 'image') &&
             model.capabilities.includes(capability) &&
             isVisibleModel(model, surface)
     );
@@ -451,6 +451,6 @@ export function isR2vImageBased(modelId: string): boolean {
     const model = MODEL_CATALOG.models[modelId];
     const family = model?.family;
     if (family === 'wan' && modelId === 'wan2.6-r2v') return false;
-    return family === 'happyhorse' || family === 'wan' || family === 'kling'
+    return family === 'minimax' || family === 'happyhorse' || family === 'wan' || family === 'kling'
         || family === 'pixverse' || family === 'vidu' || family === 'seedance';
 }

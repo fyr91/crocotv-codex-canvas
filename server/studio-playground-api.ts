@@ -27,7 +27,9 @@ studioPlaygroundRouter.post("/playground/upload", upload.single("file"), route(a
 
 async function queueGeneration(raw: any, originClientId: string) {
   const project = await playgroundProject();
-  const mode = String(raw?.mode || "t2i"); const generationMode = ["t2v", "i2v", "r2v", "v2v"].includes(mode) ? "video" : "image";
+  const mode = String(raw?.mode || "t2i");
+  if (mode === "v2v") throw new Error("MiniMax H3 暂不支持视频参考或视频编辑");
+  const generationMode = ["t2v", "i2v", "r2v"].includes(mode) ? "video" : "image";
   const id = randomUUID(); const inputMedia = stringArray(raw?.input_media);
   for (const mediaUrl of inputMedia) if (!await resourceById(resourceIdFromUrl(mediaUrl))) throw new Error(`输入素材不在 Croco 本地资源库：${mediaUrl}`);
   const history = { id, mode, model_id: String(raw?.model_id || (generationMode === "video" ? "minimax-h3" : models.image[0])), prompt: String(raw?.prompt || ""), negative_prompt: String(raw?.negative_prompt || ""), input_media: inputMedia, parameters: objectValue(raw?.parameters), batch_size: boundedCount(raw?.batch_size), outputs: [], status: "pending", created_at: new Date().toISOString(), canvas_project_id: project.id, canvas_node_ids: [], generation_job_id: id };
@@ -51,7 +53,7 @@ async function queueGeneration(raw: any, originClientId: string) {
 }
 
 async function processGeneration(projectId: string, id: string, raw: any, originClientId: string, signal: AbortSignal) {
-  const mode = String(raw?.mode || "t2i"); const generationMode = ["t2v", "i2v", "r2v", "v2v"].includes(mode) ? "video" : "image";
+  const mode = String(raw?.mode || "t2i"); const generationMode = ["t2v", "i2v", "r2v"].includes(mode) ? "video" : "image";
   const configId = randomUUID(); const inputMedia = stringArray(raw?.input_media); const inputNodes: string[] = [];
   await updateHistory(projectId, id, { status: "processing" }, originClientId);
   try {
@@ -60,10 +62,11 @@ async function processGeneration(projectId: string, id: string, raw: any, origin
   const operations: CanvasOperation[] = [];
   for (const [index, mediaUrl] of inputMedia.entries()) {
     const resource = await resourceById(resourceIdFromUrl(mediaUrl)); if (!resource) throw new Error(`输入素材不在 Croco 本地资源库：${mediaUrl}`);
+    if (generationMode === "video" && resource.type === "video") throw new Error("MiniMax H3 暂不支持视频参考或视频编辑");
     const nodeId = randomUUID(); inputNodes.push(nodeId); operations.push({ op: "add_node", node: { id: nodeId, type: resource.type === "audio" ? "audio" : resource.type === "video" ? "video" : "image", title: `创作台参考 ${index + 1}`, position: { x: right + 96, y: 160 + index * 360 }, width: 340, height: resource.type === "audio" ? 180 : 300, metadata: { storageKey: resource.id, content: resource.url, mimeType: resource.mimeType, status: "success", artifactType: "studio-playground-input", playgroundGenerationId: id } } });
   }
   const prompt = `${String(raw?.prompt || "")}${inputNodes.map((nodeId) => `\n@[node:${nodeId}]`).join("")}`;
-  operations.push({ op: "add_node", node: { id: configId, type: "config", title: `创作台 · ${mode}`, position: { x: right + 520, y: 160 }, width: 360, height: 390, metadata: { generationMode, model: generationMode === "video" ? "minimax-h3" : resolveImageModel(raw?.model_id), requestedModel: String(raw?.model_id || ""), composerContent: prompt, count: boundedCount(raw?.batch_size), videoCount: boundedCount(raw?.batch_size), seconds: Number(raw?.parameters?.duration) || 6, size: aspectSize(String(raw?.parameters?.aspect_ratio || raw?.parameters?.ratio || "1:1")), artifactType: "studio-playground-config", playgroundGenerationId: id, status: "idle" } } });
+  operations.push({ op: "add_node", node: { id: configId, type: "config", title: `创作台 · ${mode}`, position: { x: right + 520, y: 160 }, width: 360, height: 390, metadata: { generationMode, model: generationMode === "video" ? "minimax-h3" : resolveImageModel(raw?.model_id), requestedModel: String(raw?.model_id || ""), composerContent: prompt, count: boundedCount(raw?.batch_size), videoCount: boundedCount(raw?.batch_size), seconds: Number(raw?.parameters?.duration) || 6, size: aspectSize(String(raw?.parameters?.aspect_ratio || raw?.parameters?.ratio || "1:1")), ...(generationMode === "video" ? { videoInputMode: mode === "i2v" ? "firstFrame" : mode === "r2v" ? "multimodal" : "text", videoPromptEnhance: raw?.parameters?.prompt_extend === false ? "false" : "true" } : {}), artifactType: "studio-playground-config", playgroundGenerationId: id, status: "idle" } } });
   for (const nodeId of inputNodes) operations.push({ op: "connect", from: nodeId, to: configId, fromPort: "workflow-output", toPort: "workflow-input" });
   const added = await applyCanvasOperations(projectId, avoidStudioNodeOverlaps(current.nodes, operations), Number(current.version)); publishProjectUpdated(added.project, originClientId);
   signal.throwIfAborted();

@@ -72,6 +72,7 @@ const minimaxH3Config = {
         ],
         durations: [3, 4, 5, 15],
         counts: [1, 2, 3],
+        supports: { promptEnhance: true },
     }])),
 };
 
@@ -133,6 +134,7 @@ describe("normalizeVideoGenerationOptions", () => {
             [["480p", "480x640", "standard_portrait_480p"], ["720p", "768x1024", "standard_portrait_768p"]],
         ]);
         expect(options.selection).toEqual({ quality: "standard_portrait_768p", size: "768x1024", duration: 15, count: 3 });
+        expect(options.supports.promptEnhance).toBe(true);
     });
 
     it("fails closed when the H3 fixed output profile version is stale", () => {

@@ -1,20 +1,29 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildH3JobPayload } from "./providers";
+import { buildH3JobPayload, formatH3ErrorDetail } from "./providers";
 
 const base = { externalJobId: "job", count: 1, prompt: "prompt", quality: "preview", duration: 6 };
 
 test("H3 根据真实资源选择 T2V 与 R2V", () => {
-  assert.equal(buildH3JobPayload({ ...base, images: [], videos: [], audios: [] }).request.mode, "t2v");
-  const r2v = buildH3JobPayload({ ...base, images: ["image"], videos: ["video"], audios: ["audio"] });
+  const t2v = buildH3JobPayload({ ...base, images: [], videos: [], audios: [] });
+  assert.equal(t2v.request.mode, "t2v");
+  assert.equal("reference_image_asset_ids" in t2v.request, false);
+  assert.equal("reference_audio_asset_ids" in t2v.request, false);
+  assert.equal("reference_video_asset_ids" in t2v.request, false);
+  const r2v = buildH3JobPayload({ ...base, images: ["image"], videos: [], audios: ["audio"] });
   assert.equal(r2v.request.mode, "r2v");
-  assert.deepEqual(r2v.request.reference_video_asset_ids, ["video"]);
+  assert.deepEqual(r2v.request.reference_image_asset_ids, ["image"]);
+  assert.deepEqual(r2v.request.reference_audio_asset_ids, ["audio"]);
+  assert.equal("reference_video_asset_ids" in r2v.request, false);
 });
 
-test("H3 FL2V 保持有序首尾帧并拒绝缺失一端", () => {
-  const fl2v = buildH3JobPayload({ ...base, images: [], videos: [], audios: [], firstFrame: "first", lastFrame: "last" });
-  assert.equal(fl2v.request.mode, "fl2v");
-  assert.equal(fl2v.request.first_frame_asset_id, "first");
-  assert.equal(fl2v.request.last_frame_asset_id, "last");
-  assert.throws(() => buildH3JobPayload({ ...base, images: [], videos: [], audios: [], firstFrame: "first" }), /同时提供/);
+test("H3 在本地拒绝线上 Runtime 尚未支持的视频参考", () => {
+  assert.throws(() => buildH3JobPayload({ ...base, images: [], videos: ["video"], audios: [] }), /不支持参考视频/);
+});
+
+test("H3 错误详情只保留安全的字段位置与校验信息", () => {
+  assert.equal(formatH3ErrorDetail({
+    detail: [{ type: "extra_forbidden", loc: ["body", "request", "reference_video_asset_ids"], msg: "Extra inputs are not permitted", input: ["secret-resource"] }],
+  }), "body.request.reference_video_asset_ids：不支持的请求字段");
+  assert.equal(formatH3ErrorDetail({ detail: "Runtime is warming" }), "Runtime is warming");
 });

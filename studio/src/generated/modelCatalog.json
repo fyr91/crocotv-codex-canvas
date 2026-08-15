@@ -11,14 +11,14 @@
       "i2i_model": "google:nano-banana@2-lite",
       "image_model": "google:nano-banana@2-lite",
       "i2v_model": "minimax-h3",
-      "r2v_model": "minimax-h3-r2v"
+      "r2v_model": "minimax-h3"
     },
     "model_settings": {
       "t2i_model": "google:nano-banana@2-lite",
       "i2i_model": "google:nano-banana@2-lite",
       "image_model": "google:nano-banana@2-lite",
       "i2v_model": "minimax-h3",
-      "r2v_model": "minimax-h3-r2v"
+      "r2v_model": "minimax-h3"
     }
   },
   "providers": {
@@ -414,7 +414,7 @@
     "minimax-h3": {
       "id": "minimax-h3",
       "display_name": "MiniMax H3",
-      "description": "Croco 统一视频 Runtime：T2V、I2V、FL2V 与多参考 R2V",
+      "description": "统一支持文生视频、首帧、首尾帧与图片/音频多参考；默认先生成结构化 H3 提示词",
       "family": "minimax",
       "status": "active",
       "capabilities": [
@@ -446,14 +446,12 @@
             "1:1"
           ],
           "default": "16:9"
-        }
+        },
+        "promptExtend": true
       },
       "inputs": {
         "reference_images": {
           "max": 9
-        },
-        "reference_videos": {
-          "max": 3
         },
         "reference_audio": {
           "max": 3
@@ -479,73 +477,6 @@
         "order": 100,
         "badges": [
           "推荐",
-          "Croco"
-        ]
-      }
-    },
-    "minimax-h3-r2v": {
-      "id": "minimax-h3-r2v",
-      "display_name": "MiniMax H3 · 多参考",
-      "description": "使用真实图片、视频和音频资源的 Croco H3 多参考路由",
-      "family": "minimax",
-      "status": "active",
-      "capabilities": [
-        "r2v"
-      ],
-      "duration": {
-        "type": "slider",
-        "min": 3,
-        "max": 15,
-        "step": 1,
-        "default": 6
-      },
-      "params": {
-        "resolution": {
-          "options": [
-            "preview",
-            "720p",
-            "1080p"
-          ],
-          "default": "preview"
-        },
-        "ratio": {
-          "options": [
-            "16:9",
-            "9:16",
-            "1:1"
-          ],
-          "default": "16:9"
-        }
-      },
-      "inputs": {
-        "reference_images": {
-          "max": 9
-        },
-        "reference_videos": {
-          "max": 3
-        },
-        "reference_audio": {
-          "max": 3
-        },
-        "first_frame": {
-          "max": 1,
-          "ordered": true
-        },
-        "last_frame": {
-          "max": 1,
-          "ordered": true
-        }
-      },
-      "ui": {
-        "selection_group": "r2v",
-        "visible_in": [
-          "global_settings",
-          "video_sidebar"
-        ],
-        "recommended": true,
-        "order": 100,
-        "badges": [
-          "多参考",
           "Croco"
         ]
       }
@@ -732,7 +663,7 @@
     "minimax/minimax-h3#r2v": {
       "id": "minimax/minimax-h3#r2v",
       "model_line_id": "minimax-h3",
-      "legacy_model_id": "minimax-h3-r2v",
+      "legacy_model_id": "minimax-h3",
       "mode": "r2v",
       "family": "minimax",
       "status": "active",
@@ -747,6 +678,8 @@
       "ui": {
         "selection_group": "r2v",
         "visible_in": [
+          "project_settings",
+          "series_settings",
           "global_settings",
           "video_sidebar"
         ],

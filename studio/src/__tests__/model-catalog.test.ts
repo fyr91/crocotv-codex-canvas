@@ -25,7 +25,7 @@ describe('Croco model catalog selectors', () => {
             i2i_model: 'google:nano-banana@2-lite',
             image_model: 'google:nano-banana@2-lite',
             i2v_model: 'minimax-h3',
-            r2v_model: 'minimax-h3-r2v',
+            r2v_model: 'minimax-h3',
         });
 
         const imageIds = [
@@ -59,7 +59,7 @@ describe('Croco model catalog fallbacks', () => {
             t2i_model: 'google:nano-banana@2-lite',
             i2i_model: 'google:nano-banana@2-lite',
             i2v_model: 'minimax-h3',
-            r2v_model: 'minimax-h3-r2v',
+            r2v_model: 'minimax-h3',
         });
     });
 
@@ -71,13 +71,13 @@ describe('Croco model catalog fallbacks', () => {
 
 describe('Croco canonical routing metadata', () => {
     it('routes H3 reference mode through the H3 Canvas runtime', () => {
-        expect(R2V_SELECTION_MODEL_ID).toBe('minimax-h3-r2v');
-        expect(R2V_ROUTE_MODEL_ID).toBe('minimax-h3-r2v');
+        expect(R2V_SELECTION_MODEL_ID).toBe('minimax-h3');
+        expect(R2V_ROUTE_MODEL_ID).toBe('minimax-h3');
 
         const entry = getCanonicalModeEntry('minimax/minimax-h3#r2v');
         expect(entry).toMatchObject({
             model_line_id: 'minimax-h3',
-            legacy_model_id: 'minimax-h3-r2v',
+            legacy_model_id: 'minimax-h3',
             mode: 'r2v',
             family: 'minimax',
         });
@@ -100,7 +100,7 @@ describe('Croco canonical routing metadata', () => {
             i2i_model: 'google:nano-banana@2-lite',
             image_model: 'google:nano-banana@2-lite',
             i2v_model: 'minimax-h3',
-            r2v_model: 'minimax-h3-r2v',
+            r2v_model: 'minimax-h3',
         });
     });
 });

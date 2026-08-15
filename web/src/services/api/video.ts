@@ -17,6 +17,7 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
     const response = await fetch("/api/generate/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         model: modelOptionName(selectedModel),
         prompt,
+        optimizePrompt: config.videoPromptEnhance !== "false",
         inputMode: config.videoInputMode,
         duration: Number(config.videoSeconds) || 6,
         quality: config.vquality,

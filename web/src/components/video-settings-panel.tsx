@@ -171,7 +171,8 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 {options.supports.promptEnhance ? (
                     <SettingGroup title="提示词" color={theme.node.muted}>
                         <div className="grid gap-2 rounded-xl border p-2.5" style={{ borderColor: theme.node.stroke }}>
-                            <SwitchRow label="Prompt Enhance" checked={promptEnhance} theme={theme} onChange={(checked) => onConfigChange("videoPromptEnhance", String(checked))} />
+                            <SwitchRow label="提示词优化" checked={promptEnhance} theme={theme} onChange={(checked) => onConfigChange("videoPromptEnhance", String(checked))} />
+                            <div className="pr-12 text-[10px] leading-4 opacity-55">默认将当前模式与有序参考素材整理成 H3 结构化提示词；明确关闭后直接使用原始提示词。</div>
                         </div>
                     </SettingGroup>
                 ) : null}

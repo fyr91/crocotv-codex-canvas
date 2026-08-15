@@ -22,6 +22,7 @@ const imageParams = {
 const videoParams = {
   resolution: { options: ["preview", "720p", "1080p"], default: "preview" },
   ratio: { options: ["16:9", "9:16", "1:1"], default: "16:9" },
+  promptExtend: true,
 };
 
 export function getStudioModelCatalog() {
@@ -54,8 +55,7 @@ export function getStudioModelCatalog() {
       "google:nano-banana@2-lite": imageModel("google:nano-banana@2-lite", "Nano Banana 2 Lite", "Croco Runware 快速图片生成与参考图编辑模型", 100, true),
       "google:4@1": imageModel("google:4@1", "Nano Banana", "Croco Runware 高质量图片生成与参考图编辑模型", 90, false),
       "openai:gpt-image@2": imageModel("openai:gpt-image@2", "GPT Image 02", "Croco Runware GPT Image 图片生成与编辑模型", 80, false),
-      "minimax-h3": videoModel("minimax-h3", "MiniMax H3", "Croco 统一视频 Runtime：T2V、I2V、FL2V 与多参考 R2V", "i2v", videoSurfaces, ["t2v", "i2v", "fl2v", "r2v"]),
-      "minimax-h3-r2v": videoModel("minimax-h3-r2v", "MiniMax H3 · 多参考", "使用真实图片、视频和音频资源的 Croco H3 多参考路由", "r2v", ["global_settings", "video_sidebar"], ["r2v"]),
+      "minimax-h3": videoModel("minimax-h3", "MiniMax H3", "统一支持文生视频、首帧、首尾帧与图片/音频多参考；默认先生成结构化 H3 提示词", "i2v", videoSurfaces, ["t2v", "i2v", "fl2v", "r2v"]),
     },
     model_lines: {
       "runware-image": { id: "runware-image", family: "runware", modes: ["t2i", "i2i"], legacy_model_ids: [...providerModels.image] },
@@ -67,13 +67,13 @@ export function getStudioModelCatalog() {
       "minimax/minimax-h3#t2v": mode("minimax/minimax-h3#t2v", "minimax-h3", "minimax-h3", "t2v", "minimax", "i2v", videoSurfaces),
       "minimax/minimax-h3#i2v": mode("minimax/minimax-h3#i2v", "minimax-h3", "minimax-h3", "i2v", "minimax", "i2v", videoSurfaces),
       "minimax/minimax-h3#fl2v": mode("minimax/minimax-h3#fl2v", "minimax-h3", "minimax-h3", "fl2v", "minimax", "i2v", videoSurfaces),
-      "minimax/minimax-h3#r2v": mode("minimax/minimax-h3#r2v", "minimax-h3", "minimax-h3-r2v", "r2v", "minimax", "r2v", ["global_settings", "video_sidebar"]),
+      "minimax/minimax-h3#r2v": mode("minimax/minimax-h3#r2v", "minimax-h3", "minimax-h3", "r2v", "minimax", "r2v", videoSurfaces),
     },
   };
 }
 
 function imageDefaults() {
-  return { t2i_model: providerModels.image[0], i2i_model: providerModels.image[0], image_model: providerModels.image[0], i2v_model: "minimax-h3", r2v_model: "minimax-h3-r2v" };
+  return { t2i_model: providerModels.image[0], i2i_model: providerModels.image[0], image_model: providerModels.image[0], i2v_model: "minimax-h3", r2v_model: "minimax-h3" };
 }
 
 function textModels() {
@@ -93,7 +93,7 @@ function imageModel(id: string, name: string, description: string, order: number
 }
 
 function videoModel(id: string, name: string, description: string, selectionGroup: string, visibleIn: string[], capabilities: string[]) {
-  return { id, display_name: name, description, family: "minimax", status: "active", capabilities, duration: { type: "slider", min: 3, max: 15, step: 1, default: 6 }, params: videoParams, inputs: { reference_images: { max: 9 }, reference_videos: { max: 3 }, reference_audio: { max: 3 }, first_frame: { max: 1, ordered: true }, last_frame: { max: 1, ordered: true } }, ui: { selection_group: selectionGroup, visible_in: visibleIn, recommended: true, order: 100, badges: selectionGroup === "r2v" ? ["多参考", "Croco"] : ["推荐", "Croco"] } };
+  return { id, display_name: name, description, family: "minimax", status: "active", capabilities, duration: { type: "slider", min: 3, max: 15, step: 1, default: 6 }, params: videoParams, inputs: { reference_images: { max: 9 }, reference_audio: { max: 3 }, first_frame: { max: 1, ordered: true }, last_frame: { max: 1, ordered: true } }, ui: { selection_group: selectionGroup, visible_in: visibleIn, recommended: true, order: 100, badges: ["推荐", "Croco"] } };
 }
 
 function mode(id: string, modelLineId: string, legacyModelId: string, modeName: string, family: string, selectionGroup: string, visibleIn: string[]) {

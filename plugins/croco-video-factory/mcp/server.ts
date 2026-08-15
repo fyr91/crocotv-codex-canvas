@@ -20,7 +20,7 @@ const studioOrigin = process.env.CROCO_LOCAL_STUDIO_ORIGIN || "http://localhost:
 const mcpClientId = `mcp-${process.pid}`;
 
 const server = new McpServer({ name: "crocotv", version: bundleManifest.mcpVersion }, {
-  instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic free-Canvas changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Studio-backed projects retain their five-stage Studio workflow; use Studio domain tools or studio_apply_canvas_edits for Studio-managed nodes so changes translate through structured Studio state. Use canvas_create_project when a new free canvas is requested and studio_create_project for a Video Workshop project. For new Canvas-provider generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. MiniMax H3 config nodes support T2V, I2V, ordered first/last-frame FL2V, and multimodal R2V through real connected local resources. When Codex built-in ImageGen has already produced a GPT image, use canvas_place_imagegen_result to import it and preserve Prompt/Reference provenance without fabricating a provider Config. Generated or imported files must enter the local resource library before being placed on a canvas.",
+  instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic free-Canvas changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Studio-backed projects retain their five-stage Studio workflow; use Studio domain tools or studio_apply_canvas_edits for Studio-managed nodes so changes translate through structured Studio state. Use canvas_create_project when a new free canvas is requested and studio_create_project for a Video Workshop project. For new Canvas-provider generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. MiniMax H3 is one physical model. Text, first-frame, ordered first/last-frame, and multimodal reference modes are user-operation semantics; the shared runtime optimizes them into one structured H3 prompt by default and submits either T2V or image/audio R2V. Set metadata.videoPromptEnhance to false only when the user explicitly asks to skip optimization. Reference video and video editing are currently unavailable. When Codex built-in ImageGen has already produced a GPT image, use canvas_place_imagegen_result to import it and preserve Prompt/Reference provenance without fabricating a provider Config. Generated or imported files must enter the local resource library before being placed on a canvas.",
 });
 
 const positionSchema = z.object({ x: z.number(), y: z.number() });
@@ -31,6 +31,8 @@ const generationParamsSchema = z.object({
   ratio: z.string().max(20).optional(),
   imageResourceIds: z.array(z.string().min(1).max(180)).max(9).optional(),
   audioResourceIds: z.array(z.string().min(1).max(180)).max(3).optional(),
+  inputMode: z.enum(["text", "firstFrame", "firstLastFrame", "multimodal"]).optional(),
+  optimizePrompt: z.boolean().optional().describe("Defaults to true. Set false only when the user explicitly asks to skip H3 prompt optimization."),
 }).catchall(z.unknown());
 const connectionPortSchema = z.enum(["node", "workflow-input", "workflow-output"]);
 const generationCapabilitySchema = z.enum(["text", "image", "video", "speech", "music"]);
@@ -207,7 +209,7 @@ server.registerTool("studio_set_project_prompt_binding", {
 }, async ({ projectId, operation, ...body }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/prompt-strategy/${encodeURIComponent(operation)}/binding`, { method: "PUT", body })));
 
 server.registerTool("studio_get_model_catalog", {
-  description: "Read the authoritative Croco model/provider catalog shared by Canvas and Video Workshop, including executable model IDs and MiniMax H3 T2V, I2V, ordered FL2V, and multimodal R2V modes.",
+  description: "Read the authoritative Croco model/provider catalog shared by Canvas and Video Workshop. MiniMax H3 is exposed once; text, first-frame, ordered first/last-frame, and multimodal reference modes are UI semantics mapped to T2V or image/audio R2V. Reference video and video editing are unavailable.",
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async () => toolResult(await api("/api/studio/model-catalog")));
 
@@ -561,7 +563,7 @@ server.registerTool("canvas_place_imagegen_result", {
 });
 
 server.registerTool("canvas_run_nodes", {
-  description: "Submit one or more existing Canvas generation-module nodes as an asynchronous run job through the same local execution path used by the UI. When concurrency is omitted, every selected node starts concurrently; pass a lower value only when the user explicitly requests throttling. Image config nodes support connected multimodal image references through Nano Banana Lite, Nano Banana, and GPT Image 02. MiniMax H3 video config nodes use metadata.videoInputMode plus real connected resources: t2v uses text only; i2v uses one image; fl2v requires exactly two images ordered as first then last frame; r2v accepts connected image, video, and audio resources. The claimed config nodes are immediately locked while MCP owns them; generated results retain connections to their exact inputs, including Studio Canvas bindings when applicable. Poll canvas_get_run_status with the returned jobId.",
+  description: "Submit one or more existing Canvas generation-module nodes as an asynchronous run job through the same local execution path used by the UI. When concurrency is omitted, every selected node starts concurrently; pass a lower value only when the user explicitly requests throttling. Image config nodes support connected multimodal image references through Nano Banana Lite, Nano Banana, and GPT Image 02. MiniMax H3 config nodes support text, first-frame, ordered first/last-frame, and multimodal image/audio operation modes. All default to the shared structured H3 prompt optimizer, then map to T2V or R2V; set metadata.videoPromptEnhance to false only on an explicit user request. Connected videos are rejected because reference video and video editing are unavailable. The claimed config nodes are immediately locked while MCP owns them; generated results retain connections to their exact inputs, including Studio Canvas bindings when applicable. Poll canvas_get_run_status with the returned jobId.",
   inputSchema: {
     projectId: z.string().uuid(),
     nodeIds: z.array(z.string().min(1).max(80)).min(1).max(20),
@@ -847,7 +849,7 @@ async function runGeneration(capability: string, prompt: string, model: string |
     return { resource: (await api<{ resource: Resource }>("/api/generate/image", { method: "POST", body: { prompt, model, width: params.width, height: params.height, referenceResourceIds: params.referenceResourceIds || [] } })).resource };
   }
   if (capability === "video") {
-    const resources = (await api<{ resources: Resource[] }>("/api/generate/video", { method: "POST", body: { prompt, model: model || "minimax-h3", duration: params.duration || 5, quality: params.quality, ratio: params.ratio, count: 1, imageResourceIds: params.imageResourceIds || [], audioResourceIds: params.audioResourceIds || [] } })).resources;
+    const resources = (await api<{ resources: Resource[] }>("/api/generate/video", { method: "POST", body: { prompt, model: model || "minimax-h3", duration: params.duration || 5, quality: params.quality, ratio: params.ratio, count: 1, inputMode: params.inputMode, optimizePrompt: params.optimizePrompt !== false, imageResourceIds: params.imageResourceIds || [], audioResourceIds: params.audioResourceIds || [] } })).resources;
     if (!resources[0]) throw new Error("视频生成没有返回资源");
     return { resource: resources[0] };
   }

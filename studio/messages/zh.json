@@ -1394,7 +1394,7 @@
     "cfgMax": "严格",
     "movementAmplitude": "运动幅度",
     "creativeAudio": "创意与音频",
-    "promptEnhancer": "智能扩写",
+    "promptEnhancer": "提示词优化",
     "audioSettings": "音频",
     "soundAI": "AI音效",
     "audioOutput": "音视频直出",
@@ -2120,7 +2120,7 @@
       "sound": "声音",
       "viduAudio": "Vidu 音频",
       "seedPlaceholder": "随机",
-      "promptExtend": "提示词扩展",
+      "promptExtend": "提示词优化",
       "watermark": "水印",
       "toggleOn": "开",
       "toggleOff": "关"

@@ -65,6 +65,7 @@ function normalizeMiniMaxH3Options(config: Record<string, unknown>, current: Cur
     const empty = finalizeOptions([], [], [1], current, emptySupports, "MiniMax H3 固定输出规格缺失，请联系管理员同步模型配置");
     if (config.capabilitiesSource !== "minimax-h3-fixed-v3") return empty;
     const settings = videoSettingsForInputMode(config, current.inputMode);
+    const settingSupports = asRecord(settings.supports);
     const qualities = array(settings.qualities).map((quality) => {
         const item = asRecord(quality);
         const id = String(item.id || "");
@@ -106,7 +107,10 @@ function normalizeMiniMaxH3Options(config: Record<string, unknown>, current: Cur
             duration: durations.includes(requestedDuration) ? requestedDuration : durations[0] || 0,
             count: counts.includes(requestedCount) ? requestedCount : counts[0] || 1,
         },
-        supports: emptySupports,
+        supports: {
+            ...emptySupports,
+            promptEnhance: settingSupports.promptEnhance === true,
+        },
         error: resolutions.length === 8 && aspectRatios.length === 4 ? undefined : "MiniMax H3 输出规格不完整，请联系管理员同步模型配置",
     };
 }

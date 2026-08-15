@@ -307,7 +307,7 @@ async function prepareStudioVideoTasks(projectId: string, raw: any, originClient
   const configId = stableStudioNodeId(projectId, "frame", frameId, "video-config");
   const outputIds = tasks.map((task) => stableStudioNodeId(projectId, "take", task.id, "video-output"));
   try {
-    await configureStudioVideoNode(projectId, configId, frameId, resolvedPrompt, generationMode, videoInputs, { seconds: Number(raw?.duration) || 6, videoCount: count, vquality: String(raw?.resolution || "preview") }, originClientId);
+    await configureStudioVideoNode(projectId, configId, frameId, resolvedPrompt, generationMode, videoInputs, { seconds: Number(raw?.duration) || 6, videoCount: count, vquality: String(raw?.resolution || "preview"), videoPromptEnhance: raw?.prompt_extend === false ? "false" : "true" }, originClientId);
   } catch (error) {
     await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((task) => tasks.some((created) => created.id === task.id) ? { ...task, status: "failed", error: error instanceof Error ? error.message : "生成任务准备失败" } : task) }), { originClientId }).catch(() => undefined);
     throw error;
@@ -586,7 +586,6 @@ async function resolveStudioVideoInputs(frame: StudioStoryboardFrame, raw: any, 
     : generationMode === "r2v"
       ? [
           ...valueArray(raw?.reference_image_urls).map((value, index) => ({ value, role: `referenceImage${index + 1}` })),
-          ...valueArray(raw?.reference_video_urls).map((value, index) => ({ value, role: `referenceVideo${index + 1}` })),
           ...valueArray(raw?.reference_audio_urls || raw?.audio_url).map((value, index) => ({ value, role: `referenceAudio${index + 1}` })),
         ]
       : [{ value: raw?.image_url || frame.image_url, role: "firstFrame" }];
@@ -598,12 +597,12 @@ async function resolveStudioVideoInputs(frame: StudioStoryboardFrame, raw: any, 
     if (!resourceId) throw new Error(`视频参考素材必须先导入 Croco 本地资源库：${item.role}`);
     if (inputs.some((input) => input.resourceId === resourceId)) continue;
     const resource = await resourceById(resourceId);
-    if (!resource || !["image", "video", "audio"].includes(resource.type)) throw new Error(`视频参考资源不存在：${resourceId}`);
+    if (!resource || !["image", "audio"].includes(resource.type)) throw new Error(`H3 参考资源必须是图片或音频：${resourceId}`);
     inputs.push({ resourceId, type: resource.type as StudioVideoInput["type"], role: item.role });
   }
   if (generationMode === "fl2v" && (inputs.length !== 2 || inputs.some((input) => input.type !== "image"))) throw new Error("FL2V 必须提供有序的本地首帧和尾帧图片");
   if (generationMode === "i2v" && !inputs.some((input) => input.type === "image")) throw new Error("I2V 必须提供本地首帧图片");
-  if (generationMode === "r2v" && !inputs.length) throw new Error("R2V 至少需要一个本地图片、视频或音频参考资源");
+  if (generationMode === "r2v" && !inputs.length) throw new Error("多参考生视频至少需要一个本地图片或音频参考资源");
   return inputs.slice(0, 16);
 }
 

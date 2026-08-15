@@ -28,34 +28,7 @@ const h3Settings = {
     ],
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     counts: [1, 2, 3],
-    supports: {},
-};
-const happyHorseRatios = ["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "9:21", "21:9"].map((ratio, index) => {
-    const [width, height] = ratio.split(":").map(Number);
-    return { label: ratio, ratio, size: ratio, width, height, recommended: index === 0 };
-});
-const happyHorseQuality = (id: string, ratios = happyHorseRatios) => ({ id, label: id, ratios });
-const happyHorseDurations = Array.from({ length: 13 }, (_, index) => index + 3);
-const happyHorseConfig = {
-    videoInputModes: ["text", "firstFrame", "referenceImages", "videoEdit"],
-    modeModels: {
-        text: "happyhorse-1.1-t2v",
-        firstFrame: "happyhorse-1.1-i2v",
-        referenceImages: "happyhorse-1.1-r2v",
-        videoEdit: "happyhorse-1.0-video-edit",
-    },
-    inputLimits: {
-        firstFrame: { images: { min: 1, max: 1 } },
-        referenceImages: { images: { min: 1, max: 9 } },
-        videoEdit: { videos: { min: 1, max: 1 }, images: { min: 0, max: 5 } },
-    },
-    videoSettingsByInputMode: {
-        text: { qualities: ["480P", "720P", "1080P"].map((quality) => happyHorseQuality(quality)), durations: happyHorseDurations, counts: [1], supports: { watermark: true } },
-        referenceImages: { qualities: ["480P", "720P", "1080P"].map((quality) => happyHorseQuality(quality)), durations: happyHorseDurations, counts: [1], supports: { watermark: true } },
-        firstFrame: { qualities: ["480P", "720P", "1080P"].map((quality) => happyHorseQuality(quality, [{ label: "跟随首帧", ratio: "", size: "source", width: 0, height: 0, recommended: true }])), durations: happyHorseDurations, counts: [1], supports: { watermark: true } },
-        videoEdit: { qualities: ["720P", "1080P"].map((quality) => happyHorseQuality(quality, [{ label: "跟随原视频", ratio: "", size: "source", width: 0, height: 0, recommended: true }])), durations: [], counts: [1], supports: { watermark: true, audioSetting: true } },
-    },
-    inputModalities: ["text", "image", "video"],
+    supports: { promptEnhance: true },
 };
 const localModels: ProviderCatalogModel[] = [
     { id: "volc-doubao-turbo", provider_id: "volcengine", capability: "llm", model_key: "doubao-seed-2-1-turbo-260628", display_name: "豆包 Seed 2.1 Turbo", is_default: true, config: { inputModalities: ["text", "image"] } },
@@ -69,8 +42,7 @@ const localModels: ProviderCatalogModel[] = [
     { id: "runware-lite", provider_id: "runware", capability: "image", model_key: "google:nano-banana@2-lite", display_name: "Nano Banana 2 Lite", is_default: true, config: { imageSizePresets, maxInputAssets: 14, supportsPromptOptimize: false, supportsMaskEdit: false, inputModalities: ["text", "image"] } },
     { id: "runware-nano", provider_id: "runware", capability: "image", model_key: "google:4@1", display_name: "Nano Banana", is_default: false, config: { imageSizePresets, maxInputAssets: 14, supportsPromptOptimize: false, supportsMaskEdit: false, inputModalities: ["text", "image"] } },
     { id: "runware-gpt-image-02", provider_id: "runware", capability: "image", model_key: "openai:gpt-image@2", display_name: "GPT Image 02", is_default: false, config: { imageSizePresets, maxInputAssets: 8, supportsPromptOptimize: false, supportsMaskEdit: false, inputModalities: ["text", "image"] } },
-    { id: "minimax-h3", provider_id: "minimax_h3", capability: "video", model_key: "minimax-h3", display_name: "MiniMax H3", is_default: true, config: { capabilitiesSource: "minimax-h3-fixed-v3", maxPromptChars: 20_000, videoInputModes: ["text", "firstFrame", "multimodal"], videoSettingsByInputMode: { text: h3Settings, firstFrame: h3Settings, multimodal: h3Settings }, inputModalities: ["text", "image", "audio"] } },
-    { id: "happyhorse", provider_id: "happyhorse", capability: "video", model_key: "happyhorse", display_name: "Happy Horse", is_default: false, config: happyHorseConfig },
+    { id: "minimax-h3", provider_id: "minimax_h3", capability: "video", model_key: "minimax-h3", display_name: "MiniMax H3", is_default: true, config: { capabilitiesSource: "minimax-h3-fixed-v3", maxPromptChars: 20_000, videoInputModes: ["text", "firstFrame", "firstLastFrame", "multimodal"], inputLimits: { firstFrame: { images: { min: 1, max: 1 } }, firstLastFrame: { images: { min: 2, max: 2 } }, multimodal: { images: { min: 1, max: 9 }, audios: { min: 0, max: 3 } } }, videoSettingsByInputMode: { text: h3Settings, firstFrame: h3Settings, firstLastFrame: h3Settings, multimodal: h3Settings }, inputModalities: ["text", "image", "audio"] } },
     { id: "volc-speech", provider_id: "volcengine", capability: "speech", model_key: "volcengine:seed-tts-2.0-expressive", display_name: "火山引擎 Seed-TTS 2.0", is_default: true, config: { inputModalities: ["text"] } },
     { id: "suno-music", provider_id: "suno", capability: "music", model_key: "V4_5ALL", display_name: "Suno V4.5 All", is_default: true, config: { inputModalities: ["text"] } },
 ];

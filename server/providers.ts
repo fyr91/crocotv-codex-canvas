@@ -155,20 +155,18 @@ export type H3GenerationProgress = {
   label: string;
 };
 
-export async function generateH3Video(input: { prompt: string; duration: number; quality?: string; count?: number; imageResourceIds?: string[]; videoResourceIds?: string[]; audioResourceIds?: string[]; firstFrameResourceId?: string; lastFrameResourceId?: string; onProgress?: (progress: H3GenerationProgress) => void | Promise<void> }) {
+export async function generateH3Video(input: { prompt: string; duration: number; quality?: string; count?: number; imageResourceIds?: string[]; videoResourceIds?: string[]; audioResourceIds?: string[]; onProgress?: (progress: H3GenerationProgress) => void | Promise<void> }) {
   const config = { baseUrl: required("H3_BASE_URL").replace(/\/$/, ""), apiKey: required("H3_API_KEY") };
   if (!Number.isInteger(input.duration) || input.duration < 3 || input.duration > 15) throw new Error("H3 时长必须为 3–15 秒整数");
+  if (input.videoResourceIds?.length) throw new Error("当前 H3 Runtime 不支持参考视频；请仅连接图片或音频参考");
   const images = await Promise.all((input.imageResourceIds || []).slice(0, 9).map((id) => uploadH3Asset(config, id, "images")));
-  const videos = await Promise.all((input.videoResourceIds || []).slice(0, 3).map((id) => uploadH3Asset(config, id, "videos")));
   const audios = await Promise.all((input.audioResourceIds || []).slice(0, 3).map((id) => uploadH3Asset(config, id, "audio")));
-  const firstFrame = input.firstFrameResourceId ? await uploadH3Asset(config, input.firstFrameResourceId, "images") : undefined;
-  const lastFrame = input.lastFrameResourceId ? await uploadH3Asset(config, input.lastFrameResourceId, "images") : undefined;
   await ensureH3Runtime(config);
   const externalJobId = randomUUID();
   const qualities = ["preview", "base_768p", "standard_480p", "standard_768p", "portrait_preview", "portrait_768p", "standard_portrait_480p", "standard_portrait_768p"];
   const quality = qualities.includes(String(input.quality)) ? String(input.quality) : "preview";
   const count = Math.max(1, Math.min(3, Number(input.count) || 1));
-  const payload = buildH3JobPayload({ externalJobId, count, prompt: input.prompt, quality, duration: input.duration, images, videos, audios, firstFrame, lastFrame });
+  const payload = buildH3JobPayload({ externalJobId, count, prompt: input.prompt, quality, duration: input.duration, images, videos: [], audios });
   const response = await h3Json(config, "/api/v1/h3/jobs/batch", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": externalJobId }, body: JSON.stringify(payload) });
   const jobIds = (response.items || []).map((item: any) => String(item.job_id || "")).filter(Boolean);
   if (!jobIds.length) throw new Error("H3 没有返回 Job ID");
@@ -207,13 +205,13 @@ async function uploadH3Asset(config: { baseUrl: string; apiKey: string }, id: st
   const form = new FormData();
   form.append("file", new Blob([await readFile(safeResourcePath(resource.fileName))], { type: resource.mimeType }), path.basename(resource.fileName));
   const response = await fetch(`${config.baseUrl}/api/v1/h3/assets/${kind}`, { method: "POST", headers: auth(config), body: form });
-  if (!response.ok) throw new Error(`H3 素材上传失败（${response.status}）`);
+  if (!response.ok) throw await h3ResponseError(response, "H3 素材上传失败");
   return ((await response.json()) as any).asset_id as string;
 }
 
-export function buildH3JobPayload(input: { externalJobId: string; count: number; prompt: string; quality: string; duration: number; images: string[]; videos: string[]; audios: string[]; firstFrame?: string; lastFrame?: string }) {
-  if (Boolean(input.firstFrame) !== Boolean(input.lastFrame)) throw new Error("FL2V 必须同时提供有序首帧和尾帧");
-  const mode = input.firstFrame && input.lastFrame ? "fl2v" : input.images.length || input.videos.length || input.audios.length ? "r2v" : "t2v";
+export function buildH3JobPayload(input: { externalJobId: string; count: number; prompt: string; quality: string; duration: number; images: string[]; videos: string[]; audios: string[] }) {
+  if (input.videos.length) throw new Error("当前 H3 Runtime 不支持参考视频；请仅连接图片或音频参考");
+  const mode = input.images.length || input.audios.length ? "r2v" : "t2v";
   return {
     external_job_id: input.externalJobId,
     count: input.count,
@@ -223,8 +221,8 @@ export function buildH3JobPayload(input: { externalJobId: string; count: number;
       quality: input.quality,
       duration_seconds: input.duration,
       steps: 20,
-      ...(mode === "fl2v" ? { first_frame_asset_id: input.firstFrame, last_frame_asset_id: input.lastFrame } : {}),
-      ...(mode === "r2v" ? { reference_image_asset_ids: input.images, reference_video_asset_ids: input.videos, reference_audio_asset_ids: input.audios } : {}),
+      ...(mode === "r2v" && input.images.length ? { reference_image_asset_ids: input.images } : {}),
+      ...(mode === "r2v" && input.audios.length ? { reference_audio_asset_ids: input.audios } : {}),
       ref_image_size: "match",
     },
   };
@@ -235,15 +233,38 @@ async function ensureH3Runtime(config: { baseUrl: string; apiKey: string }) {
   if (current.active_runtime === "h3" && current.runtime_ready !== false && current.runtime_phase !== "warming") return;
   const response = await fetch(`${config.baseUrl}/api/v1/gpu/runtime/h3`, { method: "POST", headers: auth(config) });
   if (response.status === 409) throw new Error("GPU Runtime 忙碌，请等待活动任务结束后重试");
-  if (!response.ok) throw new Error(`H3 Runtime 切换失败（${response.status}）`);
+  if (!response.ok) throw await h3ResponseError(response, "H3 Runtime 切换失败");
   const result = await response.json() as any;
   if (result.active_runtime !== "h3" || result.runtime_ready === false) throw new Error("H3 Runtime 尚未就绪");
 }
 
 async function h3Json(config: { baseUrl: string; apiKey: string }, endpoint: string, init: RequestInit = {}) {
   const response = await fetch(`${config.baseUrl}${endpoint}`, { ...init, headers: { ...auth(config), ...init.headers } });
-  if (!response.ok) throw new Error(`H3 服务请求失败（${response.status}）`);
+  if (!response.ok) throw await h3ResponseError(response, "H3 服务请求失败");
   return response.json() as Promise<any>;
+}
+
+async function h3ResponseError(response: Response, label: string) {
+  const payload = await response.json().catch(() => undefined);
+  const detail = formatH3ErrorDetail(payload);
+  return new Error(`${label}（${response.status}）${detail ? `：${detail}` : ""}`);
+}
+
+export function formatH3ErrorDetail(payload: unknown) {
+  const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : undefined;
+  const detail = record?.detail;
+  const messages = Array.isArray(detail)
+    ? detail.map((item) => {
+        if (!item || typeof item !== "object") return "";
+        const issue = item as Record<string, unknown>;
+        const location = Array.isArray(issue.loc) ? issue.loc.map(String).filter(Boolean).join(".") : "";
+        const message = typeof issue.msg === "string" ? issue.msg : "";
+        if (!message) return "";
+        return `${location ? `${location}：` : ""}${issue.type === "extra_forbidden" ? "不支持的请求字段" : message}`;
+      })
+    : [typeof detail === "string" ? detail : typeof record?.message === "string" ? record.message : typeof record?.error === "string" ? record.error : ""];
+  const safe = messages.filter(Boolean).join("；").replace(/\s+/g, " ").trim();
+  return safe ? safe.slice(0, 500) : undefined;
 }
 
 function auth(config: { apiKey: string }) { return { Authorization: `Bearer ${config.apiKey}` }; }

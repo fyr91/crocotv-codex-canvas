@@ -7,6 +7,7 @@ import { mkdir, rename } from "node:fs/promises";
 import { addResource, createProject, dataDir, ensureStorage, fileSize, listProjects, listResources, readProject, renameProject, resourceById, resourcesDir, safeResourcePath, saveProject, trashProject, trashResource, typeFromMime, updateResource } from "./storage";
 import { resourceThumbnail, thumbnailSize } from "./thumbnails";
 import { generateH3Video, generateImage, generateMusic, generateText, models } from "./providers";
+import { prepareH3Prompt } from "./h3-prompt";
 import { generateSpeech, type SpeechGenerationProgress } from "./speech";
 import { listCharacters, syncCharacters } from "./characters";
 import { startSunoCallbackService, sunoCallbackState } from "./suno-callback";
@@ -192,11 +193,23 @@ app.post("/api/generate/speech", asyncHandler(async (request, response) => {
   response.json({ resource: await generateSpeech({ ...request.body, content: requiredText(request.body?.content, "语音正文"), voiceId: requiredText(request.body?.voiceId, "角色 Voice ID") }, onProgress) });
 }));
 app.post("/api/generate/video", asyncHandler(async (request, response) => {
-  const model = String(request.body?.model || "minimax-h3").trim().toLowerCase();
+  const requestedModel = String(request.body?.model || "minimax-h3").trim().toLowerCase();
+  const model = requestedModel === "minimax-h3-r2v" ? "minimax-h3" : requestedModel;
   if (model !== "minimax-h3") throw new Error(`不支持的视频模型：${model}`);
   const prompt = requiredText(request.body?.prompt, "H3 Prompt");
-  const resources = await generateH3Video({ ...request.body, prompt, duration: Number(request.body?.duration) });
-  response.json({ resources });
+  const duration = Number(request.body?.duration);
+  if (Array.isArray(request.body?.videoResourceIds) && request.body.videoResourceIds.length) throw new Error("MiniMax H3 暂不支持视频参考或视频编辑；请改用图片、音频参考");
+  const prepared = await prepareH3Prompt({
+    draftPrompt: prompt,
+    durationSeconds: duration,
+    inputMode: request.body?.inputMode,
+    imageResourceIds: Array.isArray(request.body?.imageResourceIds) ? request.body.imageResourceIds : [],
+    audioResourceIds: Array.isArray(request.body?.audioResourceIds) ? request.body.audioResourceIds : [],
+    resourceRoles: Array.isArray(request.body?.resourceRoles) ? request.body.resourceRoles : [],
+    optimize: request.body?.optimizePrompt !== false,
+  });
+  const resources = await generateH3Video({ ...request.body, prompt: prepared.prompt, duration, videoResourceIds: [] });
+  response.json({ resources, promptPreparation: prepared });
 }));
 app.post("/api/generate/music", asyncHandler(async (request, response) => response.json({ resources: await generateMusic({ prompt: String(request.body?.prompt || ""), model: String(request.body?.model || ""), params: request.body?.params }) })));
 

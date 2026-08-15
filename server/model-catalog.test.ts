@@ -13,6 +13,8 @@ test("模型目录公开统一名称与 H3 四种输入模式", () => {
   assert.equal(catalog.models["google:4@1"].display_name, "Nano Banana");
   assert.equal(catalog.models["openai:gpt-image@2"].display_name, "GPT Image 02");
   assert.deepEqual(catalog.model_lines["minimax-h3"].modes, ["t2v", "i2v", "fl2v", "r2v"]);
+  assert.equal(Object.keys(catalog.models).filter((id) => id.startsWith("minimax-h3")).length, 1);
+  assert.equal("reference_videos" in catalog.models["minimax-h3"].inputs, false);
   assert.equal(catalog.models["minimax-h3"].inputs.first_frame.ordered, true);
   assert.equal(catalog.models["minimax-h3"].inputs.last_frame.ordered, true);
 });
