@@ -7,6 +7,7 @@ import { getMessages } from '@/lib/i18n';
 import { LightboxProvider } from '@/components/shared/preview/LightboxProvider';
 import ToastContainer from '@/components/shared/ToastContainer';
 import { MotionConfig } from 'framer-motion';
+import { initializeSharedTheme, readSharedThemeCookie, subscribeSharedTheme } from '@/lib/sharedTheme';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     const locale = useSettingsStore((s) => s.locale);
@@ -20,6 +21,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
         html.classList.add(theme);
         html.style.colorScheme = theme;
     }, [theme]);
+
+    useEffect(() => {
+        let active = true;
+        let receivedEvent = false;
+        const applyTheme = (nextTheme: 'light' | 'dark') => {
+            if (active && useSettingsStore.getState().theme !== nextTheme) {
+                useSettingsStore.getState().setTheme(nextTheme);
+            }
+        };
+        const unsubscribe = subscribeSharedTheme((nextTheme) => {
+            receivedEvent = true;
+            applyTheme(nextTheme);
+        });
+        const fallback = readSharedThemeCookie() ?? useSettingsStore.getState().theme;
+        void initializeSharedTheme(fallback).then((nextTheme) => {
+            if (!receivedEvent) applyTheme(nextTheme);
+        });
+        return () => {
+            active = false;
+            unsubscribe();
+        };
+    }, []);
 
     useEffect(() => {
         // animations=false → 挂 html.no-motion，CSS 据此降低/禁用过渡动画

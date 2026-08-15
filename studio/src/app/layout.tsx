@@ -15,7 +15,7 @@ export default function RootLayout({
         <meta name="description" content="CrocoTV 本地视频生产工作台" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var d=JSON.parse(localStorage.getItem("lumenx-settings")||"{}");var t=d.state&&d.state.theme;var l=t==="light"||t==="atelier-light"||t==="brand-light";document.documentElement.className=l?"light":"dark";document.documentElement.style.colorScheme=l?"light":"dark";}catch(e){document.documentElement.className="dark";document.documentElement.style.colorScheme="dark";}})();`,
+            __html: `(function(){try{var c=document.cookie.match(/(?:^|; )croco_theme=(light|dark)(?:;|$)/);var d=JSON.parse(localStorage.getItem("lumenx-settings")||"{}");var t=c?c[1]:d.state&&d.state.theme;var l=t==="light"||t==="atelier-light"||t==="brand-light";document.documentElement.className=l?"light":"dark";document.documentElement.style.colorScheme=l?"light":"dark";}catch(e){document.documentElement.className="dark";document.documentElement.style.colorScheme="dark";}})();`,
           }}
         />
         {/* Desktop app: compact font-size for embedded windows (Tauri / pywebview).
