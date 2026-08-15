@@ -1,6 +1,6 @@
 # CrocoTV 视频工坊统一化优化方案
 
-> 状态：待实施
+> 状态：已实施并验收（2026-08-15）
 > 优先级：P0 基础架构
 > 目标读者：主 Agent、Canvas/Studio/MCP 实施者
 > 适用仓库：`crocotv-codex-canvas`
@@ -94,9 +94,11 @@ MCP / Agent：自动化执行模式
 | P2 主题与大纲 | `croco.p2.theme-outline` | 1.0.0 | 主题分析、Claim、节拍和内容大纲 | Gemini |
 | P2 剧本初稿 | `croco.p2.script-draft` | 1.0.1 | 根据已核验大纲生成剧本初稿 | Gemini |
 | P2 剧本校定 | `croco.p2.script-calibration` | 1.0.0 | 自然化、表达校定和去 AI 化 | GLM |
-| P3 综合生产设计 | `croco.p3.production-design` | 1.0.0 | 角色、Variation、声音、场景和道具 | Gemini |
-| P4 导演策划 | `croco.p4.director-planning` | 1.1.0 | 全片导演总纲和正式文字分镜 | Gemini |
+| P3 综合生产设计 | `croco.p3.production-design` | 1.1.0 | 角色、Variation、声音、场景和道具 | Gemini |
+| P3 艺术方向选项 | `croco.p3.art-direction-options` | 1.0.0 | 生成供用户选择的视觉方向 | Gemini |
+| P4 导演策划 | `croco.p4.director-planning` | 1.2.0 | 全片导演总纲和正式文字分镜 | Gemini |
 | P4 跨分镜审核 | `croco.p4.cross-shot-audit` | 1.0.0 | 全片连续性、资产和可生产性审核 | GLM |
+| P4 单镜头返修 | `croco.p4.shot-revision` | 1.0.0 | 根据反馈和上一版返修单镜头 | GLM |
 | H3 视频 Prompt | `croco.h3.universal-ref2va` | 2.0.0 | 生成最终六段式 H3 Prompt | 豆包 Seed 2.1 Turbo |
 
 下列 H3 文件只用于历史项目核对，不得进入新的正式执行：
@@ -364,13 +366,13 @@ Canvas 修改 Studio 管理内容
 
 语言切换放在主题按钮旁，以中文/英文图标按钮直接切换。主题切换必须与 Canvas 使用同一状态和交互方式。
 
-高级设置改为全局 Prompt Registry 管理入口，支持：
+高级设置改为全局 Prompt Registry 入口，当前支持：
 
-- 查看用途、版本、模型和正文；
-- 创建并激活新版本；
-- 恢复内置版本；
-- 查看哪些流程正在使用；
-- 查看内容 SHA 和历史版本。
+- 查看用途、激活版本和所属阶段；
+- 通过服务端 Registry API 查询模型策略、输入契约和内容 SHA；
+- 通过项目执行记录查询实际使用的模板版本、SHA、模型和结果节点。
+
+内置 Prompt 的创建、激活和恢复继续走插件权威源码与发布流程，不允许运行中的 Studio 改写可分发插件文件。这样既保留版本历史，也避免形成浏览器或运行时的第二份 Prompt 正文。
 
 关于页仅保留：视频工坊、Version、Build 和检查更新占位按钮。暂不执行真实更新检查。
 
@@ -474,50 +476,58 @@ MCP 至少需要支持：
 
 ### 13.1 Prompt 与 Runtime
 
-- [ ] `server/studio-api.ts` 不再保留六条简化 `PROMPT_DEFAULTS`；
-- [ ] 删除服务端隐藏双语润色 system wrapper；
-- [ ] Studio 不再使用 `lumenx_default_prompt_config` 保存私有 Prompt；
-- [ ] 所有 AI 操作都能追踪到 `templateKey/templateVersion/SHA`；
-- [ ] `feedback`、`prev_cn`、模型和真实参考资源均进入执行；
-- [ ] R2V 不再追加 slots JSON；
-- [ ] 专用 Prompt Config 不再复用分镜分析节点；
-- [ ] 历史 H3 模板不进入新执行；
-- [ ] Canvas、Studio、MCP 调用同一个 Runtime。
+- [x] `server/studio-api.ts` 不再保留六条简化 `PROMPT_DEFAULTS`；
+- [x] 删除服务端隐藏双语润色 system wrapper；
+- [x] Studio 不再使用 `lumenx_default_prompt_config` 保存私有 Prompt；
+- [x] 所有 Registry 驱动的 AI 操作都能追踪到 `templateKey/templateVersion/SHA`；
+- [x] `feedback`、`prev_cn`、模型和真实参考资源均进入执行；
+- [x] R2V 不再追加 slots JSON；
+- [x] 专用 Prompt Config 不再复用分镜分析节点；
+- [x] 历史 H3 模板不进入新执行；
+- [x] Canvas、Studio、MCP 调用同一个 Runtime。
 
 ### 13.2 状态与同步
 
-- [ ] Studio 手动创建或修改内容时 Canvas 自动同步；
-- [ ] Canvas 修改 Studio 管理内容时通过 Studio State 校验；
-- [ ] 项目版本正确递增；
-- [ ] 已打开 Canvas 无需刷新即可接收更新；
-- [ ] 延迟的浏览器保存不会覆盖更新版本；
-- [ ] 不存在第二条项目持久化路径。
+- [x] Studio 手动创建或修改内容时 Canvas 自动同步；
+- [x] Canvas 修改 Studio 管理内容时通过 Studio State 校验；
+- [x] 项目版本正确递增；
+- [x] 已打开 Canvas 无需刷新即可接收更新；
+- [x] 延迟的浏览器保存不会覆盖更新版本；
+- [x] 不存在第二条项目持久化路径。
 
 ### 13.3 模型和资源
 
-- [ ] 通用文本默认是 DS V4 Flash；
-- [ ] 任务专用 Prompt 保留规定模型；
-- [ ] FL2V 使用有序首尾帧；
-- [ ] R2V 使用真实图片、视频和音频资源；
-- [ ] 模型名称和 Provider 路由与服务端 Catalog 一致。
+- [x] 通用文本默认是 DS V4 Flash；
+- [x] 任务专用 Prompt 保留规定模型；
+- [x] FL2V 使用有序首尾帧；
+- [x] R2V 使用真实图片、视频和音频资源；
+- [x] 模型名称和 Provider 路由与服务端 Catalog 一致。
 
 ### 13.4 安全和界面
 
-- [ ] API Key 不进入项目、节点、日志、浏览器持久状态或 MCP；
-- [ ] 设置页只展示实际可用 Provider；
-- [ ] Studio Light/Dark 与 Canvas 状态一致；
-- [ ] 所有按钮在 Enabled/Disabled/Hover/Focus 下可读；
-- [ ] 用户文案不包含开发实现和兼容术语。
+- [x] API Key 不进入项目、节点、日志、浏览器持久状态或 MCP；
+- [x] 设置页只展示实际可用 Provider；
+- [x] Studio Light/Dark 与 Canvas 状态一致；
+- [x] 所有按钮在 Enabled/Disabled/Hover/Focus 下可读；
+- [x] 用户文案不包含开发实现和兼容术语。
 
 ### 13.5 工程验证
 
-- [ ] `npm run build` 通过；
-- [ ] `GET /api/status` 正常；
-- [ ] 受影响 REST 命令完成直接验证；
-- [ ] MCP 客户端可以 list/call 受影响工具；
-- [ ] 已打开 Canvas 可以接收 Studio/MCP 更新；
-- [ ] 使用 Mock/Fake Provider 完成 Prompt 和资源输入测试；
-- [ ] 除非明确需要，不执行付费生成调用。
+- [x] `npm run build` 通过；
+- [x] `GET /api/status` 正常；
+- [x] 受影响 REST 命令完成直接验证；
+- [x] MCP 客户端可以 list/call 受影响工具；
+- [x] 已打开 Canvas 可以接收 Studio/MCP 更新；
+- [x] 使用 Mock/Fake Provider 完成 Prompt 和资源输入测试；
+- [x] 未执行付费生成调用。
+
+### 13.6 实施结果
+
+- 视频工坊继续保持 Script、Art Direction、Cast、Storyboard、Assembly 五阶段交互与业务逻辑；
+- Canvas 继续保持自由节点编排，Studio 管理节点通过结构化翻译层修改；
+- Studio、Canvas 与 MCP 共享项目 ID、原子版本、事件流、本地资源、模型目录和生成 Runtime；
+- MCP 可查询 Prompt/模型/Provider 状态，按 `templateKey` 执行结构化 Prompt，传入反馈、上一版和有序本地资源，并查询不可变执行记录与结果节点；
+- 验收使用临时项目与 Mock/契约测试完成，未触发任何付费生成。
 
 ## 14. 完成定义
 

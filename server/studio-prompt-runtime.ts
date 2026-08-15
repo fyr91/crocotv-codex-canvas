@@ -33,6 +33,15 @@ export type StudioGenerationResult = {
   execution: StudioGenerationExecution;
 };
 
+export type StudioPromptExecutionRequest = Omit<StudioGenerationRequest, "configNodeId">;
+
+export async function executeStudioPromptForProject(input: StudioPromptExecutionRequest): Promise<StudioGenerationResult> {
+  return executeStudioPrompt({
+    ...input,
+    configNodeId: studioPromptConfigNodeId(input.projectId, input.operation, input.frameId),
+  });
+}
+
 export async function executeStudioPrompt(input: StudioGenerationRequest): Promise<StudioGenerationResult> {
   const backed = await getStudioBackedProject(input.projectId);
   const resolved = await resolveStudioPrompt(backed.studio, input.operation, input.templateKey, input.requestedModel);
@@ -236,3 +245,10 @@ async function executeVisualContext(input: StudioGenerationRequest, project: any
 function objectValue(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function stringArray(value: unknown) { return Array.isArray(value) ? value.map(String).filter(Boolean).slice(0, 100) : []; }
 function textModels() { return [...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm]; }
+
+function studioPromptConfigNodeId(projectId: string, operation: StudioPromptOperation, frameId?: string) {
+  if (operation === "entity_extraction") return stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
+  if (operation === "style_analysis") return stableStudioNodeId(projectId, "art-direction", projectId, "analysis-config");
+  if (operation === "storyboard_extraction") return stableStudioNodeId(projectId, "frame", projectId, "analysis-config");
+  return stableStudioNodeId(projectId, "frame", frameId || projectId, "prompt-revision-config");
+}

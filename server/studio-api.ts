@@ -18,6 +18,7 @@ import { STUDIO_PROMPT_TEMPLATE_MAP } from "./studio-schemas";
 import { getStudioModelCatalog } from "./model-catalog";
 import { clearProviderSecret, listProviderSecretStatuses, revealProviderSecret, updateProviderSecret } from "./provider-secrets";
 import { applyStudioCanvasEdits } from "./studio-canvas-translation";
+import { executeStudioPromptForProject, type StudioPromptOperation } from "./studio-prompt-runtime";
 
 export const studioApiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
@@ -126,6 +127,47 @@ studioApiRouter.post("/projects/:id/merge", projectRoute(async (request, respons
 studioApiRouter.post("/projects/:id/generate_video", projectRoute(async (request, response, id) => response.json(await mergeStudioProject(id, clientId(request)))));
 studioApiRouter.post("/projects/:id/run-stage", projectRoute(async (request, response, id) => response.json(await runStudioStage(id, String(request.body?.stage || ""), clientId(request)))));
 studioApiRouter.post("/projects/:id/canvas-edits", projectRoute(async (request, response, id) => response.json(await applyStudioCanvasEdits(id, request.body?.edits, { expectedVersion: optionalVersion(request.body?.expectedVersion), originClientId: clientId(request) }))));
+studioApiRouter.post("/projects/:id/prompt-executions", projectRoute(async (request, response, id) => {
+  const references = promptResourceReferences(request.body);
+  response.json(await executeStudioPromptForProject({
+    projectId: id,
+    operation: promptOperation(request.body?.operation),
+    templateKey: optionalTemplateKey(request.body?.template_key || request.body?.templateKey),
+    draftPrompt: boundedText(request.body?.draft_prompt ?? request.body?.draftPrompt, "draftPrompt", 100_000),
+    feedback: optionalText(request.body?.feedback, 100_000),
+    prevCn: optionalText(request.body?.prev_cn ?? request.body?.prevCn, 100_000),
+    targetDurationSeconds: boundedDuration(request.body?.target_duration_seconds ?? request.body?.targetDurationSeconds),
+    orderedResourceIds: references.map((reference) => reference.resourceId),
+    resourceRoles: references,
+    requestedModel: optionalText(request.body?.requested_model ?? request.body?.requestedModel, 100),
+    frameId: optionalId(request.body?.frame_id ?? request.body?.frameId),
+    originClientId: clientId(request),
+  }));
+}));
+studioApiRouter.get("/projects/:id/prompt-executions", projectRoute(async (request, response, id) => {
+  const backed = await getStudioBackedProject(id);
+  const executionId = optionalId(request.query.execution_id);
+  const limit = boundedLimit(request.query.limit, 100);
+  const executions = backed.studio.generationExecutions
+    .filter((execution) => !executionId || execution.id === executionId)
+    .slice(-limit)
+    .reverse()
+    .map((execution) => ({
+      ...execution,
+      results: execution.outputNodeIds.map((nodeId) => {
+        const node = backed.nodes.find((candidate) => candidate.id === nodeId);
+        return node ? {
+          nodeId,
+          type: node.type,
+          title: node.title,
+          status: String(node.metadata?.status || ""),
+          resourceId: String(node.metadata?.storageKey || "") || undefined,
+          content: typeof node.metadata?.content === "string" ? node.metadata.content.slice(0, 100_000) : undefined,
+        } : { nodeId, missing: true };
+      }),
+    }));
+  response.json({ projectId: id, projectVersion: backed.version, executions });
+}));
 
 studioApiRouter.post("/video/polish_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), String(request.body?.draft_prompt || ""), clientId(request), promptRuntimeOptions(request.body, "video_polish")))));
 studioApiRouter.post("/video/polish_r2v_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), String(request.body?.draft_prompt || ""), clientId(request), promptRuntimeOptions(request.body, "r2v_polish")))));
@@ -196,6 +238,7 @@ function projectRoute(handler: (request: Request, response: Response, id: string
 function clientId(request: Request) { return String(request.header("x-croco-client-id") || "studio-api").slice(0, 180); }
 function param(value: string | string[]) { return Array.isArray(value) ? value[0] : value; }
 function requiredId(value: unknown) { const id = String(value || "").trim(); if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new Error("ID 无效"); return id; }
+function optionalId(value: unknown) { const id = String(value || "").trim(); return id ? requiredId(id) : undefined; }
 function entityKind(value: unknown): "character" | "scene" | "prop" { const kind = String(value || "").toLowerCase().replace(/s$/, "").replace("full_body", "character").replace("head_shot", "character"); if (kind === "character" || kind === "scene" || kind === "prop") return kind; throw new Error(`不支持的资产类型：${value}`); }
 function collection(kind: "character" | "scene" | "prop") { return kind === "character" ? "characters" as const : kind === "scene" ? "scenes" as const : "props" as const; }
 function objectValue(value: unknown): Record<string, any> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {}; }
@@ -203,6 +246,11 @@ function stringArray(value: unknown) { return Array.isArray(value) ? value.map(S
 function stringRecord(value: unknown) { return Object.fromEntries(Object.entries(objectValue(value)).filter(([, item]) => typeof item === "string")) as Record<string, string>; }
 function boundedCount(value: unknown) { const count = Number(value); return Math.max(1, Math.min(3, Number.isFinite(count) ? Math.floor(count) : 1)); }
 function optionalVersion(value: unknown) { const version = Number(value); return Number.isInteger(version) && version > 0 ? version : undefined; }
+function boundedLimit(value: unknown, fallback: number) { const limit = Number(value); return Number.isInteger(limit) ? Math.max(1, Math.min(100, limit)) : fallback; }
+function boundedText(value: unknown, label: string, maximum: number) { const text = String(value ?? ""); if (!text.trim()) throw new Error(`${label} 不能为空`); if (text.length > maximum) throw new Error(`${label} 超过 ${maximum} 字符`); return text; }
+function optionalText(value: unknown, maximum: number) { const text = String(value ?? ""); if (!text) return undefined; if (text.length > maximum) throw new Error(`文本超过 ${maximum} 字符`); return text; }
+function optionalTemplateKey(value: unknown) { const key = String(value || "").trim(); if (!key) return undefined; if (!/^[a-z0-9._-]{1,100}$/.test(key)) throw new Error("templateKey 无效"); return key; }
+function promptOperation(value: unknown): StudioPromptOperation { const operation = String(value || "") as StudioPromptOperation; if (!(operation in STUDIO_PROMPT_TEMPLATE_MAP)) throw new Error(`不支持的 Studio Prompt 操作：${value}`); return operation; }
 function decodePresetVoice(value: string) { const parts = value.split("."); if ((parts[0] === "design" || parts[0] === "clone") && parts[1]) { try { return Buffer.from(parts[1], "base64url").toString("utf8"); } catch {} } return value; }
 
 function promptRuntimeOptions(raw: any, operation: "storyboard_polish" | "video_polish" | "r2v_polish", frameId?: string) {

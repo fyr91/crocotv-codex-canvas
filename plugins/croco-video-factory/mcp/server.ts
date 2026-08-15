@@ -19,7 +19,7 @@ const studioOrigin = process.env.CROCO_LOCAL_STUDIO_ORIGIN || "http://localhost:
 const mcpClientId = `mcp-${process.pid}`;
 
 const server = new McpServer({ name: "crocotv", version: bundleManifest.mcpVersion }, {
-  instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic multi-node changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Use canvas_create_project when a new canvas is requested. For new Canvas-provider generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. When Codex built-in ImageGen has already produced a GPT image, use canvas_place_imagegen_result to import it and preserve Prompt/Reference provenance without fabricating a provider Config. Generated or imported files must enter the local resource library before being placed on a canvas.",
+  instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic free-Canvas changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Studio-backed projects retain their five-stage Studio workflow; use Studio domain tools or studio_apply_canvas_edits for Studio-managed nodes so changes translate through structured Studio state. Use canvas_create_project when a new free canvas is requested and studio_create_project for a Video Workshop project. For new Canvas-provider generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. MiniMax H3 config nodes support T2V, I2V, ordered first/last-frame FL2V, and multimodal R2V through real connected local resources. When Codex built-in ImageGen has already produced a GPT image, use canvas_place_imagegen_result to import it and preserve Prompt/Reference provenance without fabricating a provider Config. Generated or imported files must enter the local resource library before being placed on a canvas.",
 });
 
 const positionSchema = z.object({ x: z.number(), y: z.number() });
@@ -86,6 +86,17 @@ const studioFrameSchema = z.object({
   dialogue: z.string().max(20_000).optional(),
   characterIds: z.array(z.string().min(1).max(80)).max(100).optional(),
 });
+const studioCanvasEditSchema = z.discriminatedUnion("op", [
+  z.object({ op: z.literal("update_node"), nodeId: z.string().min(1).max(80), content: z.string().max(1_000_000).optional(), title: z.string().max(180).optional(), metadata: metadataSchema.optional() }),
+  z.object({ op: z.literal("delete_node"), nodeId: z.string().min(1).max(80) }),
+  z.object({ op: z.literal("connect"), fromNodeId: z.string().min(1).max(80), toNodeId: z.string().min(1).max(80), fromPort: connectionPortSchema.optional(), toPort: connectionPortSchema.optional() }),
+  z.object({ op: z.literal("disconnect"), connectionId: z.string().min(1).max(80) }),
+]);
+const studioPromptOperationSchema = z.enum(["entity_extraction", "style_analysis", "storyboard_extraction", "storyboard_polish", "video_polish", "r2v_polish"]);
+const studioPromptResourceRoleSchema = z.object({
+  resourceId: z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/),
+  role: z.string().min(1).max(80),
+});
 
 server.registerTool("canvas_start_local_service", {
   description: "Start the local CrocoTV API and web app if they are not already running. Safe to call repeatedly.",
@@ -124,6 +135,73 @@ server.registerTool("studio_get_project", {
   inputSchema: { projectId: z.string().uuid() },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async ({ projectId }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}`)));
+
+server.registerTool("studio_list_prompt_templates", {
+  description: "List the authoritative versioned Croco Prompt Registry used by Video Workshop and Canvas runtimes. Returns metadata, hashes, model policy, and input modes without exposing or duplicating prompt bodies in browser storage.",
+  inputSchema: { includeLegacy: z.boolean().default(false), includeInactive: z.boolean().default(false) },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ includeLegacy, includeInactive }) => toolResult(await api(`/api/studio/prompt-registry?include_legacy=${includeLegacy}&include_inactive=${includeInactive}`)));
+
+server.registerTool("studio_get_model_catalog", {
+  description: "Read the authoritative Croco model/provider catalog shared by Canvas and Video Workshop, including executable model IDs and MiniMax H3 T2V, I2V, ordered FL2V, and multimodal R2V modes.",
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async () => toolResult(await api("/api/studio/model-catalog")));
+
+server.registerTool("studio_list_provider_status", {
+  description: "Read masked local provider credential status for the shared Croco runtime. Never returns complete secrets.",
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async () => toolResult(await api("/api/studio/config/secrets")));
+
+server.registerTool("studio_apply_canvas_edits", {
+  description: "Atomically translate Canvas-side edits of Studio-managed nodes into structured Studio state, then regenerate the deterministic managed projection while preserving free Canvas nodes. Use this instead of canvas_apply_operations for Studio-managed content, titles, configuration, entity/frame deletion, or connections. Fixed five-stage workflow connections cannot be removed.",
+  inputSchema: { projectId: z.string().uuid(), expectedVersion: z.number().int().positive().optional(), edits: z.array(studioCanvasEditSchema).min(1).max(100) },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+}, async ({ projectId, expectedVersion, edits }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/canvas-edits`, { method: "POST", body: { expectedVersion, edits } })));
+
+server.registerTool("studio_execute_prompt", {
+  description: "Execute one structured Video Workshop Prompt Registry operation through its dedicated managed Canvas Config node and the shared Canvas runtime. Supports an explicit templateKey, feedback, previous Chinese version, target duration, and ordered local resource references. The call records immutable prompt/input snapshots and can invoke configured external providers and incur cost; use Studio domain tools separately when the returned text should update business state.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    operation: studioPromptOperationSchema,
+    templateKey: z.string().min(1).max(100).regex(/^[a-z0-9._-]+$/).optional(),
+    draftPrompt: z.string().min(1).max(100_000),
+    feedback: z.string().max(100_000).optional(),
+    previousChinese: z.string().max(100_000).optional(),
+    targetDurationSeconds: z.number().int().min(3).max(15).optional(),
+    frameId: z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    orderedResources: z.array(studioPromptResourceRoleSchema).max(16).default([]),
+    requestedModel: z.string().min(1).max(100).optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+}, async ({ projectId, operation, templateKey, draftPrompt, feedback, previousChinese, targetDurationSeconds, frameId, orderedResources, requestedModel }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/prompt-executions`, {
+  method: "POST",
+  body: {
+    operation,
+    templateKey,
+    draftPrompt,
+    feedback,
+    prevCn: previousChinese,
+    targetDurationSeconds,
+    frameId,
+    ordered_resource_ids: orderedResources.map((resource) => resource.resourceId),
+    resource_roles: orderedResources,
+    requestedModel,
+  },
+})));
+
+server.registerTool("studio_list_prompt_executions", {
+  description: "List immutable Video Workshop prompt execution records and their current Canvas result nodes, including prompt version/hash, model, ordered source/resource IDs, project version, status, local resource ID, and bounded text content.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    executionId: z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    limit: z.number().int().min(1).max(100).default(20),
+  },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ projectId, executionId, limit }) => {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (executionId) query.set("execution_id", executionId);
+  return toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/prompt-executions?${query}`));
+});
 
 server.registerTool("studio_set_script", {
   description: "Replace the Studio source script and atomically update its stable managed Canvas Text node without touching free Canvas nodes.",
@@ -407,7 +485,7 @@ server.registerTool("canvas_place_imagegen_result", {
 });
 
 server.registerTool("canvas_run_nodes", {
-  description: "Submit one or more existing Canvas generation-module nodes as an asynchronous run job through the same local execution path used by the UI. When concurrency is omitted, every selected node starts concurrently; pass a lower value only when the user explicitly requests throttling. Canvas retains every configured model for direct user operation; Croco Video Factory applies its narrower stage routing when it constructs nodes. Image config nodes support connected multimodal image references, including Nano Banana Lite, Nano Banana, and GPT Image 02; video config nodes use MiniMax H3. The claimed config nodes are immediately locked and glow green while MCP owns them; generated results retain ordinary Canvas connections to the exact referenced input nodes. Poll canvas_get_run_status with the returned jobId.",
+  description: "Submit one or more existing Canvas generation-module nodes as an asynchronous run job through the same local execution path used by the UI. When concurrency is omitted, every selected node starts concurrently; pass a lower value only when the user explicitly requests throttling. Image config nodes support connected multimodal image references through Nano Banana Lite, Nano Banana, and GPT Image 02. MiniMax H3 video config nodes use metadata.videoInputMode plus real connected resources: t2v uses text only; i2v uses one image; fl2v requires exactly two images ordered as first then last frame; r2v accepts connected image, video, and audio resources. The claimed config nodes are immediately locked while MCP owns them; generated results retain connections to their exact inputs, including Studio Canvas bindings when applicable. Poll canvas_get_run_status with the returned jobId.",
   inputSchema: {
     projectId: z.string().uuid(),
     nodeIds: z.array(z.string().min(1).max(80)).min(1).max(20),
