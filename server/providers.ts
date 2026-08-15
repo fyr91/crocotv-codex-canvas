@@ -155,6 +155,14 @@ export type H3GenerationProgress = {
   label: string;
 };
 
+export function h3JobProgressState(status: unknown): { pending: boolean; stage: H3GenerationProgress["stage"]; label: string } {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "dispatching") return { pending: true, stage: "queued", label: "MiniMax H3 任务分发中" };
+  if (normalized === "queued") return { pending: true, stage: "queued", label: "MiniMax H3 排队中" };
+  if (normalized === "running") return { pending: true, stage: "running", label: "MiniMax H3 生成中" };
+  return { pending: false, stage: "completed", label: "MiniMax H3 正在保存结果" };
+}
+
 export async function generateH3Video(input: { prompt: string; duration: number; quality?: string; count?: number; imageResourceIds?: string[]; videoResourceIds?: string[]; audioResourceIds?: string[]; onProgress?: (progress: H3GenerationProgress) => void | Promise<void> }) {
   const config = { baseUrl: required("H3_BASE_URL").replace(/\/$/, ""), apiKey: required("H3_API_KEY") };
   if (!Number.isInteger(input.duration) || input.duration < 3 || input.duration > 15) throw new Error("H3 时长必须为 3–15 秒整数");
@@ -177,14 +185,15 @@ export async function generateH3Video(input: { prompt: string; duration: number;
     do {
       await wait(5000);
       job = await h3Json(config, `/api/v1/h3/jobs/${encodeURIComponent(jobId)}`);
-      const stage = job.status === "queued" ? "queued" : job.status === "running" ? "running" : "completed";
+      const state = h3JobProgressState(job.status);
+      const stage = state.stage;
       const progress = Number.isFinite(Number(job.progress)) ? Math.max(0, Math.min(100, Number(job.progress))) : undefined;
       const signature = `${stage}:${progress ?? ""}`;
       if (signature !== previousProgressSignature) {
         previousProgressSignature = signature;
-        await input.onProgress?.({ stage, jobId, outputIndex, ...(progress != null ? { progress } : {}), label: stage === "queued" ? "MiniMax H3 排队中" : stage === "running" ? "MiniMax H3 生成中" : "MiniMax H3 正在保存结果" });
+        await input.onProgress?.({ stage, jobId, outputIndex, ...(progress != null ? { progress } : {}), label: state.label });
       }
-    } while (["queued", "running"].includes(job.status));
+    } while (h3JobProgressState(job.status).pending);
     if (job.status !== "succeeded") throw new Error(job.error || `H3 任务状态：${job.status}`);
     const videoResponse = await fetch(`${config.baseUrl}/api/v1/h3/jobs/${encodeURIComponent(jobId)}/content`, { headers: auth(config) });
     if (!videoResponse.ok) throw new Error(`H3 视频下载失败（${videoResponse.status}）`);
