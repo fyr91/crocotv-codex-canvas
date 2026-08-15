@@ -223,14 +223,17 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
       const failure = await finishResourceOutputs(projectId, config.id, outputIds, settled, originClientId);
       if (failure) return { configNodeId, outputNodeIds: outputIds, status: "error", error: failure };
     } else if (mode === "video") {
-      if (inputs.videoIds.length) throw new Error("MiniMax H3 生成模组不接受视频作为输入，请连接图片和音频节点");
+      const videoInputMode = String(config.metadata?.videoInputMode || config.metadata?.generation_mode || "").toLowerCase();
+      if (videoInputMode === "fl2v" && inputs.imageIds.length !== 2) throw new Error("FL2V 生成模组必须按首帧、尾帧顺序连接两张图片");
       const resources = await generateH3Video({
         prompt: inputs.prompt,
         duration: videoDuration(config),
         quality: String(config.metadata?.vquality || "preview"),
         count,
         imageResourceIds: inputs.imageIds,
+        videoResourceIds: inputs.videoIds,
         audioResourceIds: inputs.audioIds,
+        ...(videoInputMode === "fl2v" ? { firstFrameResourceId: inputs.imageIds[0], lastFrameResourceId: inputs.imageIds[1] } : {}),
         onProgress: (progress) => signal?.aborted ? undefined : publishVideoProgress(projectId, config.id, outputIds, progress, originClientId, remoteOperation, operationId),
       });
       signal?.throwIfAborted();

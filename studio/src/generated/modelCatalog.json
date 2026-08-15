@@ -1,8 +1,11 @@
 {
+  "schemaVersion": 1,
+  "generatedFrom": "server/model-catalog.ts",
   "compat": {
     "legacy_model_ids": {}
   },
   "defaults": {
+    "text_model": "deepseek-v4-flash-ga-260731",
     "canonical_model_settings": {
       "t2i_model": "google:nano-banana@2-lite",
       "i2i_model": "google:nano-banana@2-lite",
@@ -18,111 +21,533 @@
       "r2v_model": "minimax-h3-r2v"
     }
   },
+  "providers": {
+    "ark": {
+      "id": "ark",
+      "display_name": "火山方舟 Ark",
+      "secret_keys": [
+        "ARK_API_KEY"
+      ]
+    },
+    "bigmodel": {
+      "id": "bigmodel",
+      "display_name": "BigModel",
+      "secret_keys": [
+        "BIGMODEL_API_KEY"
+      ]
+    },
+    "runware": {
+      "id": "runware",
+      "display_name": "Runware",
+      "secret_keys": [
+        "RUNWARE_API_KEY"
+      ]
+    },
+    "h3": {
+      "id": "h3",
+      "display_name": "MiniMax H3",
+      "secret_keys": [
+        "H3_API_KEY"
+      ]
+    },
+    "suno": {
+      "id": "suno",
+      "display_name": "Suno",
+      "secret_keys": [
+        "SUNO_API_KEY"
+      ]
+    },
+    "characters": {
+      "id": "characters",
+      "display_name": "Croco 角色服务",
+      "secret_keys": [
+        "CROCO_CHARACTERS_API_TOKEN"
+      ]
+    },
+    "tts": {
+      "id": "tts",
+      "display_name": "豆包 TTS",
+      "secret_keys": [
+        "DOUBAO_TTS_API_KEY"
+      ]
+    }
+  },
   "families": {
-    "runware": { "family": "runware", "display_name": "Runware" },
-    "minimax": { "family": "minimax", "display_name": "MiniMax" }
+    "ark": {
+      "family": "ark",
+      "display_name": "火山方舟 Ark"
+    },
+    "bigmodel": {
+      "family": "bigmodel",
+      "display_name": "BigModel"
+    },
+    "runware": {
+      "family": "runware",
+      "display_name": "Runware"
+    },
+    "minimax": {
+      "family": "minimax",
+      "display_name": "MiniMax"
+    }
   },
   "models": {
+    "doubao-seed-2-1-turbo-260628": {
+      "id": "doubao-seed-2-1-turbo-260628",
+      "display_name": "Doubao Seed",
+      "description": "Croco 文本与多模态任务模型",
+      "family": "ark",
+      "status": "active",
+      "capabilities": [
+        "text"
+      ],
+      "duration": null,
+      "params": {},
+      "inputs": {},
+      "ui": {
+        "selection_group": "text",
+        "visible_in": [
+          "global_settings"
+        ],
+        "recommended": false,
+        "order": 50,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "deepseek-v4-flash-ga-260731": {
+      "id": "deepseek-v4-flash-ga-260731",
+      "display_name": "DeepSeek",
+      "description": "Croco 文本与多模态任务模型",
+      "family": "ark",
+      "status": "active",
+      "capabilities": [
+        "text"
+      ],
+      "duration": null,
+      "params": {},
+      "inputs": {},
+      "ui": {
+        "selection_group": "text",
+        "visible_in": [
+          "global_settings"
+        ],
+        "recommended": true,
+        "order": 50,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "deepseek-v4-pro-260425": {
+      "id": "deepseek-v4-pro-260425",
+      "display_name": "DeepSeek",
+      "description": "Croco 文本与多模态任务模型",
+      "family": "ark",
+      "status": "active",
+      "capabilities": [
+        "text"
+      ],
+      "duration": null,
+      "params": {},
+      "inputs": {},
+      "ui": {
+        "selection_group": "text",
+        "visible_in": [
+          "global_settings"
+        ],
+        "recommended": false,
+        "order": 50,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "glm-5.2": {
+      "id": "glm-5.2",
+      "display_name": "GLM-5.2",
+      "description": "Croco 文本与多模态任务模型",
+      "family": "bigmodel",
+      "status": "active",
+      "capabilities": [
+        "text"
+      ],
+      "duration": null,
+      "params": {},
+      "inputs": {},
+      "ui": {
+        "selection_group": "text",
+        "visible_in": [
+          "global_settings"
+        ],
+        "recommended": false,
+        "order": 50,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "glm-5v-turbo": {
+      "id": "glm-5v-turbo",
+      "display_name": "GLM-5V-TURBO",
+      "description": "Croco 文本与多模态任务模型",
+      "family": "bigmodel",
+      "status": "active",
+      "capabilities": [
+        "text",
+        "vision"
+      ],
+      "duration": null,
+      "params": {},
+      "inputs": {},
+      "ui": {
+        "selection_group": "text",
+        "visible_in": [
+          "global_settings"
+        ],
+        "recommended": false,
+        "order": 50,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "google:gemini@3.1-pro": {
+      "id": "google:gemini@3.1-pro",
+      "display_name": "gemini 3.1-pro",
+      "description": "Croco 文本与多模态任务模型",
+      "family": "runware",
+      "status": "active",
+      "capabilities": [
+        "text"
+      ],
+      "duration": null,
+      "params": {},
+      "inputs": {},
+      "ui": {
+        "selection_group": "text",
+        "visible_in": [
+          "global_settings"
+        ],
+        "recommended": false,
+        "order": 50,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "google:gemini@3-flash": {
+      "id": "google:gemini@3-flash",
+      "display_name": "gemini 3-flash",
+      "description": "Croco 文本与多模态任务模型",
+      "family": "runware",
+      "status": "active",
+      "capabilities": [
+        "text"
+      ],
+      "duration": null,
+      "params": {},
+      "inputs": {},
+      "ui": {
+        "selection_group": "text",
+        "visible_in": [
+          "global_settings"
+        ],
+        "recommended": false,
+        "order": 50,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "google:gemini@3.1-flash-lite": {
+      "id": "google:gemini@3.1-flash-lite",
+      "display_name": "gemini 3.1-flash-lite",
+      "description": "Croco 文本与多模态任务模型",
+      "family": "runware",
+      "status": "active",
+      "capabilities": [
+        "text"
+      ],
+      "duration": null,
+      "params": {},
+      "inputs": {},
+      "ui": {
+        "selection_group": "text",
+        "visible_in": [
+          "global_settings"
+        ],
+        "recommended": false,
+        "order": 50,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
     "google:nano-banana@2-lite": {
       "id": "google:nano-banana@2-lite",
       "display_name": "Nano Banana 2 Lite",
-      "description": "Croco Runware 图片生成与参考图编辑模型",
+      "description": "Croco Runware 快速图片生成与参考图编辑模型",
       "family": "runware",
       "status": "active",
-      "capabilities": ["t2i", "i2i"],
+      "capabilities": [
+        "t2i",
+        "i2i"
+      ],
       "duration": null,
       "params": {
-        "ratio": { "options": ["16:9", "9:16", "4:3", "3:4", "1:1"], "default": "1:1" }
+        "ratio": {
+          "options": [
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "1:1"
+          ],
+          "default": "1:1"
+        }
       },
-      "inputs": { "reference_images": { "max": 9 } },
+      "inputs": {
+        "reference_images": {
+          "max": 9
+        }
+      },
       "ui": {
         "selection_group": "image",
-        "visible_in": ["project_settings", "series_settings", "global_settings"],
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings"
+        ],
         "recommended": true,
         "order": 100,
-        "badges": ["推荐", "Croco"]
+        "badges": [
+          "推荐",
+          "Croco"
+        ]
       }
     },
     "google:4@1": {
       "id": "google:4@1",
-      "display_name": "Google Image 4",
-      "description": "Croco Runware 高质量图片生成模型",
+      "display_name": "Nano Banana",
+      "description": "Croco Runware 高质量图片生成与参考图编辑模型",
       "family": "runware",
       "status": "active",
-      "capabilities": ["t2i", "i2i"],
+      "capabilities": [
+        "t2i",
+        "i2i"
+      ],
       "duration": null,
       "params": {
-        "ratio": { "options": ["16:9", "9:16", "4:3", "3:4", "1:1"], "default": "1:1" }
+        "ratio": {
+          "options": [
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "1:1"
+          ],
+          "default": "1:1"
+        }
       },
-      "inputs": { "reference_images": { "max": 9 } },
+      "inputs": {
+        "reference_images": {
+          "max": 9
+        }
+      },
       "ui": {
         "selection_group": "image",
-        "visible_in": ["project_settings", "series_settings", "global_settings"],
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings"
+        ],
         "recommended": false,
         "order": 90,
-        "badges": ["Croco"]
+        "badges": [
+          "Croco"
+        ]
       }
     },
     "openai:gpt-image@2": {
       "id": "openai:gpt-image@2",
-      "display_name": "GPT Image 2",
-      "description": "Croco Runware GPT Image 图片生成模型",
+      "display_name": "GPT Image 02",
+      "description": "Croco Runware GPT Image 图片生成与编辑模型",
       "family": "runware",
       "status": "active",
-      "capabilities": ["t2i", "i2i"],
+      "capabilities": [
+        "t2i",
+        "i2i"
+      ],
       "duration": null,
       "params": {
-        "ratio": { "options": ["16:9", "9:16", "4:3", "3:4", "1:1"], "default": "1:1" }
+        "ratio": {
+          "options": [
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "1:1"
+          ],
+          "default": "1:1"
+        }
       },
-      "inputs": { "reference_images": { "max": 9 } },
+      "inputs": {
+        "reference_images": {
+          "max": 9
+        }
+      },
       "ui": {
         "selection_group": "image",
-        "visible_in": ["project_settings", "series_settings", "global_settings"],
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings"
+        ],
         "recommended": false,
         "order": 80,
-        "badges": ["Croco"]
+        "badges": [
+          "Croco"
+        ]
       }
     },
     "minimax-h3": {
       "id": "minimax-h3",
       "display_name": "MiniMax H3",
-      "description": "Croco 统一视频生成 Runtime，支持文生视频和首帧/音频参考",
+      "description": "Croco 统一视频 Runtime：T2V、I2V、FL2V 与多参考 R2V",
       "family": "minimax",
       "status": "active",
-      "capabilities": ["t2v", "i2v"],
-      "duration": { "type": "slider", "min": 3, "max": 15, "step": 1, "default": 6 },
-      "params": {
-        "resolution": { "options": ["preview", "720p", "1080p"], "default": "preview" },
-        "ratio": { "options": ["16:9", "9:16", "1:1"], "default": "16:9" }
+      "capabilities": [
+        "t2v",
+        "i2v",
+        "fl2v",
+        "r2v"
+      ],
+      "duration": {
+        "type": "slider",
+        "min": 3,
+        "max": 15,
+        "step": 1,
+        "default": 6
       },
-      "inputs": { "reference_images": { "max": 9 } },
+      "params": {
+        "resolution": {
+          "options": [
+            "preview",
+            "720p",
+            "1080p"
+          ],
+          "default": "preview"
+        },
+        "ratio": {
+          "options": [
+            "16:9",
+            "9:16",
+            "1:1"
+          ],
+          "default": "16:9"
+        }
+      },
+      "inputs": {
+        "reference_images": {
+          "max": 9
+        },
+        "reference_videos": {
+          "max": 3
+        },
+        "reference_audio": {
+          "max": 3
+        },
+        "first_frame": {
+          "max": 1,
+          "ordered": true
+        },
+        "last_frame": {
+          "max": 1,
+          "ordered": true
+        }
+      },
       "ui": {
         "selection_group": "i2v",
-        "visible_in": ["project_settings", "series_settings", "global_settings", "video_sidebar"],
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings",
+          "video_sidebar"
+        ],
         "recommended": true,
         "order": 100,
-        "badges": ["推荐", "Croco"]
+        "badges": [
+          "推荐",
+          "Croco"
+        ]
       }
     },
     "minimax-h3-r2v": {
       "id": "minimax-h3-r2v",
-      "display_name": "MiniMax H3 · References",
-      "description": "Croco H3 多参考图片/音频视频生成路由",
+      "display_name": "MiniMax H3 · 多参考",
+      "description": "使用真实图片、视频和音频资源的 Croco H3 多参考路由",
       "family": "minimax",
       "status": "active",
-      "capabilities": ["r2v"],
-      "duration": { "type": "slider", "min": 3, "max": 15, "step": 1, "default": 6 },
-      "params": {
-        "resolution": { "options": ["preview", "720p", "1080p"], "default": "preview" },
-        "ratio": { "options": ["16:9", "9:16", "1:1"], "default": "16:9" }
+      "capabilities": [
+        "r2v"
+      ],
+      "duration": {
+        "type": "slider",
+        "min": 3,
+        "max": 15,
+        "step": 1,
+        "default": 6
       },
-      "inputs": { "reference_images": { "max": 9 } },
+      "params": {
+        "resolution": {
+          "options": [
+            "preview",
+            "720p",
+            "1080p"
+          ],
+          "default": "preview"
+        },
+        "ratio": {
+          "options": [
+            "16:9",
+            "9:16",
+            "1:1"
+          ],
+          "default": "16:9"
+        }
+      },
+      "inputs": {
+        "reference_images": {
+          "max": 9
+        },
+        "reference_videos": {
+          "max": 3
+        },
+        "reference_audio": {
+          "max": 3
+        },
+        "first_frame": {
+          "max": 1,
+          "ordered": true
+        },
+        "last_frame": {
+          "max": 1,
+          "ordered": true
+        }
+      },
       "ui": {
         "selection_group": "r2v",
-        "visible_in": ["global_settings", "video_sidebar"],
+        "visible_in": [
+          "global_settings",
+          "video_sidebar"
+        ],
         "recommended": true,
         "order": 100,
-        "badges": ["参考素材", "Croco"]
+        "badges": [
+          "多参考",
+          "Croco"
+        ]
       }
     }
   },
@@ -130,14 +555,29 @@
     "runware-image": {
       "id": "runware-image",
       "family": "runware",
-      "modes": ["t2i", "i2i"],
-      "legacy_model_ids": ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2"]
+      "modes": [
+        "t2i",
+        "i2i"
+      ],
+      "legacy_model_ids": [
+        "google:nano-banana@2-lite",
+        "google:4@1",
+        "openai:gpt-image@2"
+      ]
     },
     "minimax-h3": {
       "id": "minimax-h3",
       "family": "minimax",
-      "modes": ["t2v", "i2v", "r2v"],
-      "legacy_model_ids": ["minimax-h3", "minimax-h3-r2v"]
+      "modes": [
+        "t2v",
+        "i2v",
+        "fl2v",
+        "r2v"
+      ],
+      "legacy_model_ids": [
+        "minimax-h3",
+        "minimax-h3-r2v"
+      ]
     }
   },
   "modes": {
@@ -148,9 +588,86 @@
       "mode": "t2i",
       "family": "runware",
       "status": "active",
-      "capabilities": ["t2i"],
-      "runtime": { "croco": { "gateway": "google:nano-banana@2-lite" } },
-      "ui": { "selection_group": "image", "visible_in": ["project_settings", "series_settings", "global_settings"], "recommended": true, "order": 100, "badges": ["Croco"] }
+      "capabilities": [
+        "t2i"
+      ],
+      "runtime": {
+        "croco": {
+          "gateway": "google:nano-banana@2-lite"
+        }
+      },
+      "ui": {
+        "selection_group": "image",
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings"
+        ],
+        "recommended": true,
+        "order": 100,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "runware/runware-image#i2i": {
+      "id": "runware/runware-image#i2i",
+      "model_line_id": "runware-image",
+      "legacy_model_id": "google:nano-banana@2-lite",
+      "mode": "i2i",
+      "family": "runware",
+      "status": "active",
+      "capabilities": [
+        "i2i"
+      ],
+      "runtime": {
+        "croco": {
+          "gateway": "google:nano-banana@2-lite"
+        }
+      },
+      "ui": {
+        "selection_group": "image",
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings"
+        ],
+        "recommended": true,
+        "order": 100,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "minimax/minimax-h3#t2v": {
+      "id": "minimax/minimax-h3#t2v",
+      "model_line_id": "minimax-h3",
+      "legacy_model_id": "minimax-h3",
+      "mode": "t2v",
+      "family": "minimax",
+      "status": "active",
+      "capabilities": [
+        "t2v"
+      ],
+      "runtime": {
+        "croco": {
+          "gateway": "minimax-h3"
+        }
+      },
+      "ui": {
+        "selection_group": "i2v",
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings",
+          "video_sidebar"
+        ],
+        "recommended": true,
+        "order": 100,
+        "badges": [
+          "Croco"
+        ]
+      }
     },
     "minimax/minimax-h3#i2v": {
       "id": "minimax/minimax-h3#i2v",
@@ -159,9 +676,58 @@
       "mode": "i2v",
       "family": "minimax",
       "status": "active",
-      "capabilities": ["i2v"],
-      "runtime": { "croco": { "gateway": "minimax-h3" } },
-      "ui": { "selection_group": "i2v", "visible_in": ["project_settings", "series_settings", "global_settings", "video_sidebar"], "recommended": true, "order": 100, "badges": ["Croco"] }
+      "capabilities": [
+        "i2v"
+      ],
+      "runtime": {
+        "croco": {
+          "gateway": "minimax-h3"
+        }
+      },
+      "ui": {
+        "selection_group": "i2v",
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings",
+          "video_sidebar"
+        ],
+        "recommended": true,
+        "order": 100,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "minimax/minimax-h3#fl2v": {
+      "id": "minimax/minimax-h3#fl2v",
+      "model_line_id": "minimax-h3",
+      "legacy_model_id": "minimax-h3",
+      "mode": "fl2v",
+      "family": "minimax",
+      "status": "active",
+      "capabilities": [
+        "fl2v"
+      ],
+      "runtime": {
+        "croco": {
+          "gateway": "minimax-h3"
+        }
+      },
+      "ui": {
+        "selection_group": "i2v",
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings",
+          "video_sidebar"
+        ],
+        "recommended": true,
+        "order": 100,
+        "badges": [
+          "Croco"
+        ]
+      }
     },
     "minimax/minimax-h3#r2v": {
       "id": "minimax/minimax-h3#r2v",
@@ -170,9 +736,26 @@
       "mode": "r2v",
       "family": "minimax",
       "status": "active",
-      "capabilities": ["r2v"],
-      "runtime": { "croco": { "gateway": "minimax-h3" } },
-      "ui": { "selection_group": "r2v", "visible_in": ["global_settings", "video_sidebar"], "recommended": true, "order": 100, "badges": ["Croco"] }
+      "capabilities": [
+        "r2v"
+      ],
+      "runtime": {
+        "croco": {
+          "gateway": "minimax-h3"
+        }
+      },
+      "ui": {
+        "selection_group": "r2v",
+        "visible_in": [
+          "global_settings",
+          "video_sidebar"
+        ],
+        "recommended": true,
+        "order": 100,
+        "badges": [
+          "Croco"
+        ]
+      }
     }
   }
 }

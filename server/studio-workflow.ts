@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { applyCanvasOperations } from "./canvas-commands";
+import { applyCanvasOperations, type CanvasOperation } from "./canvas-commands";
 import { publishProjectUpdated } from "./canvas-events";
 import { runCanvasConfigNodes } from "./canvas-node-runtime";
 import { dubCanvasVideo, mergeCanvasVideos, useCanvasVideoFrames } from "./canvas-video-tools";
@@ -7,7 +7,7 @@ import { stableStudioNodeId } from "./studio-canvas-mapping";
 import { getStudioBackedProject, mutateStudioProject } from "./studio-commands";
 import type { StudioImageAsset, StudioImageVariant, StudioNamedEntity, StudioProjectState, StudioStoryboardFrame, StudioVideoTask } from "./studio-types";
 import { models } from "./providers";
-import { readProject } from "./storage";
+import { readProject, resourceById } from "./storage";
 import { executeStudioPrompt, type StudioPromptOperation } from "./studio-prompt-runtime";
 
 type EntityKind = "character" | "scene" | "prop";
@@ -205,15 +205,18 @@ export async function createStudioVideoTasks(projectId: string, raw: any, origin
   const initial = await getStudioBackedProject(projectId);
   const sourceFrame = requiredFrame(initial.studio, frameId);
   const resolvedPrompt = String(raw?.prompt || sourceFrame.prompt);
+  const generationMode = String(raw?.generation_mode || "i2v").toLowerCase();
+  const videoInputs = await resolveStudioVideoInputs(sourceFrame, raw, generationMode);
   const count = boundedCount(raw?.batch_size);
   const tasks: StudioVideoTask[] = Array.from({ length: count }, () => ({
     id: randomUUID(), project_id: projectId, frame_id: frameId, image_url: String(raw?.image_url || sourceFrame.image_url || ""), prompt: resolvedPrompt, status: "processing", created_at: Date.now() / 1000,
-    duration: Number(raw?.duration) || 6, model: String(raw?.model || "minimax-h3"), generation_mode: String(raw?.generation_mode || "i2v"), workbench_tab: raw?.workbench_tab,
+    duration: Number(raw?.duration) || 6, model: String(raw?.model || "minimax-h3"), generation_mode: generationMode, workbench_tab: raw?.workbench_tab,
+    reference_resource_ids: videoInputs.map((input) => input.resourceId),
   }));
   await mutateStudioProject(projectId, (state) => { requiredFrame(state, frameId); return { ...state, videoTasks: [...state.videoTasks, ...tasks] }; }, { originClientId });
   const configId = stableStudioNodeId(projectId, "frame", frameId, "video-config");
   const outputIds = tasks.map((task) => stableStudioNodeId(projectId, "take", task.id, "video-output"));
-  await configureNode(projectId, configId, { composerContent: resolvedPrompt, seconds: Number(raw?.duration) || 6, videoCount: count, vquality: String(raw?.resolution || "preview") }, originClientId);
+  await configureStudioVideoNode(projectId, configId, frameId, resolvedPrompt, generationMode, videoInputs, { seconds: Number(raw?.duration) || 6, videoCount: count, vquality: String(raw?.resolution || "preview") }, originClientId);
   try { await runTargets(projectId, configId, outputIds, originClientId); }
   catch (error) { await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((task) => tasks.some((created) => created.id === task.id) ? { ...task, status: "failed", error: error instanceof Error ? error.message : "生成失败" } : task) }), { originClientId }).catch(() => undefined); throw error; }
   const results = await outputResources(projectId, outputIds, tasks.map((task) => task.id));
@@ -428,6 +431,59 @@ async function configureNode(projectId: string, nodeId: string, metadata: Record
   const result = await applyCanvasOperations(projectId, [{ op: "update_node", nodeId, patch: { metadata } }], Number(project.version), { allowStudioManagedWrites: true });
   publishProjectUpdated(result.project, originClientId);
 }
+
+type StudioVideoInput = { resourceId: string; type: "image" | "video" | "audio"; role: string };
+
+async function resolveStudioVideoInputs(frame: StudioStoryboardFrame, raw: any, generationMode: string): Promise<StudioVideoInput[]> {
+  const requested: Array<{ value: unknown; role: string }> = generationMode === "fl2v"
+    ? [{ value: raw?.first_frame_url || raw?.image_url || frame.image_url, role: "firstFrame" }, { value: raw?.last_frame_url, role: "lastFrame" }]
+    : generationMode === "r2v"
+      ? [
+          ...valueArray(raw?.reference_image_urls).map((value, index) => ({ value, role: `referenceImage${index + 1}` })),
+          ...valueArray(raw?.reference_video_urls).map((value, index) => ({ value, role: `referenceVideo${index + 1}` })),
+          ...valueArray(raw?.reference_audio_urls || raw?.audio_url).map((value, index) => ({ value, role: `referenceAudio${index + 1}` })),
+        ]
+      : [{ value: raw?.image_url || frame.image_url, role: "firstFrame" }];
+  const inputs: StudioVideoInput[] = [];
+  for (const item of requested) {
+    const value = String(item.value || "").trim();
+    if (!value) continue;
+    const resourceId = value.match(/\/files\/by-id\/([A-Za-z0-9_-]{1,80})/)?.[1] || (/^[A-Za-z0-9_-]{1,80}$/.test(value) ? value : "");
+    if (!resourceId) throw new Error(`视频参考素材必须先导入 Croco 本地资源库：${item.role}`);
+    if (inputs.some((input) => input.resourceId === resourceId)) continue;
+    const resource = await resourceById(resourceId);
+    if (!resource || !["image", "video", "audio"].includes(resource.type)) throw new Error(`视频参考资源不存在：${resourceId}`);
+    inputs.push({ resourceId, type: resource.type as StudioVideoInput["type"], role: item.role });
+  }
+  if (generationMode === "fl2v" && (inputs.length !== 2 || inputs.some((input) => input.type !== "image"))) throw new Error("FL2V 必须提供有序的本地首帧和尾帧图片");
+  if (generationMode === "i2v" && !inputs.some((input) => input.type === "image")) throw new Error("I2V 必须提供本地首帧图片");
+  if (generationMode === "r2v" && !inputs.length) throw new Error("R2V 至少需要一个本地图片、视频或音频参考资源");
+  return inputs.slice(0, 16);
+}
+
+async function configureStudioVideoNode(projectId: string, configId: string, frameId: string, prompt: string, generationMode: string, inputs: StudioVideoInput[], metadata: Record<string, unknown>, originClientId: string) {
+  const project = await readProject(projectId) as any;
+  const operations: CanvasOperation[] = [];
+  const nodeIds: string[] = [];
+  for (const [index, input] of inputs.entries()) {
+    let resourceNode = project.nodes.find((node: any) => String(node.metadata?.storageKey || "") === input.resourceId && node.type === input.type);
+    if (!resourceNode) {
+      const resource = await resourceById(input.resourceId);
+      if (!resource) throw new Error(`视频参考资源不存在：${input.resourceId}`);
+      const nodeId = stableStudioNodeId(projectId, "frame", frameId, `reference-${input.resourceId}`);
+      resourceNode = { id: nodeId, type: input.type };
+      operations.push({ op: "add_node", node: { id: nodeId, type: input.type, title: `${input.role} · ${resource.name}`, position: { x: 2460, y: 900 + index * 240 }, width: 320, height: input.type === "audio" ? 180 : 240, metadata: { artifactType: "studio-reference-resource", storageKey: input.resourceId, content: resource.url, status: "success", generationState: "ready", resourceRole: input.role } } });
+    }
+    nodeIds.push(String(resourceNode.id));
+  }
+  const composerContent = [prompt, ...nodeIds.map((nodeId, index) => `${inputs[index].role}: @[node:${nodeId}]`)].join("\n");
+  operations.push({ op: "update_node", nodeId: configId, patch: { metadata: { ...metadata, composerContent, videoInputMode: generationMode, orderedResourceIds: inputs.map((input) => input.resourceId), resourceRoles: inputs.map(({ resourceId, role, type }) => ({ resourceId, role, type })) } } });
+  operations.push(...nodeIds.map((nodeId): CanvasOperation => ({ op: "connect", from: nodeId, to: configId })));
+  const result = await applyCanvasOperations(projectId, operations, Number(project.version), { allowStudioManagedWrites: true });
+  publishProjectUpdated(result.project, originClientId);
+}
+
+function valueArray(value: unknown): unknown[] { return Array.isArray(value) ? value : value == null || value === "" ? [] : [value]; }
 
 async function runTargets(projectId: string, configNodeId: string, outputNodeIds: string[], originClientId: string) {
   const result = await runCanvasConfigNodes({ projectId, configNodeIds: [configNodeId], concurrency: 1, originClientId, targetOutputNodeIds: { [configNodeId]: outputNodeIds } });

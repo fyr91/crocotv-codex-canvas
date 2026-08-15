@@ -87,7 +87,7 @@ describe('Croco canonical routing metadata', () => {
     it('keeps the Croco model-line metadata addressable', () => {
         expect(getModelLineEntry('minimax-h3')).toMatchObject({
             family: 'minimax',
-            modes: ['t2v', 'i2v', 'r2v'],
+            modes: ['t2v', 'i2v', 'fl2v', 'r2v'],
             legacy_model_ids: ['minimax-h3', 'minimax-h3-r2v'],
         });
         expect(getCanonicalModeId('minimax-h3')).toBeUndefined();

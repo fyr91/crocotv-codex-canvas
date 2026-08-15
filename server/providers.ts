@@ -5,15 +5,9 @@ import { addResource, fileSize, resourceById, safeResourcePath, writeGenerated }
 import type { StoredResource } from "./types";
 import { getSunoCallbackUrl } from "./suno-callback";
 import { createModelAssetLease, type ModelAssetLease } from "./model-asset-url";
+import { providerModels as models } from "./model-catalog";
 
-export const models = {
-  volcengineLlm: ["doubao-seed-2-1-turbo-260628", "deepseek-v4-flash-ga-260731", "deepseek-v4-pro-260425"],
-  bigmodelLlm: ["glm-5.2", "glm-5v-turbo"],
-  runwareLlm: ["google:gemini@3.1-pro", "google:gemini@3-flash", "google:gemini@3.1-flash-lite"],
-  image: ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2"],
-  video: ["MiniMax H3", "Happy Horse"],
-  music: process.env.SUNO_MODEL || "V4_5ALL",
-};
+export { models };
 
 export async function generateText(prompt: string, requestedModel?: string, inputResourceIds: string[] = [], inputDataUrls: string[] = [], systemPrompt = "") {
   const normalizedRequestedModel = requestedModel === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : requestedModel;
@@ -161,18 +155,21 @@ export type H3GenerationProgress = {
   label: string;
 };
 
-export async function generateH3Video(input: { prompt: string; duration: number; quality?: string; count?: number; imageResourceIds?: string[]; audioResourceIds?: string[]; onProgress?: (progress: H3GenerationProgress) => void | Promise<void> }) {
+export async function generateH3Video(input: { prompt: string; duration: number; quality?: string; count?: number; imageResourceIds?: string[]; videoResourceIds?: string[]; audioResourceIds?: string[]; firstFrameResourceId?: string; lastFrameResourceId?: string; onProgress?: (progress: H3GenerationProgress) => void | Promise<void> }) {
   const config = { baseUrl: required("H3_BASE_URL").replace(/\/$/, ""), apiKey: required("H3_API_KEY") };
   if (!Number.isInteger(input.duration) || input.duration < 3 || input.duration > 15) throw new Error("H3 时长必须为 3–15 秒整数");
   const images = await Promise.all((input.imageResourceIds || []).slice(0, 9).map((id) => uploadH3Asset(config, id, "images")));
+  const videos = await Promise.all((input.videoResourceIds || []).slice(0, 3).map((id) => uploadH3Asset(config, id, "videos")));
   const audios = await Promise.all((input.audioResourceIds || []).slice(0, 3).map((id) => uploadH3Asset(config, id, "audio")));
+  const firstFrame = input.firstFrameResourceId ? await uploadH3Asset(config, input.firstFrameResourceId, "images") : undefined;
+  const lastFrame = input.lastFrameResourceId ? await uploadH3Asset(config, input.lastFrameResourceId, "images") : undefined;
   await ensureH3Runtime(config);
   const externalJobId = randomUUID();
-  const mode = images.length || audios.length ? "r2v" : "t2v";
   const qualities = ["preview", "base_768p", "standard_480p", "standard_768p", "portrait_preview", "portrait_768p", "standard_portrait_480p", "standard_portrait_768p"];
   const quality = qualities.includes(String(input.quality)) ? String(input.quality) : "preview";
   const count = Math.max(1, Math.min(3, Number(input.count) || 1));
-  const response = await h3Json(config, "/api/v1/h3/jobs/batch", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": externalJobId }, body: JSON.stringify({ external_job_id: externalJobId, count, request: { mode, prompt: input.prompt, quality, duration_seconds: input.duration, steps: 20, ...(mode === "r2v" ? { reference_image_asset_ids: images, reference_audio_asset_ids: audios } : {}), ref_image_size: "match" } }) });
+  const payload = buildH3JobPayload({ externalJobId, count, prompt: input.prompt, quality, duration: input.duration, images, videos, audios, firstFrame, lastFrame });
+  const response = await h3Json(config, "/api/v1/h3/jobs/batch", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": externalJobId }, body: JSON.stringify(payload) });
   const jobIds = (response.items || []).map((item: any) => String(item.job_id || "")).filter(Boolean);
   if (!jobIds.length) throw new Error("H3 没有返回 Job ID");
   await Promise.allSettled(jobIds.map((jobId: string, outputIndex: number) => input.onProgress?.({ stage: "submitted", jobId, outputIndex, progress: 0, label: "MiniMax H3 任务已提交" })));
@@ -204,7 +201,7 @@ async function resourceDataUri(id: string) {
   return `data:${resource.mimeType};base64,${(await readFile(safeResourcePath(resource.fileName))).toString("base64")}`;
 }
 
-async function uploadH3Asset(config: { baseUrl: string; apiKey: string }, id: string, kind: "images" | "audio") {
+async function uploadH3Asset(config: { baseUrl: string; apiKey: string }, id: string, kind: "images" | "videos" | "audio") {
   const resource = await resourceById(id);
   if (!resource) throw new Error(`H3 参考资源不存在：${id}`);
   const form = new FormData();
@@ -212,6 +209,25 @@ async function uploadH3Asset(config: { baseUrl: string; apiKey: string }, id: st
   const response = await fetch(`${config.baseUrl}/api/v1/h3/assets/${kind}`, { method: "POST", headers: auth(config), body: form });
   if (!response.ok) throw new Error(`H3 素材上传失败（${response.status}）`);
   return ((await response.json()) as any).asset_id as string;
+}
+
+export function buildH3JobPayload(input: { externalJobId: string; count: number; prompt: string; quality: string; duration: number; images: string[]; videos: string[]; audios: string[]; firstFrame?: string; lastFrame?: string }) {
+  if (Boolean(input.firstFrame) !== Boolean(input.lastFrame)) throw new Error("FL2V 必须同时提供有序首帧和尾帧");
+  const mode = input.firstFrame && input.lastFrame ? "fl2v" : input.images.length || input.videos.length || input.audios.length ? "r2v" : "t2v";
+  return {
+    external_job_id: input.externalJobId,
+    count: input.count,
+    request: {
+      mode,
+      prompt: input.prompt,
+      quality: input.quality,
+      duration_seconds: input.duration,
+      steps: 20,
+      ...(mode === "fl2v" ? { first_frame_asset_id: input.firstFrame, last_frame_asset_id: input.lastFrame } : {}),
+      ...(mode === "r2v" ? { reference_image_asset_ids: input.images, reference_video_asset_ids: input.videos, reference_audio_asset_ids: input.audios } : {}),
+      ref_image_size: "match",
+    },
+  };
 }
 
 async function ensureH3Runtime(config: { baseUrl: string; apiKey: string }) {

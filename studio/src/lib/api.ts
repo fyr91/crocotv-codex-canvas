@@ -100,6 +100,14 @@ export interface EnvConfigPayload {
     [key: string]: string | Record<string, string> | Record<string, boolean> | boolean | undefined;
 }
 
+export interface ProviderSecretStatus {
+    key: string;
+    configured: boolean;
+    maskedValue: string;
+    source: "local-env" | "process-env" | "none";
+    updatedAt?: string;
+}
+
 // R2V v2 Phase 4 — Cross-episode reconcile types
 export interface ReconcileSuggestion {
     local_id: string;
@@ -1191,6 +1199,36 @@ export const api = {
             timeout: 60000, // 60 seconds timeout
         });
         return res.data;
+    },
+
+    getModelCatalog: async () => {
+        const res = await axios.get(`${API_URL}/model-catalog`);
+        return res.data;
+    },
+
+    getProviderSecrets: async (): Promise<ProviderSecretStatus[]> => {
+        const res = await axios.get<{ secrets: ProviderSecretStatus[] }>(`${API_URL}/config/secrets`);
+        return res.data.secrets;
+    },
+
+    updateProviderSecret: async (key: string, value: string): Promise<ProviderSecretStatus> => {
+        const res = await axios.put<ProviderSecretStatus>(`${API_URL}/config/secrets/${encodeURIComponent(key)}`, { value });
+        return res.data;
+    },
+
+    clearProviderSecret: async (key: string): Promise<ProviderSecretStatus> => {
+        const res = await axios.delete<ProviderSecretStatus>(`${API_URL}/config/secrets/${encodeURIComponent(key)}`);
+        return res.data;
+    },
+
+    copyProviderSecret: async (key: string): Promise<void> => {
+        const res = await axios.post<{ value: string }>(`${API_URL}/config/secrets/${encodeURIComponent(key)}/reveal`);
+        const value = res.data.value;
+        try {
+            await navigator.clipboard.writeText(value);
+        } finally {
+            res.data.value = "";
+        }
     },
 
     triggerMulerunLogin: async () => {

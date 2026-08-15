@@ -15,6 +15,8 @@ import { studioCompatRouter } from "./studio-compat-api";
 import { studioPlaygroundRouter } from "./studio-playground-api";
 import { getPromptTemplate, listPromptTemplates } from "./prompt-registry";
 import { STUDIO_PROMPT_TEMPLATE_MAP } from "./studio-schemas";
+import { getStudioModelCatalog } from "./model-catalog";
+import { clearProviderSecret, listProviderSecretStatuses, revealProviderSecret, updateProviderSecret } from "./provider-secrets";
 
 export const studioApiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
@@ -43,6 +45,7 @@ studioApiRouter.get("/prompt-registry/:templateKey", route(async (request, respo
   param(request.params.templateKey),
   typeof request.query.version === "string" ? request.query.version : undefined,
 ))));
+studioApiRouter.get("/model-catalog", route(async (_request, response) => response.json(getStudioModelCatalog())));
 
 studioApiRouter.post("/projects", route(async (request, response) => response.status(201).json(await createStudioProject(request.body, clientId(request)))));
 studioApiRouter.get("/projects/", route(async (_request, response) => response.json(await listStudioProjectResponses({ kind: "episode" }))));
@@ -172,8 +175,12 @@ studioApiRouter.post("/projects/:id/sync_derivation", projectRoute(async (reques
 studioApiRouter.post("/projects/:id/derive_gaps", projectRoute(async (request, response, id) => { const project = await getStudioBackedProject(id); const preview = await previewStudioEntities(id, stringArray(request.body?.raw_text_blocks).join("\n") || project.studio.originalText, clientId(request)); const results = [...preview.characters.map((item) => ({ type: "character", name: item.name, description: item.description, confidence: 1 })), ...preview.props.map((item) => ({ type: "prop", name: item.name, description: item.description, confidence: 1 })), ...preview.scenes.map((item) => ({ type: "location", name: item.name, description: item.description, confidence: 1 }))]; response.json({ results, entities: results, cached: false }); }));
 studioApiRouter.post("/projects/:id/shot_blocks/:shotId/confirm", projectRoute(async (request, response, id) => { const shotId = param(request.params.shotId); await patchStudioFrame(id, shotId, { ...objectValue(request.body), status: "confirmed" }, clientId(request)); response.json({ shot_id: shotId, status: "confirmed", ...objectValue(request.body), confirmed_at: new Date().toISOString() }); }));
 
-studioApiRouter.get("/config/env", route(async (_request, response) => response.json({ managed_by: "Croco Canvas", secrets_configured: { ARK_API_KEY: Boolean(process.env.ARK_API_KEY), RUNWARE_API_KEY: Boolean(process.env.RUNWARE_API_KEY), BIGMODEL_API_KEY: Boolean(process.env.BIGMODEL_API_KEY), MINIMAX_H3_API_KEY: Boolean(process.env.MINIMAX_H3_API_KEY), SUNO_API_KEY: Boolean(process.env.SUNO_API_KEY) } })));
+studioApiRouter.get("/config/env", route(async (_request, response) => response.json({ managed_by: "Croco Canvas", secrets_configured: Object.fromEntries((await listProviderSecretStatuses()).map((item) => [item.key, item.configured])) })));
 studioApiRouter.post("/config/env", route(async (_request, response) => response.status(403).json({ detail: "Provider 密钥由 Croco 的 .codex/.env 统一管理，不写入 Studio 或浏览器状态" })));
+studioApiRouter.get("/config/secrets", route(async (_request, response) => response.json({ secrets: await listProviderSecretStatuses() })));
+studioApiRouter.put("/config/secrets/:key", route(async (request, response) => response.json(await updateProviderSecret(param(request.params.key), request.body?.value))));
+studioApiRouter.delete("/config/secrets/:key", route(async (request, response) => response.json(await clearProviderSecret(param(request.params.key)))));
+studioApiRouter.post("/config/secrets/:key/reveal", route(async (request, response) => response.json({ value: await revealProviderSecret(param(request.params.key)) })));
 studioApiRouter.post("/config/mulerun-login", route(async (_request, response) => response.status(410).json({ detail: "MuleRun 登录已由 Croco provider 配置取代" })));
 
 studioApiRouter.use(studioCompatRouter);
