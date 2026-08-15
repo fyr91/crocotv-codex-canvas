@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Play, Pause, X, Volume2, VolumeX, Lock, Unlock } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { VideoTask } from "@/lib/api";
 
 interface CompareModalProps {
@@ -26,6 +27,7 @@ interface CompareModalProps {
 }
 
 export default function CompareModal({ tasks, onClose, resolveUrl }: CompareModalProps) {
+    const t = useTranslations("storyboardR2V");
     const display = (u?: string | null) => (u && resolveUrl ? resolveUrl(u) : u ?? undefined);
     const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
     const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -166,7 +168,7 @@ export default function CompareModal({ tasks, onClose, resolveUrl }: CompareModa
                 ref={dialogRef}
                 role="dialog"
                 aria-modal="true"
-                aria-label="Compare candidates"
+                aria-label={t("compareAria")}
                 onKeyDown={handleTrapTab}
                 className="fixed left-1/2 top-1/2 z-[61] flex h-[88vh] w-[min(1200px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-glass-border bg-surface shadow-2xl motion-safe:animate-[compareModalIn_240ms_cubic-bezier(0.22,1,0.36,1)_both]"
             >
@@ -175,26 +177,26 @@ export default function CompareModal({ tasks, onClose, resolveUrl }: CompareModa
                     <div className="flex items-center gap-2">
                         {/* Display tier — primary modal title (P0-2). */}
                         <div className="font-display text-display font-medium tracking-tight text-foreground">
-                            Compare {slots.length} candidates
+                            {t("compareTitle", { count: slots.length })}
                         </div>
                         <div className="font-mono text-chrome-sm font-medium uppercase text-text-muted">
-                            {sync ? "synced" : "independent"} · {soloIndex === null ? "all muted" : `solo #${soloIndex + 1}`}
+                            {sync ? t("compareSynced") : t("compareIndependent")} · {soloIndex === null ? t("compareAllMuted") : t("compareSolo", { index: soloIndex + 1 })}
                         </div>
                     </div>
                     <div className="flex items-center gap-1">
                         <button
                             type="button"
                             onClick={() => setSync(!sync)}
-                            title={sync ? "Switch to independent timelines" : "Sync timelines"}
+                            title={sync ? t("compareSwitchIndependent") : t("compareSyncTimelines")}
                             className="btn-tip inline-flex h-8 min-w-[68px] items-center justify-center gap-1 rounded px-2 font-mono text-chrome-sm font-medium uppercase text-text-secondary transition-colors duration-fast ease-out-quart hover:bg-hover-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
                         >
                             {sync ? <Lock size={11} aria-hidden="true" /> : <Unlock size={11} aria-hidden="true" />}
-                            {sync ? "Synced" : "Indep."}
+                            {sync ? t("compareSynced") : t("compareIndependentShort")}
                         </button>
                         <button
                             type="button"
                             onClick={cycleSolo}
-                            title="Cycle solo audio (S)"
+                            title={t("compareCycleSolo")}
                             className="btn-tip inline-flex h-8 min-w-[78px] items-center justify-center gap-1 rounded px-2 font-mono text-chrome-sm font-medium uppercase text-text-secondary transition-colors duration-fast ease-out-quart hover:bg-hover-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
                         >
                             {soloIndex === null ? (
@@ -202,13 +204,13 @@ export default function CompareModal({ tasks, onClose, resolveUrl }: CompareModa
                             ) : (
                                 <Volume2 size={11} aria-hidden="true" />
                             )}
-                            {soloIndex === null ? "Mute" : `Solo ${soloIndex + 1}`}
+                            {soloIndex === null ? t("compareMute") : t("compareSolo", { index: soloIndex + 1 })}
                         </button>
                         <button
                             ref={closeBtnRef}
                             type="button"
                             onClick={onClose}
-                            aria-label="Close"
+                            aria-label={t("close")}
                             className="-m-1 grid h-9 w-9 place-items-center rounded text-text-muted transition-colors duration-fast ease-out-quart hover:bg-hover-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
                         >
                             <X size={14} aria-hidden="true" />
@@ -236,7 +238,7 @@ export default function CompareModal({ tasks, onClose, resolveUrl }: CompareModa
                                     />
                                 ) : (
                                     <div className="grid h-full w-full place-items-center font-mono text-chrome-sm font-medium uppercase text-text-muted">
-                                        no video url
+                                        {t("compareNoVideo")}
                                     </div>
                                 )}
                                 <div className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded bg-black/65 px-1.5 py-[3px] font-mono text-chrome-sm font-medium uppercase text-foreground">
@@ -244,7 +246,7 @@ export default function CompareModal({ tasks, onClose, resolveUrl }: CompareModa
                                     <span className="text-text-secondary">·</span>
                                     <span className="text-foreground">{task.model || "?"}</span>
                                     {task.is_starred ? (
-                                        <span className="text-status-starred-fg" aria-label="Starred">★</span>
+                                        <span className="text-status-starred-fg" aria-label={t("filterStarred")}>★</span>
                                     ) : null}
                                 </div>
                                 {task.label ? (
@@ -262,7 +264,7 @@ export default function CompareModal({ tasks, onClose, resolveUrl }: CompareModa
                     <button
                         type="button"
                         onClick={togglePlay}
-                        aria-label={isPlaying ? "Pause" : "Play"}
+                        aria-label={isPlaying ? t("comparePause") : t("comparePlay")}
                         className="grid h-10 w-10 place-items-center rounded-full bg-elevated text-foreground transition-colors duration-fast ease-out-quart hover:bg-hover-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
                     >
                         {isPlaying ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
@@ -274,16 +276,16 @@ export default function CompareModal({ tasks, onClose, resolveUrl }: CompareModa
                             max={1000}
                             value={Math.round(progress * 1000)}
                             onChange={(e) => seekTo(parseInt(e.target.value, 10) / 1000)}
-                            aria-label="Playback position"
+                            aria-label={t("comparePlaybackPosition")}
                             className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-elevated accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
                         />
                     ) : (
                         <div className="flex-1 text-center font-mono text-chrome-sm font-medium uppercase text-text-muted">
-                            Independent timelines · each video controls itself
+                            {t("compareIndependentHint")}
                         </div>
                     )}
                     <div className="font-mono text-chrome-sm tracking-tight text-text-muted">
-                        Space play/pause · S solo · Esc close
+                        {t("compareShortcuts")}
                     </div>
                 </footer>
             </div>

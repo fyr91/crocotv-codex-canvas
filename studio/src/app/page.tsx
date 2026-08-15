@@ -701,7 +701,7 @@ export default function Home() {
         <header className="px-4 md:px-7 pt-5 md:pt-6 pb-3 flex flex-col md:flex-row md:items-end gap-3 md:gap-5">
           <div className="flex-1 min-w-0">
             <div className="font-mono text-sm font-medium uppercase tracking-[0.2em] text-text-muted">
-              WORKSPACE · <span className="text-primary font-medium">{t("gallery") || "画廊"}</span>
+              {t("eyebrow")} · <span className="text-primary font-medium">{t("gallery")}</span>
             </div>
             <h1 className="text-[2rem] md:text-[2.25rem] font-display atelier-display font-medium text-foreground leading-[1.15] tracking-[-0.025em] mt-1">
               {t("title")}
@@ -763,7 +763,7 @@ export default function Home() {
                     className="w-full px-4 py-2.5 text-sm text-left text-foreground hover:bg-hover-bg transition-colors flex items-center gap-2"
                   >
                     <Sparkles size={16} className="text-accent" />
-                    Playground
+                    {t("playground")}
                   </button>
                 </motion.div>
               )}
@@ -839,7 +839,7 @@ export default function Home() {
               <div className="glass-panel atelier-card p-10 rounded-2xl border border-glass-border text-center max-w-[620px] w-full relative overflow-hidden">
                 <div className="relative z-[1] flex flex-col items-center gap-4">
                   <div className="font-mono text-sm uppercase tracking-[0.22em] text-text-muted">
-                    RENDER NOISE INTO NARRATIVE
+                    {t("emptyEyebrow")}
                   </div>
                   <p className="font-display atelier-display text-xl font-medium leading-7 tracking-tight text-foreground">
                     {t("emptyQuote") || "\u201c每一座城市，都藏着一个还没被讲出来的故事。\u201d"}

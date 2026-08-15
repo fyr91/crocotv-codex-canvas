@@ -231,7 +231,7 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
                     type="password"
                     value={config.DASHSCOPE_API_KEY}
                     onChange={(e) => handleChange("DASHSCOPE_API_KEY", e.target.value)}
-                    placeholder="Required for DashScope-first model routing"
+                    placeholder={t("dashscopeRequiredPlaceholder")}
                     className={inputClass}
                   />
                 </div>
@@ -242,26 +242,26 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Alibaba Cloud Access Key ID
+                      {t("alibabaAccessKeyId")}
                     </label>
                     <input
                       type="password"
                       value={config.ALIBABA_CLOUD_ACCESS_KEY_ID}
                       onChange={(e) => handleChange("ALIBABA_CLOUD_ACCESS_KEY_ID", e.target.value)}
-                      placeholder="Optional, used when OSS mirror is enabled"
+                      placeholder={t("ossOptionalPlaceholder")}
                       className={inputClass}
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Alibaba Cloud Access Key Secret
+                      {t("alibabaAccessKeySecret")}
                     </label>
                     <input
                       type="password"
                       value={config.ALIBABA_CLOUD_ACCESS_KEY_SECRET}
                       onChange={(e) => handleChange("ALIBABA_CLOUD_ACCESS_KEY_SECRET", e.target.value)}
-                      placeholder="Optional, used when OSS mirror is enabled"
+                      placeholder={t("ossOptionalPlaceholder")}
                       className={inputClass}
                     />
                   </div>
@@ -279,14 +279,14 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
                       rel="noopener noreferrer"
                       className="text-sm text-primary hover:text-primary/80 transition-colors"
                     >
-                      Open OSS Console &rarr;
+                      {t("openOssConsole")} &rarr;
                     </a>
                   </div>
 
                   <div className="space-y-4">
                     <div>
                       <label className="flex items-center justify-between text-sm font-medium text-foreground mb-2">
-                        <span>OSS Bucket Name</span>
+                        <span>{t("ossBucketName")}</span>
                         <span className="text-text-muted font-normal text-sm">e.g. my-comic-bucket</span>
                       </label>
                       <input
@@ -300,7 +300,7 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
 
                     <div>
                       <label className="flex items-center justify-between text-sm font-medium text-foreground mb-2">
-                        <span>OSS Endpoint</span>
+                        <span>{t("ossEndpoint")}</span>
                         <span className="text-text-muted font-normal text-sm">e.g. oss-cn-hangzhou.aliyuncs.com</span>
                       </label>
                       <input
@@ -314,7 +314,7 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
 
                     <div>
                       <label className="flex items-center justify-between text-sm font-medium text-foreground mb-2">
-                        <span>OSS Base Path</span>
+                        <span>{t("ossBasePath")}</span>
                         <span className="text-text-muted font-normal text-sm">e.g. lumenx</span>
                       </label>
                       <input
@@ -330,7 +330,7 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
 
                 <div className="pt-4 border-t border-glass-border">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-medium text-foreground">Kling Provider</h3>
+                    <h3 className="text-sm font-medium text-foreground">{t("klingProvider")}</h3>
                     <span className="text-sm text-text-muted">{t("chooseProvider")}</span>
                   </div>
                   <div className="bg-glass border border-glass-border rounded-lg p-4 space-y-4">
@@ -347,7 +347,7 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
                         onClick={() => handleChange("KLING_PROVIDER_MODE", "vendor")}
                         className={modeButtonClass(config.KLING_PROVIDER_MODE === "vendor")}
                       >
-                        Vendor Direct
+                        {t("vendorDirect")}
                       </button>
                     </div>
                     <p className="text-sm text-text-muted">
@@ -388,7 +388,7 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
 
                 <div className="pt-4 border-t border-glass-border">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-medium text-foreground">Vidu Provider</h3>
+                    <h3 className="text-sm font-medium text-foreground">{t("viduProvider")}</h3>
                     <span className="text-sm text-text-muted">{t("chooseProvider")}</span>
                   </div>
                   <div className="bg-input-bg border border-glass-border rounded-lg p-4 space-y-4">
@@ -405,7 +405,7 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
                         onClick={() => handleChange("VIDU_PROVIDER_MODE", "vendor")}
                         className={modeButtonClass(config.VIDU_PROVIDER_MODE === "vendor")}
                       >
-                        Vendor Direct
+                        {t("vendorDirect")}
                       </button>
                     </div>
                     <p className="text-sm text-text-muted">
@@ -432,7 +432,7 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
                 {/* MuleRun / MuleRouter */}
                 <div className="space-y-3 pt-4 border-t border-glass-border">
                   <h4 className="text-sm font-medium text-text-secondary">MuleRun / MuleRouter</h4>
-                  <p className="text-sm text-text-secondary/60">用于 Seedance 2.0 视频生成和 GPT-Image-2 图片生成</p>
+                  <p className="text-sm text-text-secondary/60">{t("mulerunDescription")}</p>
                   <div>
                     <label className="block text-sm text-text-secondary mb-1">API Key</label>
                     <input
@@ -443,31 +443,31 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
                       className={inputClass}
                     />
                     {!config.MULEROUTER_API_KEY && config.MULERUN_CLI_LOGGED_IN && (
-                      <p className="text-sm text-status-completed-fg mt-1">✓ MuleRun CLI 已登录，无需手动填写</p>
+                      <p className="text-sm text-status-completed-fg mt-1">✓ {t("mulerunCliLoggedIn")}</p>
                     )}
                   </div>
                   <details className="group">
                     <summary className="text-sm text-primary cursor-pointer hover:underline flex items-center gap-1">
                       <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                      如何获取 MuleRun Key？
+                      {t("mulerunGetKey")}
                     </summary>
                     <div className="mt-2 space-y-2 pl-4 border-l border-glass-border">
                       <div className="flex items-center gap-2 text-sm text-text-secondary">
                         <span className="shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium">1</span>
-                        <span>安装 CLI</span>
+                        <span>{t("installCli")}</span>
                         <code className="ml-auto px-2 py-0.5 bg-glass rounded text-sm font-mono select-all">npm i -g @mulerunai/cli</code>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-text-secondary">
                         <span className="shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium">2</span>
-                        <span>浏览器登录</span>
+                        <span>{t("browserLogin")}</span>
                         <code className="ml-auto px-2 py-0.5 bg-glass rounded text-sm font-mono select-all">mulerun login</code>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-text-secondary">
                         <span className="shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium">3</span>
-                        <span>复制 Key</span>
+                        <span>{t("copyKey")}</span>
                         <code className="ml-auto px-2 py-0.5 bg-glass rounded text-sm font-mono select-all">mulerun studio config</code>
                       </div>
-                      <p className="text-sm text-text-secondary/50 mt-1">Key 格式为 muk-...，粘贴到上方输入框即可。本地开发如已登录 CLI，无需填写。</p>
+                      <p className="text-sm text-text-secondary/50 mt-1">{t("mulerunKeyHint")}</p>
                     </div>
                   </details>
                 </div>
@@ -491,7 +491,7 @@ export default function EnvConfigDialog({ isOpen, onClose, isRequired = false }:
                       {ENDPOINT_PROVIDERS.map(({ key, label, placeholder }) => (
                         <div key={key}>
                           <label className="flex items-center justify-between text-sm font-medium text-foreground mb-2">
-                            <span>{label} Base URL</span>
+                            <span>{t("baseUrlLabel", { provider: label })}</span>
                             <span className="text-text-muted font-normal text-sm">{placeholder}</span>
                           </label>
                           <input

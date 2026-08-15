@@ -51,7 +51,10 @@ export default function PropertiesPanel({ activeStep }: PropertiesPanelProps) {
                 <h2 className="font-display font-medium text-foreground flex items-center gap-2">
                     <Info size={16} className="text-primary" /> {tp("context")}
                 </h2>
-                <span className="text-sm font-mono text-text-muted uppercase">{activeStep}</span>
+                <span className="text-sm font-mono text-text-muted uppercase">{{
+                    script: tp("stepScript"), assets: tp("stepAssets"), storyboard: tp("stepStoryboard"),
+                    audio: tp("stepAudio"), mix: tp("stepMix"), export: tp("stepExport"),
+                }[activeStep] || activeStep}</span>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -147,7 +150,7 @@ function AssetsInspector({ project }: { project: any }) {
 
                 {/* Character Aspect Ratio */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-text-muted uppercase">Character</label>
+                    <label className="text-sm font-medium text-text-muted uppercase">{tp("character")}</label>
                     <div className="grid grid-cols-5 gap-1">
                         {['9:16', '3:4', '1:1', '4:3', '16:9'].map((ratio) => (
                             <button
@@ -166,7 +169,7 @@ function AssetsInspector({ project }: { project: any }) {
 
                 {/* Scene Aspect Ratio */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-text-muted uppercase">Scene</label>
+                    <label className="text-sm font-medium text-text-muted uppercase">{tp("scene")}</label>
                     <div className="grid grid-cols-5 gap-1">
                         {['9:16', '3:4', '1:1', '4:3', '16:9'].map((ratio) => (
                             <button
@@ -185,7 +188,7 @@ function AssetsInspector({ project }: { project: any }) {
 
                 {/* Prop Aspect Ratio */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-text-muted uppercase">Prop</label>
+                    <label className="text-sm font-medium text-text-muted uppercase">{tp("prop")}</label>
                     <div className="grid grid-cols-5 gap-1">
                         {['9:16', '3:4', '1:1', '4:3', '16:9'].map((ratio) => (
                             <button
@@ -403,7 +406,7 @@ function StoryboardInspector() {
             }
         } catch (err) {
             console.error("Polish failed", err);
-            alert("Prompt polishing failed");
+            alert(tp("promptPolishFailed"));
         } finally {
             setIsPolishing(false);
         }
@@ -429,7 +432,7 @@ function StoryboardInspector() {
                     <Layout size={14} /> {tp("frameDetails")}
                 </h3>
                 <div className="text-sm text-text-secondary">
-                    Editing Frame {currentProject?.frames?.findIndex((f: any) => f.id === selectedFrameId) + 1}
+                    {tp("editingFrame", { number: currentProject?.frames?.findIndex((f: any) => f.id === selectedFrameId) + 1 })}
                 </div>
             </div>
 
@@ -440,7 +443,7 @@ function StoryboardInspector() {
                     className="w-full h-24 bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-text-secondary resize-none focus:outline-none focus:border-primary/50"
                     value={selectedFrame.action_description || ""}
                     onChange={(e) => updateFrame({ action_description: e.target.value })}
-                    placeholder="Describe the action..."
+                    placeholder={tp("actionPlaceholder")}
                 />
             </div>
 
@@ -451,7 +454,7 @@ function StoryboardInspector() {
                     className="w-full h-16 bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-text-secondary resize-none focus:outline-none focus:border-primary/50"
                     value={selectedFrame.dialogue || ""}
                     onChange={(e) => updateFrame({ dialogue: e.target.value })}
-                    placeholder="Speaker: Content"
+                    placeholder={tp("dialoguePlaceholder")}
                 />
             </div>
 
@@ -480,13 +483,13 @@ function StoryboardInspector() {
                             <div className="flex justify-between items-center">
                                 <label className="text-sm font-medium text-text-muted uppercase">{tp("characters")}</label>
                                 <span className={`text-sm ${isLimitReached ? "text-status-starred-fg font-medium" : "text-text-muted"}`}>
-                                    {referenceCount}/{referenceLimit} Images
+                                    {tp("imagesCount", { current: referenceCount, max: referenceLimit })}
                                 </span>
                             </div>
 
                             {/* Scene Selector */}
                             <div className="mb-2 space-y-2">
-                                <label className="text-sm font-medium text-text-muted uppercase">Scene</label>
+                                <label className="text-sm font-medium text-text-muted uppercase">{tp("scene")}</label>
                                 <select
                                     className="w-full bg-input-bg border border-glass-border rounded p-2 text-sm text-text-secondary focus:outline-none"
                                     value={selectedFrame.scene_id || ""}
@@ -505,13 +508,13 @@ function StoryboardInspector() {
                                         const predictedCount = (newSceneHasImage ? 1 : 0) + charImageCount + propImageCount;
 
                                         if (predictedCount > referenceLimit) {
-                                            alert(`Cannot select this scene: Reference image limit (${referenceLimit}) would be exceeded. Deselect some characters or props first.`);
+                                            alert(tp("referenceLimitExceeded", { limit: referenceLimit }));
                                             return;
                                         }
                                         updateFrame({ scene_id: newSceneId });
                                     }}
                                 >
-                                    <option value="">Select Scene...</option>
+                                    <option value="">{tp("selectScene")}</option>
                                     {currentProject?.scenes?.map((scene: any) => (
                                         <option key={scene.id} value={scene.id}>{scene.name}</option>
                                     ))}
@@ -520,7 +523,7 @@ function StoryboardInspector() {
                                 {/* Show Scene Description if selected */}
                                 {selectedScene?.description && (
                                     <div className="bg-glass p-2 rounded text-sm text-text-secondary italic border border-border-subtle">
-                                        <span className="font-medium not-italic text-text-muted">Scene: </span>
+                                        <span className="font-medium not-italic text-text-muted">{tp("scenePrefix")}</span>
                                         {selectedScene.description}
                                     </div>
                                 )}
@@ -528,7 +531,7 @@ function StoryboardInspector() {
 
                             {/* Character Toggles */}
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-text-muted uppercase">Characters</label>
+                                <label className="text-sm font-medium text-text-muted uppercase">{tp("characters")}</label>
                                 <div className="grid grid-cols-2 gap-2">
                                     {currentProject?.characters?.map((char: any) => {
                                         const isSelected = selectedFrame.character_ids?.includes(char.id);
@@ -576,7 +579,7 @@ function StoryboardInspector() {
                             {/* Prop Toggles */}
                             {currentProject?.props && currentProject.props.length > 0 && (
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-text-muted uppercase">Props</label>
+                                    <label className="text-sm font-medium text-text-muted uppercase">{tp("props")}</label>
                                     <div className="grid grid-cols-2 gap-2">
                                         {currentProject.props.map((prop: any) => {
                                             const isSelected = selectedFrame.prop_ids?.includes(prop.id);
@@ -646,13 +649,13 @@ function StoryboardInspector() {
                         value={selectedFrame.camera_angle || ""}
                         onChange={(e) => updateFrame({ camera_angle: e.target.value })}
                     >
-                        <option value="">Angle...</option>
-                        <option value="Wide Shot">Wide Shot</option>
-                        <option value="Medium Shot">Medium Shot</option>
-                        <option value="Close Up">Close Up</option>
-                        <option value="Low Angle">Low Angle</option>
-                        <option value="High Angle">High Angle</option>
-                        <option value="Over the Shoulder">Over the Shoulder</option>
+                        <option value="">{tp("anglePlaceholder")}</option>
+                        <option value="Wide Shot">{tp("wideShot")}</option>
+                        <option value="Medium Shot">{tp("mediumShot")}</option>
+                        <option value="Close Up">{tp("closeUp")}</option>
+                        <option value="Low Angle">{tp("lowAngle")}</option>
+                        <option value="High Angle">{tp("highAngle")}</option>
+                        <option value="Over the Shoulder">{tp("overShoulder")}</option>
                     </select>
                 </div>
             </div>
@@ -664,24 +667,24 @@ function StoryboardInspector() {
                     <button
                         onClick={handleComposePrompt}
                         className="flex items-center gap-1 text-sm bg-glass hover:bg-hover-bg px-2 py-1 rounded text-foreground transition-colors"
-                        title="Auto-generate prompt from metadata"
+                        title={tp("autoComposeTitle")}
                     >
-                        <Wand2 size={10} /> Auto-Compose
+                        <Wand2 size={10} /> {tp("autoCompose")}
                     </button>
                     <button
                         onClick={() => handlePolish()}
                         disabled={isPolishing}
                         className="flex items-center gap-1 text-sm bg-primary hover:bg-primary px-2 py-1 rounded text-white transition-colors ml-2 disabled:opacity-50"
-                        title="AI Polish Prompt"
+                        title={tp("polishTitle")}
                     >
-                        {isPolishing ? <Sparkles size={10} className="animate-spin" /> : <Sparkles size={10} />} Polish
+                        {isPolishing ? <Sparkles size={10} className="animate-spin" /> : <Sparkles size={10} />} {tp("polish")}
                     </button>
                 </div>
                 <textarea
                     className="w-full h-32 bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-text-secondary resize-none focus:outline-none focus:border-primary/50"
                     value={selectedFrame.image_prompt || ""}
                     onChange={(e) => updateFrame({ image_prompt: e.target.value })}
-                    placeholder="Full image generation prompt..."
+                    placeholder={tp("fullPromptPlaceholder")}
                 />
 
                 {/* Polished Result Display - Bilingual */}
@@ -694,7 +697,7 @@ function StoryboardInspector() {
                     >
                         <div className="flex justify-between items-start">
                             <span className="text-sm font-medium text-primary flex items-center gap-1">
-                                <Wand2 size={12} /> AI Bilingual Polish
+                                <Wand2 size={12} /> {tp("bilingualPolish")}
                             </span>
                             <button
                                 onClick={() => {
@@ -714,11 +717,11 @@ function StoryboardInspector() {
                         {/* Chinese Prompt */}
                         <div className="space-y-1">
                             <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-text-muted uppercase">CN (Preview)</span>
+                                <span className="text-sm font-medium text-text-muted uppercase">{tp("cnPreview")}</span>
                                 <button
                                     onClick={() => {
                                         navigator.clipboard.writeText(polishedPrompt.cn);
-                                        alert("CN prompt copied");
+                                        alert(tp("cnCopied"));
                                     }}
                                     className="text-sm text-text-secondary hover:text-foreground bg-surface px-2 py-0.5 rounded"
                                 >
@@ -733,16 +736,16 @@ function StoryboardInspector() {
                         {/* English Prompt */}
                         <div className="space-y-1">
                             <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-text-muted uppercase">EN (Generation)</span>
+                                <span className="text-sm font-medium text-text-muted uppercase">{tp("enGeneration")}</span>
                                 <div className="flex gap-1">
                                     <button
                                         onClick={() => {
                                             navigator.clipboard.writeText(polishedPrompt.en);
-                                            alert("English prompt copied");
+                                            alert(tp("enCopied"));
                                         }}
                                         className="text-sm text-text-secondary hover:text-foreground bg-surface px-2 py-0.5 rounded"
                                     >
-                                        Copy
+                                        {tp("copy")}
                                     </button>
                                     <button
                                         onClick={() => {
@@ -759,7 +762,7 @@ function StoryboardInspector() {
                                         }}
                                         className="text-sm text-white bg-primary hover:bg-primary px-2 py-0.5 rounded font-medium"
                                     >
-                                        应用
+                                        {tp("apply")}
                                     </button>
                                 </div>
                             </div>
@@ -780,7 +783,7 @@ function StoryboardInspector() {
                                             handlePolish(feedbackText.trim());
                                         }
                                     }}
-                                    placeholder="Feedback for refinement..."
+                                    placeholder={tp("feedbackPlaceholder")}
                                     className="flex-1 text-sm bg-input-bg border border-primary/20 rounded px-2 py-1.5 text-foreground placeholder-text-muted focus:outline-none focus:border-primary/50"
                                 />
                                 <button
@@ -789,7 +792,7 @@ function StoryboardInspector() {
                                     className="text-sm text-white bg-primary hover:bg-primary px-2 py-1.5 rounded font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                 >
                                     {isPolishing ? <Sparkles size={8} className="animate-spin" /> : <Sparkles size={8} />}
-                                    再润色
+                                    {tp("refineAgain")}
                                 </button>
                             </div>
                         </div>
@@ -806,12 +809,12 @@ function MotionInspector() {
         <div className="space-y-6">
             <div className="space-y-3">
                 <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-                    <Video size={14} /> Motion Params
+                    <Video size={14} /> {tp("motionParams")}
                 </h3>
                 <div className="space-y-4">
                     <div className="space-y-1">
                         <div className="flex justify-between text-sm text-text-secondary">
-                            <span>Motion Bucket</span>
+                            <span>{tp("motionBucket")}</span>
                             <span>127</span>
                         </div>
                         <input type="range" className="w-full h-1 bg-glass rounded-lg appearance-none cursor-pointer" />
@@ -850,7 +853,7 @@ function AudioInspector({ project }: { project: any }) {
                     <span className="text-sm font-mono text-text-secondary">{assignedCount}/{totalCount}</span>
                 </div>
                 <p className="text-sm text-text-muted">
-                    {assignedCount === totalCount ? "All characters casted." : "Some characters need voices."}
+                    {assignedCount === totalCount ? tp("allCharactersVoiced") : tp("charactersNeedVoices")}
                 </p>
             </div>
         </div>
@@ -863,10 +866,10 @@ function MixInspector() {
         <div className="space-y-6">
             <div className="space-y-3">
                 <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-                    <Music size={14} /> Track Inspector
+                    <Music size={14} /> {tp("trackInspector")}
                 </h3>
                 <div className="p-4 bg-glass rounded-lg border border-glass-border text-center text-sm text-text-muted">
-                    Select a clip on the timeline to view details.
+                    {tp("selectClip")}
                 </div>
             </div>
         </div>
@@ -879,12 +882,12 @@ function ExportInspector() {
         <div className="space-y-6">
             <div className="space-y-3">
                 <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-                    <Film size={14} /> Export History
+                    <Film size={14} /> {tp("exportHistory")}
                 </h3>
                 <div className="space-y-2">
                     <div className="p-2 bg-glass rounded border border-glass-border flex justify-between items-center">
                         <span className="text-sm text-text-secondary">Project_v1.mp4</span>
-                        <span className="text-sm text-text-muted">2h ago</span>
+                        <span className="text-sm text-text-muted">{tp("hoursAgo", { count: 2 })}</span>
                     </div>
                 </div>
             </div>

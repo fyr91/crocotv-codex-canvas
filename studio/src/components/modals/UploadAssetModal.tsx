@@ -202,7 +202,7 @@ export default function UploadAssetModal({
                                 <div className="relative">
                                     <img
                                         src={previewUrl}
-                                        alt="Preview"
+                                    alt={t("previewAlt")}
                                         className="max-h-48 mx-auto rounded-lg object-contain"
                                     />
                                     <div className="mt-3 text-sm text-text-secondary">

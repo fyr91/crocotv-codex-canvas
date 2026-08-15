@@ -16,6 +16,19 @@ describe('i18n configuration', () => {
         expect(messages.settings.title).toBe('设置');
     });
 
+    it('keeps primary Studio surfaces localized in zh', () => {
+        const messages = getMessages('zh');
+        expect(messages.workspace.eyebrow).toBe('工作区');
+        expect(messages.library.eyebrow).toBe('资产库');
+        expect(messages.vault.characters).toBe('角色');
+        expect(messages.vault.loadingProject).toBe('加载项目中...');
+        expect(messages.storyboard.framesLabel).toBe('帧');
+        expect(messages.creator.noStoryboardFrames).toBe('暂无分镜帧。');
+        expect(messages.playground.compose.promptLabel).toBe('提示词');
+        expect(messages.settings.registryTitle).toBe('提示词版本库');
+        expect(messages.pendingTask.diagnoseTitle).toBe('诊断卡住的任务');
+    });
+
     it('getMessages returns messages for en', () => {
         const messages = getMessages('en');
         expect(messages).toBeDefined();

@@ -272,7 +272,7 @@ export default function ModelSettingsModal({ isOpen, onClose }: ModelSettingsMod
                                 <span>R2V · 参考生视频</span>
                             </div>
                             <p className="text-sm text-text-muted">
-                                项目级 R2V 模型默认值。Storyboard 的 R2V tab 进入时按此初始化；用户在 storyboard 内的临时切换会保存在本地、不影响这里。
+                                {t("r2vModelHint")}
                             </p>
 
                             <div className="space-y-2">

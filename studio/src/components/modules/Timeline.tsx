@@ -2,8 +2,10 @@
 
 import { Play, Pause, SkipBack, SkipForward, Scissors, Layers } from "lucide-react";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 export default function Timeline() {
+    const t = useTranslations("assembly");
     const [isPlaying, setIsPlaying] = useState(false);
 
     return (
@@ -50,20 +52,20 @@ export default function Timeline() {
 
                 {/* Video Track */}
                 <div className="h-16 bg-glass rounded-lg relative overflow-hidden group">
-                    <div className="absolute inset-0 flex items-center px-2 text-sm font-medium text-text-muted pointer-events-none">Video 1</div>
+                    <div className="absolute inset-0 flex items-center px-2 text-sm font-medium text-text-muted pointer-events-none">{t("videoTrack", { number: 1 })}</div>
                     <div className="absolute left-10 top-1 bottom-1 w-32 bg-primary/20 border border-primary/50 rounded flex items-center justify-center text-sm text-primary">
-                        Scene 1
+                        {t("sceneTrack", { number: 1 })}
                     </div>
                     <div className="absolute left-44 top-1 bottom-1 w-48 bg-primary/20 border border-primary/50 rounded flex items-center justify-center text-sm text-primary">
-                        Scene 2
+                        {t("sceneTrack", { number: 2 })}
                     </div>
                 </div>
 
                 {/* Audio Track */}
                 <div className="h-12 bg-glass rounded-lg relative overflow-hidden">
-                    <div className="absolute inset-0 flex items-center px-2 text-sm font-medium text-text-muted pointer-events-none">Audio 1</div>
+                    <div className="absolute inset-0 flex items-center px-2 text-sm font-medium text-text-muted pointer-events-none">{t("audioTrack", { number: 1 })}</div>
                     <div className="absolute left-10 top-1 bottom-1 w-80 bg-status-completed-bg border border-status-completed-border rounded flex items-center justify-center text-sm text-status-completed-fg">
-                        Background Music
+                        {t("backgroundMusic")}
                     </div>
                 </div>
 

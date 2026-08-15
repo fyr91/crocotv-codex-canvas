@@ -12,6 +12,7 @@ import StepHeader from "@/components/shared/StepHeader";
 
 export default function VideoGenerator() {
     const tStep = useTranslations("stepHeader");
+    const tv = useTranslations("video");
     const currentProject = useProjectStore((state) => state.currentProject);
     const updateProject = useProjectStore((state) => state.updateProject);
     const [tasks, setTasks] = useState<VideoTask[]>([]);
@@ -139,19 +140,19 @@ export default function VideoGenerator() {
                 trailing={tasks.length > 0 ? (
                     <span className="font-mono text-sm uppercase tracking-[0.18em] text-text-muted">
                         <span className="text-foreground font-medium">{tasks.length}</span>
-                        <span className="ml-1.5">shots</span>
+                        <span className="ml-1.5">{tv("shots")}</span>
                         {doneCount > 0 ? (
                             <>
                                 <span className="mx-1.5 text-text-muted/40">·</span>
                                 <span className="text-primary">{doneCount}</span>
-                                <span className="ml-1.5">done</span>
+                                <span className="ml-1.5">{tv("done")}</span>
                             </>
                         ) : null}
                         {queueCount > 0 ? (
                             <>
                                 <span className="mx-1.5 text-text-muted/40">·</span>
                                 <span className="text-foreground">{queueCount}</span>
-                                <span className="ml-1.5">in queue</span>
+                                <span className="ml-1.5">{tv("inQueue")}</span>
                             </>
                         ) : null}
                     </span>

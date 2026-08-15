@@ -296,12 +296,12 @@ export default function ParamsSection({
                         {advOpen ? (
                             <div className="space-y-3 mt-2">
                                 {modelParams.negativePrompt ? (
-                                    <ParamRow label="Negative">
+                                    <ParamRow label={t("negativePromptLabel")}>
                                         <input
                                             type="text"
                                             value={params.negativePrompt ?? ""}
                                             onChange={(e) => set("negativePrompt", e.target.value)}
-                                            placeholder="things to avoid…"
+                                            placeholder={t("negativePromptPlaceholder")}
                                             className="w-full rounded-lg border border-glass-border bg-surface-inset px-2.5 py-1.5 font-sans text-body-sm text-foreground placeholder:text-text-muted outline-none transition-colors duration-fast ease-out-quart focus:border-primary/55 focus-visible:ring-2 focus-visible:ring-primary/45"
                                         />
                                     </ParamRow>
@@ -329,8 +329,8 @@ export default function ParamsSection({
                                                     const parsed = parseInt(v, 10);
                                                     set("seed", Number.isNaN(parsed) ? undefined : parsed);
                                                 }}
-                                                placeholder="random"
-                                                aria-label="Random seed (leave blank for provider default)"
+                                                placeholder={t("seedRandom")}
+                                                aria-label={t("seedAria")}
                                                 className="w-32 rounded-lg border border-glass-border bg-surface-inset px-2 py-1.5 font-mono text-body-sm text-foreground placeholder:text-text-muted outline-none transition-colors duration-fast ease-out-quart focus:border-primary/55 focus-visible:ring-2 focus-visible:ring-primary/45"
                                             />
                                             {/* Dice = randomize. Lucide icon for
@@ -340,9 +340,9 @@ export default function ParamsSection({
                                             <button
                                                 type="button"
                                                 onClick={() => set("seed", Math.floor(Math.random() * 1_000_000_000))}
-                                                aria-label="Generate random seed"
+                                                aria-label={t("seedGenerateAria")}
                                                 className="grid h-8 w-8 place-items-center rounded text-text-muted transition-colors duration-fast ease-out-quart hover:bg-hover-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
-                                                title="New random seed"
+                                                title={t("seedGenerateAria")}
                                             >
                                                 <Dices size={15} aria-hidden="true" />
                                             </button>
@@ -354,8 +354,8 @@ export default function ParamsSection({
                                                 <button
                                                     type="button"
                                                     onClick={() => set("seed", undefined)}
-                                                    aria-label="Clear seed"
-                                                    title="Clear (random)"
+                                                    aria-label={t("seedClearAria")}
+                                                    title={t("seedClearAria")}
                                                     className="grid h-8 w-8 place-items-center rounded text-text-muted transition-colors duration-fast ease-out-quart hover:bg-hover-bg hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
                                                 >
                                                     <X size={13} aria-hidden="true" />
@@ -376,7 +376,7 @@ export default function ParamsSection({
                                     </ParamRow>
                                 ) : null}
                                 {modelParams.mode ? (
-                                    <ParamRow label="Mode">
+                                    <ParamRow label={t("parameters.mode")}>
                                         <PillCluster
                                             options={modelParams.mode.options}
                                             value={params.mode ?? modelParams.mode.default}
@@ -385,7 +385,7 @@ export default function ParamsSection({
                                     </ParamRow>
                                 ) : null}
                                 {modelParams.movementAmplitude ? (
-                                    <ParamRow label="Motion">
+                                    <ParamRow label={t("parameters.motion")}>
                                         <PillCluster
                                             options={modelParams.movementAmplitude.options}
                                             value={params.movementAmplitude ?? modelParams.movementAmplitude.default}
@@ -394,7 +394,7 @@ export default function ParamsSection({
                                     </ParamRow>
                                 ) : null}
                                 {modelParams.sound ? (
-                                    <ParamRow label="Sound">
+                                    <ParamRow label={t("parameters.sound")}>
                                         <ToggleControl
                                             value={!!params.sound}
                                             onChange={(v) => set("sound", v)}
@@ -402,7 +402,7 @@ export default function ParamsSection({
                                     </ParamRow>
                                 ) : null}
                                 {modelParams.viduAudio ? (
-                                    <ParamRow label="Vidu audio">
+                                    <ParamRow label={t("parameters.viduAudio")}>
                                         <ToggleControl
                                             value={!!params.viduAudio}
                                             onChange={(v) => set("viduAudio", v)}
@@ -410,7 +410,7 @@ export default function ParamsSection({
                                     </ParamRow>
                                 ) : null}
                                 {modelParams.promptExtend ? (
-                                    <ParamRow label="Prompt extend">
+                                    <ParamRow label={t("parameters.promptExtend")}>
                                         <ToggleControl
                                             value={!!params.promptExtend}
                                             onChange={(v) => set("promptExtend", v)}
@@ -523,10 +523,11 @@ function DurationControl({
     value: number;
     onChange: (v: number) => void;
 }) {
+    const t = useTranslations("storyboardR2V");
     if (cfg.type === "fixed") {
         return (
             <span className="font-mono text-body-sm tabular-nums text-text-secondary">
-                {cfg.value}s <span className="text-text-muted">(fixed)</span>
+                {cfg.value}s <span className="text-text-muted">{t("durationFixed")}</span>
             </span>
         );
     }
@@ -556,7 +557,7 @@ function DurationControl({
                 step={cfg.step}
                 value={value}
                 onChange={(e) => onChange(parseInt(e.target.value, 10))}
-                aria-label="Duration in seconds (drag to adjust)"
+                aria-label={t("durationAria")}
                 className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-elevated accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/55"
             />
             <div className="flex shrink-0 items-center gap-0.5">
@@ -581,7 +582,7 @@ function DurationControl({
                         const clamped = clamp(parsed);
                         if (clamped !== value) onChange(clamped);
                     }}
-                    aria-label={`Duration in seconds (type a value between ${cfg.min} and ${cfg.max})`}
+                    aria-label={t("durationInputAria", { min: cfg.min, max: cfg.max })}
                     className="w-12 rounded border border-glass-border bg-surface-inset px-1.5 py-0.5 text-right font-mono text-body-sm tabular-nums text-foreground outline-none transition-colors duration-fast ease-out-quart focus:border-primary/55 focus-visible:ring-1 focus-visible:ring-primary/45 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <span className="font-mono text-body-sm text-text-muted">s</span>

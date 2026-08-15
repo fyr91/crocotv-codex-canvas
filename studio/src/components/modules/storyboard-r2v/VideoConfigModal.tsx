@@ -268,7 +268,7 @@ export default function VideoConfigModal({ isOpen, onClose, config, onConfigChan
                                                 <span className="text-3xl font-medium text-foreground tabular-nums tracking-tight">
                                                     {dc.value}
                                                 </span>
-                                                <span className="text-sm text-text-muted font-medium">sec</span>
+                                                <span className="text-sm text-text-muted font-medium">{t("durationUnit")}</span>
                                             </div>
                                         );
                                     }
@@ -562,7 +562,7 @@ export default function VideoConfigModal({ isOpen, onClose, config, onConfigChan
                                 onClick={onClose}
                                 className="flex-1 px-4 py-3 rounded-xl bg-glass hover:bg-hover-bg border border-glass-border text-text-muted hover:text-foreground text-sm font-medium tracking-wide transition-all duration-200"
                             >
-                                Cancel
+                                {t("close")}
                             </motion.button>
                             <motion.button
                                 whileHover={{ scale: 1.02 }}

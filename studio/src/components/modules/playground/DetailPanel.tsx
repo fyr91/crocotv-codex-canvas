@@ -205,7 +205,7 @@ export default function DetailPanel({
           ) : (
             <div className="flex flex-col items-center gap-2 text-text-muted">
               <Video className="w-12 h-12" />
-              <span className="font-mono text-sm">No media</span>
+              <span className="font-mono text-sm">{t("detail.noMedia")}</span>
             </div>
           )}
 
@@ -262,19 +262,19 @@ export default function DetailPanel({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-mono text-sm font-medium uppercase tracking-[0.18em] text-text-muted">
-                  PROMPT
+                  {t("detail.promptLabel")}
                 </h3>
                 <button
                   onClick={handleCopyPrompt}
                   className="flex items-center gap-1 px-2 py-1 rounded text-sm text-text-muted hover:text-foreground hover:bg-hover-bg transition-colors"
                 >
                   <Copy className="w-3 h-3" />
-                  {copied ? 'Copied' : 'Copy'}
+                  {copied ? t("card.copied") : t("detail.copy")}
                 </button>
               </div>
               <div className="rounded-xl bg-surface-inset border border-border-subtle p-4 max-h-48 overflow-y-auto">
                 <p className="font-display italic text-sm text-text-secondary leading-relaxed whitespace-pre-wrap break-words">
-                  {generation.prompt ? `“${generation.prompt}”` : '(empty)'}
+                  {generation.prompt ? `“${generation.prompt}”` : t("detail.emptyPrompt")}
                 </p>
               </div>
             </div>
@@ -308,7 +308,7 @@ export default function DetailPanel({
             {generation.negative_prompt && (
               <div>
                 <h3 className="font-mono text-sm font-medium uppercase tracking-[0.18em] text-text-muted mb-2">
-                  NEGATIVE PROMPT
+                  {t("prompt.negativeLabel")}
                 </h3>
                 <div className="rounded-xl bg-surface-inset border border-border-subtle p-4 max-h-28 overflow-y-auto">
                   <p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap break-words">
@@ -322,7 +322,7 @@ export default function DetailPanel({
             {generation.status === 'failed' && generation.error && (
               <div>
                 <h3 className="font-mono text-sm uppercase tracking-[0.18em] text-status-failed-fg mb-2">
-                  ERROR
+                  {t("detail.errorLabel")}
                 </h3>
                 <div className="max-h-28 overflow-y-auto rounded-2xl bg-status-failed-bg border border-status-failed-border p-4">
                   <p className="text-sm text-status-failed-fg leading-relaxed break-all font-mono">
@@ -342,7 +342,7 @@ export default function DetailPanel({
                 className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-primary text-on-accent text-sm font-medium shadow-none hover:bg-primary-hover transition"
               >
                 <RotateCcw className="w-4 h-4" />
-                Retry
+                {t("card.retry")}
               </button>
             )}
 
@@ -377,7 +377,7 @@ export default function DetailPanel({
                     className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-surface-inset border border-glass-border text-text-secondary text-sm font-medium hover:text-foreground hover:bg-hover-bg transition"
                   >
                     <Download className="w-4 h-4" />
-                    Download
+                    {t("card.download")}
                   </button>
                 )}
                 {!isVideo && output?.media_path && onGenerateVideo && (
@@ -386,7 +386,7 @@ export default function DetailPanel({
                     className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-full bg-surface-inset border border-glass-border text-text-secondary text-sm font-medium hover:text-foreground hover:bg-hover-bg transition"
                   >
                     <Video className="w-4 h-4" />
-                    Generate Video
+                    {t("card.generateVideo")}
                   </button>
                 )}
               </div>
@@ -399,7 +399,7 @@ export default function DetailPanel({
               className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium text-text-muted hover:text-status-failed-fg hover:bg-status-failed-bg transition disabled:opacity-40"
             >
               <Trash2 className="w-4 h-4" />
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? t("detail.deleting") : t("card.delete")}
             </button>
           </div>
         </div>

@@ -112,10 +112,10 @@ export default function VoicePickerModal({
                     setCustomVoices(customs);
                 }
             })
-            .catch((e) => { if (!cancelled) setError(e?.message || "Failed to load voices"); })
+            .catch((e) => { if (!cancelled) setError(e?.message || t("loadFailed")); })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [isOpen, seriesId]);
+    }, [isOpen, seriesId, t]);
 
     // PR-3h · handle clone result — refresh list + auto-select new clone
     const handleCloneCreated = async (newVoice: CustomVoice) => {
@@ -192,7 +192,7 @@ export default function VoicePickerModal({
             setPlayingId(voiceId);
             await audio.play();
         } catch (e: any) {
-            setError(e?.message || "Preview failed");
+            setError(e?.message || t("playFailed"));
         } finally {
             setPreviewingId(null);
         }
@@ -624,7 +624,7 @@ function CustomVoiceList({
                                     <div className="flex shrink-0 items-center gap-1">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onPreview(cv); }}
-                                            aria-label="Play preview"
+                                            aria-label={t("playPreview")}
                                             className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors ${
                                                 isPlaying
                                                     ? "border-primary bg-primary/15 text-primary"
@@ -635,7 +635,7 @@ function CustomVoiceList({
                                         </button>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onDelete(cv.id); }}
-                                            aria-label="Delete custom voice"
+                                            aria-label={t("deleteCustomVoice")}
                                             className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-glass-border bg-black/30 text-text-muted hover:border-danger/40 hover:bg-danger/10 hover:text-danger transition-colors"
                                         >
                                             <Trash2 size={11} />

@@ -167,7 +167,7 @@ export default function ConsistencyVault() {
     // Delete asset handler
     const handleDeleteAsset = async (assetId: string, type: string) => {
         if (!currentProject) return;
-        if (!confirm(`Are you sure you want to delete this ${type}?`)) return;
+        if (!confirm(tv("confirmDelete", { type }))) return;
 
         try {
             if (type === "character") {
@@ -182,7 +182,7 @@ export default function ConsistencyVault() {
             updateProject(currentProject.id, updatedProject);
         } catch (error) {
             console.error("Failed to delete asset:", error);
-            alert("Failed to delete asset");
+            alert(tv("deleteFailed", { error: "" }));
         }
     };
 
@@ -204,7 +204,7 @@ export default function ConsistencyVault() {
             setIsCreateDialogOpen(false);
         } catch (error) {
             console.error("Failed to create asset:", error);
-            alert("Failed to create asset");
+            alert(tv("createFailed"));
         }
     };
 
@@ -303,7 +303,7 @@ export default function ConsistencyVault() {
 
     const handleDeleteVideo = async (assetId: string, type: string, videoId: string) => {
         if (!currentProject) return;
-        if (!confirm("Are you sure you want to delete this video? This action cannot be undone.")) return;
+        if (!confirm(tv("confirmDeleteVideo"))) return;
 
         try {
             await api.deleteAssetVideo(currentProject.id, type, assetId, videoId);
@@ -311,7 +311,7 @@ export default function ConsistencyVault() {
             updateProject(currentProject.id, updatedProject);
         } catch (error: any) {
             console.error("Failed to delete video:", error);
-            alert(`Failed to delete video: ${error.message}`);
+            alert(tv("deleteFailed", { error: error.message }));
         }
     };
 
@@ -375,21 +375,21 @@ export default function ConsistencyVault() {
                         active={activeTab === "character"}
                         onClick={() => setActiveTab("character")}
                         icon={<User size={14} />}
-                        label="Characters"
+                        label={tv("characters")}
                         count={currentProject?.characters?.length || 0}
                     />
                     <TabButton
                         active={activeTab === "scene"}
                         onClick={() => setActiveTab("scene")}
                         icon={<MapPin size={14} />}
-                        label="Scenes"
+                        label={tv("scenes")}
                         count={currentProject?.scenes?.length || 0}
                     />
                     <TabButton
                         active={activeTab === "prop"}
                         onClick={() => setActiveTab("prop")}
                         icon={<Box size={14} />}
-                        label="Props"
+                        label={tv("props")}
                         count={currentProject?.props?.length || 0}
                     />
                 </div>
@@ -420,14 +420,14 @@ export default function ConsistencyVault() {
             <div className="flex-1 overflow-y-auto p-6">
                 {!currentProject ? (
                     <div className="flex items-center justify-center h-full text-text-muted">
-                        Loading project...
+                        {tv("loadingProject")}
                     </div>
                 ) : assets?.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-text-muted gap-4">
                         <div className="w-16 h-16 rounded-full bg-glass flex items-center justify-center">
                             {activeTab === "character" ? <User size={32} /> : activeTab === "scene" ? <MapPin size={32} /> : <Box size={32} />}
                         </div>
-                        <p>No {activeTab}s found</p>
+                        <p>{tv("noItemsFound", { type: tv(activeTab === "character" ? "characters" : activeTab === "scene" ? "scenes" : "props") })}</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
@@ -457,7 +457,7 @@ export default function ConsistencyVault() {
                         >
                             <div className="flex flex-col items-center gap-3 text-text-secondary group-hover:text-primary transition-colors">
                                 <Plus size={40} />
-                                <span className="text-sm font-medium">Add {activeTab}</span>
+                                <span className="text-sm font-medium">{tv("createNew", { type: tv(activeTab) })}</span>
                             </div>
                         </motion.div>
                     </div>
@@ -537,6 +537,7 @@ export default function ConsistencyVault() {
 }
 
 function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGenerate, isGenerating, stylePrompt = "", styleNegativePrompt = "", onGenerateVideo, onDeleteVideo, isGeneratingVideo }: any) {
+    const tv = useTranslations("vault");
     const [description, setDescription] = useState(asset.description);
     const [isEditing, setIsEditing] = useState(false);
     const currentProject = useProjectStore((state) => state.currentProject);
@@ -612,13 +613,13 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                             onClick={() => setActiveTab("image")}
                             className={`flex-1 p-3 text-sm font-medium transition-colors ${activeTab === "image" ? "text-foreground border-b-2 border-primary bg-glass" : "text-text-muted hover:text-text-secondary"}`}
                         >
-                            Image Reference
+                            {tv("imageReference")}
                         </button>
                         <button
                             onClick={() => setActiveTab("video")}
                             className={`flex-1 p-3 text-sm font-medium transition-colors ${activeTab === "video" ? "text-foreground border-b-2 border-primary bg-glass" : "text-text-muted hover:text-text-secondary"}`}
                         >
-                            Video Reference
+                            {tv("videoReference")}
                         </button>
                     </div>
 
@@ -662,10 +663,10 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                         {/* Description */}
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                                <label className="text-sm font-medium text-text-secondary uppercase">Description</label>
+                                <label className="text-sm font-medium text-text-secondary uppercase">{tv("description")}</label>
                                 {!isEditing && (
                                     <button onClick={() => setIsEditing(true)} className="text-sm text-primary hover:underline">
-                                        Edit
+                                        {tv("edit")}
                                     </button>
                                 )}
                             </div>
@@ -677,8 +678,8 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                                         className="w-full h-32 bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-text-secondary resize-none focus:border-primary focus:outline-none"
                                     />
                                     <div className="flex justify-end gap-2">
-                                        <button onClick={() => { setIsEditing(false); setDescription(asset.description); }} className="px-3 py-1.5 text-sm text-text-secondary hover:text-foreground">Cancel</button>
-                                        <button onClick={handleSave} className="px-3 py-1.5 bg-primary text-white text-sm rounded hover:bg-primary/90">Save Description</button>
+                                        <button onClick={() => { setIsEditing(false); setDescription(asset.description); }} className="px-3 py-1.5 text-sm text-text-secondary hover:text-foreground">{tv("cancel")}</button>
+                                        <button onClick={handleSave} className="px-3 py-1.5 bg-primary text-white text-sm rounded hover:bg-primary/90">{tv("saveDescription")}</button>
                                     </div>
                                 </div>
                             ) : (
@@ -691,12 +692,12 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                         {/* Video Prompt (Only visible in Video Tab) */}
                         {activeTab === "video" && (
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-text-secondary uppercase">Video Prompt</label>
+                                <label className="text-sm font-medium text-text-secondary uppercase">{tv("videoPrompt")}</label>
                                 <textarea
                                     value={videoPrompt}
                                     onChange={(e) => setVideoPrompt(e.target.value)}
                                     className="w-full h-24 bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-text-secondary resize-none focus:border-primary focus:outline-none"
-                                    placeholder="Describe the motion..."
+                                    placeholder={tv("motionPlaceholder")}
                                 />
                             </div>
                         )}
@@ -704,7 +705,7 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                         {/* Style Control (Only visible in Image Tab) */}
                         {activeTab === "image" && (
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-text-secondary uppercase">Style Settings</label>
+                                <label className="text-sm font-medium text-text-secondary uppercase">{tv("styleSettings")}</label>
                                 <div className="bg-glass rounded-lg p-3 border border-border-subtle">
                                     <div className="flex items-center gap-2 mb-2">
                                         <input
@@ -715,13 +716,13 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                                             className="rounded border-glass-border bg-elevated text-primary focus:ring-primary"
                                         />
                                         <label htmlFor="applyStyleModal" className="text-sm font-medium text-text-secondary cursor-pointer select-none">
-                                            Apply Art Direction Style
+                                            {tv("applyArtDirection")}
                                         </label>
                                     </div>
 
                                     {stylePrompt && (
                                         <div className="text-sm text-text-muted font-mono bg-surface p-2 rounded border border-border-subtle">
-                                            <span className="text-primary font-medium">Style:</span> {stylePrompt}
+                                            <span className="text-primary font-medium">{tv("styleLabel")}</span> {stylePrompt}
                                         </div>
                                     )}
                                 </div>
@@ -735,7 +736,7 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                                     onClick={() => setShowAdvanced(!showAdvanced)}
                                     className="flex items-center gap-2 text-sm font-medium text-text-muted hover:text-foreground transition-colors uppercase"
                                 >
-                                    <span>Advanced Settings (Negative Prompt)</span>
+                                    <span>{tv("advancedNegative")}</span>
                                     <ChevronRight size={12} className={`transform transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
                                 </button>
 
@@ -751,7 +752,7 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                                                 value={negativePrompt}
                                                 onChange={(e) => setNegativePrompt(e.target.value)}
                                                 className="w-full h-24 bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-text-secondary resize-none focus:outline-none focus:border-primary/50 font-mono"
-                                                placeholder="Enter negative prompt..."
+                                                placeholder={tv("negativePlaceholder")}
                                             />
                                         </motion.div>
                                     )}
@@ -767,7 +768,7 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                             className="flex-1 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-normal flex items-center justify-center gap-2 shadow-none"
                         >
                             <Check size={18} />
-                            Done
+                            {tv("done")}
                         </button>
                     </div>
                 </div>
@@ -797,6 +798,7 @@ function TabButton({ active, onClick, icon, label, count }: any) {
 }
 
 function ImageWithRetry({ src, alt, className }: { src: string, alt: string, className?: string }) {
+    const tv = useTranslations("vault");
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
@@ -840,7 +842,7 @@ function ImageWithRetry({ src, alt, className }: { src: string, alt: string, cla
             />
             {error && retryCount >= 10 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-status-failed-bg backdrop-blur-sm z-20">
-                    <span className="text-sm text-status-failed-fg font-medium">Failed to load</span>
+                    <span className="text-sm text-status-failed-fg font-medium">{tv("loadFailed")}</span>
                 </div>
             )}
         </div>
@@ -868,7 +870,7 @@ function AssetCard({ asset, type, isGenerating, onGenerate, onToggleLock, onClic
             updateProject(currentProject.id, updatedProject);
         } catch (error) {
             console.error("Failed to upload asset image:", error);
-            alert("Failed to upload image");
+            alert(tv("uploadImageFailed"));
         }
     };
 
@@ -903,7 +905,7 @@ function AssetCard({ asset, type, isGenerating, onGenerate, onToggleLock, onClic
             {isGenerating && (
                 <div className="absolute inset-0 z-20 bg-overlay backdrop-blur-sm flex items-center justify-center flex-col gap-2">
                     <RefreshCw className="animate-spin text-primary" size={32} />
-                    <span className="text-sm font-mono text-primary">Generating...</span>
+                    <span className="text-sm font-mono text-primary">{tv("generating")}</span>
                 </div>
             )}
 
@@ -915,7 +917,7 @@ function AssetCard({ asset, type, isGenerating, onGenerate, onToggleLock, onClic
                         onDelete();
                     }}
                     className="p-2 rounded-full backdrop-blur-md bg-status-failed-bg text-status-failed-fg hover:bg-status-failed-bg transition-colors"
-                    title="Delete"
+                    title={tv("deleteAria")}
                 >
                     <Trash2 size={14} />
                 </button>
@@ -937,7 +939,7 @@ function AssetCard({ asset, type, isGenerating, onGenerate, onToggleLock, onClic
             <div className="absolute bottom-0 left-0 right-0 p-4 z-30">
                 <h3 className="text-xl font-medium text-foreground mb-1 truncate">{asset.name}</h3>
                 <p className="text-sm text-foreground/80 line-clamp-2 mb-3 h-8">
-                    {asset.description || "No description"}
+                    {asset.description || tv("noDescription")}
                 </p>
 
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0">
@@ -953,7 +955,7 @@ function AssetCard({ asset, type, isGenerating, onGenerate, onToggleLock, onClic
                         size="sm"
                         className="flex-1"
                     >
-                        {isGenerating ? "Generating..." : "Generate"}
+                        {isGenerating ? tv("generating") : tv("generate")}
                     </WorkflowActionButton>
                     <button
                         onClick={(e) => {
@@ -974,13 +976,14 @@ function AssetCard({ asset, type, isGenerating, onGenerate, onToggleLock, onClic
 
 
 function CreateAssetDialog({ type, onClose, onCreate }: { type: string; onClose: () => void; onCreate: (data: { name: string; description: string }) => void }) {
+    const tv = useTranslations("vault");
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async () => {
         if (!name.trim()) {
-            alert("Name is required");
+            alert(tv("nameRequiredAlert"));
             return;
         }
         setIsSubmitting(true);
@@ -991,7 +994,7 @@ function CreateAssetDialog({ type, onClose, onCreate }: { type: string; onClose:
         }
     };
 
-    const typeLabel = type === "character" ? "Character" : type === "scene" ? "Scene" : "Prop";
+    const typeLabel = tv(type === "character" ? "character" : type === "scene" ? "scene" : "prop");
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm p-8">
@@ -1004,7 +1007,7 @@ function CreateAssetDialog({ type, onClose, onCreate }: { type: string; onClose:
                 <div className="p-6 border-b border-glass-border flex justify-between items-center bg-surface">
                     <div className="flex items-center gap-3">
                         <Plus className="text-primary" size={20} />
-                        <h2 className="text-xl font-medium text-foreground">Create New {typeLabel}</h2>
+                        <h2 className="text-xl font-medium text-foreground">{tv("createNew", { type: typeLabel })}</h2>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-hover-bg rounded-lg transition-colors">
                         <X size={20} className="text-text-secondary" />
@@ -1013,21 +1016,21 @@ function CreateAssetDialog({ type, onClose, onCreate }: { type: string; onClose:
 
                 <div className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-text-secondary mb-2">Name *</label>
+                        <label className="block text-sm font-medium text-text-secondary mb-2">{tv("nameRequired")}</label>
                         <input
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder={`Enter ${type} name`}
+                            placeholder={tv("namePlaceholder", { type: typeLabel })}
                             className="w-full px-4 py-3 bg-input-bg border border-glass-border rounded-lg text-foreground placeholder-text-muted focus:border-primary/50 focus:outline-none"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-text-secondary mb-2">Description</label>
+                        <label className="block text-sm font-medium text-text-secondary mb-2">{tv("descriptionLabel")}</label>
                         <textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            placeholder={`Describe the ${type}...`}
+                            placeholder={tv("descriptionPlaceholder", { type: typeLabel })}
                             rows={4}
                             className="w-full px-4 py-3 bg-input-bg border border-glass-border rounded-lg text-foreground placeholder-text-muted focus:border-primary/50 focus:outline-none resize-none"
                         />
@@ -1039,7 +1042,7 @@ function CreateAssetDialog({ type, onClose, onCreate }: { type: string; onClose:
                         onClick={onClose}
                         className="px-6 py-2 bg-glass hover:bg-hover-bg text-foreground rounded-lg transition-colors"
                     >
-                        Cancel
+                        {tv("cancel")}
                     </button>
                     <button
                         onClick={handleSubmit}
@@ -1047,7 +1050,7 @@ function CreateAssetDialog({ type, onClose, onCreate }: { type: string; onClose:
                         className="px-6 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                         {isSubmitting && <RefreshCw size={16} className="animate-spin" />}
-                        Create {typeLabel}
+                        {tv("create")}
                     </button>
                 </div>
             </motion.div>

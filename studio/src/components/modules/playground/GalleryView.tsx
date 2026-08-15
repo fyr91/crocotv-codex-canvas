@@ -87,7 +87,7 @@ export default function GalleryView({
   if (generations.length === 0) {
     return (
       <div className="flex flex-col h-full items-center justify-center">
-        <p className="text-sm text-text-muted">No results to display</p>
+        <p className="text-sm text-text-muted">{t("gallery.noResults")}</p>
       </div>
     );
   }
@@ -126,7 +126,7 @@ export default function GalleryView({
         ) : current.status === 'failed' ? (
           <div className="flex flex-col items-center gap-3 text-status-failed-fg">
             <AlertCircle className="w-10 h-10" />
-            <p className="font-mono text-sm">Generation failed</p>
+            <p className="font-mono text-sm">{t("card.failed")}</p>
             {current.error && (
               <p className="text-sm text-text-muted max-w-xs text-center line-clamp-3">
                 {current.error}
@@ -137,7 +137,7 @@ export default function GalleryView({
                 onClick={() => onRetry(current)}
                 className="mt-2 px-3 py-1.5 rounded text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
               >
-                Retry
+                {t("card.retry")}
               </button>
             )}
           </div>
@@ -145,7 +145,7 @@ export default function GalleryView({
           <div className="flex flex-col items-center gap-3 text-text-muted">
             <div className="w-8 h-8 border-2 border-glass-border border-t-primary rounded-full animate-spin" />
             <p className="font-mono text-sm">
-              {current.status === 'pending' ? 'Queued...' : 'Generating...'}
+              {current.status === 'pending' ? t("card.queued") : t("card.processing")}
             </p>
           </div>
         )}
@@ -154,7 +154,7 @@ export default function GalleryView({
       {/* Info bar */}
       <div className="px-6 py-3 bg-surface space-y-1.5">
         <p className="text-sm text-text-secondary line-clamp-2 leading-relaxed cursor-pointer hover:text-foreground transition-colors" onClick={handleClick} title={t('gallery.viewDetail')}>
-          {current.prompt || '(no prompt)'}
+          {current.prompt || t("gallery.noPrompt")}
         </p>
         <div className="flex items-center gap-2">
           <span className="font-mono text-sm bg-elevated text-text-muted rounded px-[6px] py-[2px]">

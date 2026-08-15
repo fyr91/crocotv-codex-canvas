@@ -72,11 +72,11 @@ export default function ReconcileModal({ isOpen, scriptId, onClose, onApplied }:
             })
             .catch(err => {
                 if (cancelled) return;
-                setError(err?.response?.data?.detail || err?.message || "Load failed");
+                setError(err?.response?.data?.detail || err?.message || t("loadFailed"));
             })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [isOpen, scriptId]);
+    }, [isOpen, scriptId, t]);
 
     const counts = useMemo(() => {
         const base = { total: 0, merge: 0, create: 0, skip: 0 };
@@ -121,7 +121,7 @@ export default function ReconcileModal({ isOpen, scriptId, onClose, onApplied }:
                 document.dispatchEvent(new CustomEvent("lumenx:navigateStep", { detail: "cast" }));
             }
         } catch (err: any) {
-            setError(err?.response?.data?.detail || err?.message || "Apply failed");
+            setError(err?.response?.data?.detail || err?.message || t("applyFailed"));
         } finally {
             setApplying(false);
         }
@@ -162,7 +162,7 @@ export default function ReconcileModal({ isOpen, scriptId, onClose, onApplied }:
                             </div>
                             <button
                                 onClick={onClose}
-                                aria-label="Close"
+                                aria-label={t("close")}
                                 className="p-2 hover:bg-hover-bg rounded-lg text-text-muted hover:text-foreground transition-colors"
                             >
                                 <X size={16} />
@@ -197,9 +197,9 @@ export default function ReconcileModal({ isOpen, scriptId, onClose, onApplied }:
                         {/* Footer */}
                         <footer className="flex items-center gap-2 px-6 py-4 border-t border-glass-border">
                             <span className="flex-1 font-mono text-sm uppercase tracking-[0.16em] text-text-muted">
-                                {counts.merge > 0 && <span className="text-primary mr-2">↳ {counts.merge} merge</span>}
-                                {counts.create > 0 && <span className="text-primary mr-2">+ {counts.create} new</span>}
-                                {counts.skip > 0 && <span className="text-text-muted">⊘ {counts.skip} skip</span>}
+                                {counts.merge > 0 && <span className="text-primary mr-2">↳ {t("mergeCount", { count: counts.merge })}</span>}
+                                {counts.create > 0 && <span className="text-primary mr-2">+ {t("newCount", { count: counts.create })}</span>}
+                                {counts.skip > 0 && <span className="text-text-muted">⊘ {t("skipCount", { count: counts.skip })}</span>}
                             </span>
                             <WorkflowActionButton
                                 variant="ghost"

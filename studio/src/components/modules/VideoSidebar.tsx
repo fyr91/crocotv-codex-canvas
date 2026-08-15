@@ -261,7 +261,7 @@ export default function VideoSidebar({ tasks, onRemix, params, setParams }: Vide
                                                     : "bg-glass border-transparent text-text-secondary hover:bg-hover-bg"
                                                     } ${!params.promptExtend ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
-                                                <span className="font-medium">Single</span>
+                                                <span className="font-medium">{tm("single")}</span>
                                                 <span className="text-sm text-text-muted">{tm("singleShot")}</span>
                                             </button>
                                             <button
@@ -272,7 +272,7 @@ export default function VideoSidebar({ tasks, onRemix, params, setParams }: Vide
                                                     : "bg-glass border-transparent text-text-secondary hover:bg-hover-bg"
                                                     } ${!params.promptExtend ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
-                                                <span className="font-medium">Multi</span>
+                                                <span className="font-medium">{tm("multi")}</span>
                                                 <span className="text-sm text-text-muted">{tm("multiShot")}</span>
                                             </button>
                                         </div>
@@ -439,7 +439,7 @@ export default function VideoSidebar({ tasks, onRemix, params, setParams }: Vide
                                                     : "bg-glass border-transparent text-text-secondary hover:bg-hover-bg"
                                                     }`}
                                             >
-                                                <VolumeX size={12} /> Mute
+                                                <VolumeX size={12} /> {tm("mute")}
                                             </button>
                                             <button
                                                 onClick={() => setAudioMode("ai")}
@@ -448,7 +448,7 @@ export default function VideoSidebar({ tasks, onRemix, params, setParams }: Vide
                                                     : "bg-glass border-transparent text-text-secondary hover:bg-hover-bg"
                                                     }`}
                                             >
-                                                <Mic size={12} /> AI Sound
+                                                <Mic size={12} /> {tm("aiSound")}
                                             </button>
                                             <button
                                                 onClick={() => setAudioMode("custom")}
@@ -457,7 +457,7 @@ export default function VideoSidebar({ tasks, onRemix, params, setParams }: Vide
                                                     : "bg-glass border-transparent text-text-secondary hover:bg-hover-bg"
                                                     }`}
                                             >
-                                                <Music size={12} /> Sound Driven
+                                                <Music size={12} /> {tm("soundDriven")}
                                             </button>
                                         </div>
                                         {audioMode === "custom" && (
@@ -466,7 +466,7 @@ export default function VideoSidebar({ tasks, onRemix, params, setParams }: Vide
                                                     type="text"
                                                     value={params.audioUrl || ""}
                                                     readOnly
-                                                    placeholder={isUploadingAudio ? "Uploading..." : "Click to upload audio"}
+                                                    placeholder={isUploadingAudio ? tm("uploadingAudio") : tm("uploadAudio")}
                                                     onClick={() => audioInputRef.current?.click()}
                                                     className="w-full bg-glass border border-glass-border rounded-lg py-1.5 px-2 text-sm text-foreground focus:border-primary focus:outline-none cursor-pointer"
                                                 />
@@ -540,7 +540,7 @@ export default function VideoSidebar({ tasks, onRemix, params, setParams }: Vide
                                                     <textarea
                                                         value={params.negativePrompt || ""}
                                                         onChange={(e) => updateParam("negativePrompt", e.target.value)}
-                                                        placeholder="Low quality, blurry, distorted..."
+                                                        placeholder={tm("negativePromptPlaceholder")}
                                                         className="w-full h-20 bg-glass border border-glass-border rounded-lg p-2 text-sm text-foreground focus:border-primary focus:outline-none resize-none"
                                                     />
                                                 </motion.div>
@@ -568,13 +568,13 @@ export default function VideoSidebar({ tasks, onRemix, params, setParams }: Vide
                                                 type="number"
                                                 value={params.seed ?? ""}
                                                 onChange={(e) => updateParam("seed", e.target.value ? parseInt(e.target.value) : undefined)}
-                                                placeholder="Random (-1)"
+                                                placeholder={tm("randomSeedPlaceholder")}
                                                 className="w-full bg-glass border border-glass-border rounded-lg py-1.5 pl-2 pr-8 text-sm text-foreground focus:border-border-strong focus:outline-none [&::-webkit-inner-spin-button]:appearance-none"
                                             />
                                             <button
                                                 onClick={() => updateParam("seed", Math.floor(Math.random() * 2147483647))}
                                                 className="absolute right-2 top-1.5 text-text-muted hover:text-foreground"
-                                                title="Randomize"
+                                                title={tm("randomize")}
                                             >
                                                 <RefreshCw size={12} />
                                             </button>

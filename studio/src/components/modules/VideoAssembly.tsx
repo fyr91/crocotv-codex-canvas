@@ -243,7 +243,7 @@ export default function VideoAssembly() {
 
                                             {selectedVideoId && (
                                                 <div className="flex items-center gap-1 text-status-completed-fg text-sm font-medium">
-                                                    <Check size={12} /> Ready
+                                                    <Check size={12} /> {ta("ready")}
                                                 </div>
                                             )}
                                         </div>
@@ -321,7 +321,7 @@ export default function VideoAssembly() {
                                                 <div className="p-3">
                                                     <div className="flex items-center justify-between mb-2">
                                                         <div className="text-sm text-text-secondary">
-                                                            Variant #{idx + 1}
+                                                            {ta("variantNumber", { number: idx + 1 })}
                                                         </div>
                                                         <div className="text-sm px-1.5 py-0.5 rounded bg-hover-bg text-text-secondary">
                                                             {video.model}
@@ -447,7 +447,7 @@ function MixPhase({
                         }`}
                     >
                         <p className="text-sm font-medium text-foreground">{ta("mixBgmNone")}</p>
-                        <p className="mt-0.5 font-mono text-sm uppercase tracking-[0.14em] text-text-muted">silent</p>
+                        <p className="mt-0.5 font-mono text-sm uppercase tracking-[0.14em] text-text-muted">{ta("silent")}</p>
                     </button>
                     {loading ? (
                         <div className="col-span-3 grid place-items-center py-4 text-text-muted">
@@ -564,7 +564,7 @@ function ExportPhase({
                             </p>
                             {mergeError.toLowerCase().includes("ffmpeg") && (
                                 <a href="https://ffmpeg.org/download.html" target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:text-primary underline mt-2 inline-block">
-                                    Download FFmpeg →
+                                    {ta("downloadFfmpeg")}
                                 </a>
                             )}
                             <button onClick={onDismissError} className="mt-3 text-sm text-text-secondary hover:text-foreground underline">
