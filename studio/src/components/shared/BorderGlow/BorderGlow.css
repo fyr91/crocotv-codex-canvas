@@ -1,0 +1,18 @@
+.border-glow-card {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--elevation-card);
+}
+
+.border-glow-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: auto;
+}

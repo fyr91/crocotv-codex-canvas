@@ -4,17 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n server,web -c cyan,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev": "concurrently -k -n server,web,studio -c cyan,green,magenta \"npm:dev:server\" \"npm:dev:canvas\" \"npm:dev:studio\"",
     "dev:server": "tsx watch server/bootstrap.ts",
-    "dev:web": "npm --prefix web run dev",
+    "dev:canvas": "npm --prefix web run dev",
+    "dev:web": "npm run dev",
+    "dev:studio": "npm --prefix studio run dev",
     "mcp": "tsx plugins/croco-video-factory/mcp/bootstrap.ts",
     "build:mcp": "esbuild plugins/croco-video-factory/mcp/bootstrap.ts --bundle --platform=node --format=esm --target=node20 --outfile=plugins/croco-video-factory/mcp/runtime/server.mjs",
     "build:skills": "esbuild plugins/croco-video-factory/skills/character-speaking/scripts/generate-speech.mjs --bundle --platform=node --format=esm --target=node20 --outfile=plugins/croco-video-factory/skills/character-speaking/runtime/generate-speech.mjs",
     "build:manifest": "node scripts/generate-bundle-manifest.mjs",
-    "build": "npm run build:mcp && npm run build:skills && npm run build:manifest && tsc --noEmit && npm --prefix web run build",
+    "build": "npm run build:mcp && npm run build:skills && npm run build:manifest && tsc --noEmit && npm --prefix web run build && npm --prefix studio run build",
     "setup": "node scripts/configure-local.mjs",
     "check:compatibility": "node plugins/croco-video-factory/scripts/check-compatibility.mjs",
-    "start": "concurrently -k -n server,web -c cyan,green \"tsx server/bootstrap.ts\" \"npm --prefix web run start\""
+    "start": "concurrently -k -n server,web,studio -c cyan,green,magenta \"tsx server/bootstrap.ts\" \"npm --prefix web run start\" \"npm --prefix studio run start\""
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",

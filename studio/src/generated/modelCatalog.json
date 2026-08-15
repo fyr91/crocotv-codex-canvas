@@ -1,0 +1,178 @@
+{
+  "compat": {
+    "legacy_model_ids": {}
+  },
+  "defaults": {
+    "canonical_model_settings": {
+      "t2i_model": "google:nano-banana@2-lite",
+      "i2i_model": "google:nano-banana@2-lite",
+      "image_model": "google:nano-banana@2-lite",
+      "i2v_model": "minimax-h3",
+      "r2v_model": "minimax-h3-r2v"
+    },
+    "model_settings": {
+      "t2i_model": "google:nano-banana@2-lite",
+      "i2i_model": "google:nano-banana@2-lite",
+      "image_model": "google:nano-banana@2-lite",
+      "i2v_model": "minimax-h3",
+      "r2v_model": "minimax-h3-r2v"
+    }
+  },
+  "families": {
+    "runware": { "family": "runware", "display_name": "Runware" },
+    "minimax": { "family": "minimax", "display_name": "MiniMax" }
+  },
+  "models": {
+    "google:nano-banana@2-lite": {
+      "id": "google:nano-banana@2-lite",
+      "display_name": "Nano Banana 2 Lite",
+      "description": "Croco Runware 图片生成与参考图编辑模型",
+      "family": "runware",
+      "status": "active",
+      "capabilities": ["t2i", "i2i"],
+      "duration": null,
+      "params": {
+        "ratio": { "options": ["16:9", "9:16", "4:3", "3:4", "1:1"], "default": "1:1" }
+      },
+      "inputs": { "reference_images": { "max": 9 } },
+      "ui": {
+        "selection_group": "image",
+        "visible_in": ["project_settings", "series_settings", "global_settings"],
+        "recommended": true,
+        "order": 100,
+        "badges": ["推荐", "Croco"]
+      }
+    },
+    "google:4@1": {
+      "id": "google:4@1",
+      "display_name": "Google Image 4",
+      "description": "Croco Runware 高质量图片生成模型",
+      "family": "runware",
+      "status": "active",
+      "capabilities": ["t2i", "i2i"],
+      "duration": null,
+      "params": {
+        "ratio": { "options": ["16:9", "9:16", "4:3", "3:4", "1:1"], "default": "1:1" }
+      },
+      "inputs": { "reference_images": { "max": 9 } },
+      "ui": {
+        "selection_group": "image",
+        "visible_in": ["project_settings", "series_settings", "global_settings"],
+        "recommended": false,
+        "order": 90,
+        "badges": ["Croco"]
+      }
+    },
+    "openai:gpt-image@2": {
+      "id": "openai:gpt-image@2",
+      "display_name": "GPT Image 2",
+      "description": "Croco Runware GPT Image 图片生成模型",
+      "family": "runware",
+      "status": "active",
+      "capabilities": ["t2i", "i2i"],
+      "duration": null,
+      "params": {
+        "ratio": { "options": ["16:9", "9:16", "4:3", "3:4", "1:1"], "default": "1:1" }
+      },
+      "inputs": { "reference_images": { "max": 9 } },
+      "ui": {
+        "selection_group": "image",
+        "visible_in": ["project_settings", "series_settings", "global_settings"],
+        "recommended": false,
+        "order": 80,
+        "badges": ["Croco"]
+      }
+    },
+    "minimax-h3": {
+      "id": "minimax-h3",
+      "display_name": "MiniMax H3",
+      "description": "Croco 统一视频生成 Runtime，支持文生视频和首帧/音频参考",
+      "family": "minimax",
+      "status": "active",
+      "capabilities": ["t2v", "i2v"],
+      "duration": { "type": "slider", "min": 3, "max": 15, "step": 1, "default": 6 },
+      "params": {
+        "resolution": { "options": ["preview", "720p", "1080p"], "default": "preview" },
+        "ratio": { "options": ["16:9", "9:16", "1:1"], "default": "16:9" }
+      },
+      "inputs": { "reference_images": { "max": 9 } },
+      "ui": {
+        "selection_group": "i2v",
+        "visible_in": ["project_settings", "series_settings", "global_settings", "video_sidebar"],
+        "recommended": true,
+        "order": 100,
+        "badges": ["推荐", "Croco"]
+      }
+    },
+    "minimax-h3-r2v": {
+      "id": "minimax-h3-r2v",
+      "display_name": "MiniMax H3 · References",
+      "description": "Croco H3 多参考图片/音频视频生成路由",
+      "family": "minimax",
+      "status": "active",
+      "capabilities": ["r2v"],
+      "duration": { "type": "slider", "min": 3, "max": 15, "step": 1, "default": 6 },
+      "params": {
+        "resolution": { "options": ["preview", "720p", "1080p"], "default": "preview" },
+        "ratio": { "options": ["16:9", "9:16", "1:1"], "default": "16:9" }
+      },
+      "inputs": { "reference_images": { "max": 9 } },
+      "ui": {
+        "selection_group": "r2v",
+        "visible_in": ["global_settings", "video_sidebar"],
+        "recommended": true,
+        "order": 100,
+        "badges": ["参考素材", "Croco"]
+      }
+    }
+  },
+  "model_lines": {
+    "runware-image": {
+      "id": "runware-image",
+      "family": "runware",
+      "modes": ["t2i", "i2i"],
+      "legacy_model_ids": ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2"]
+    },
+    "minimax-h3": {
+      "id": "minimax-h3",
+      "family": "minimax",
+      "modes": ["t2v", "i2v", "r2v"],
+      "legacy_model_ids": ["minimax-h3", "minimax-h3-r2v"]
+    }
+  },
+  "modes": {
+    "runware/runware-image#t2i": {
+      "id": "runware/runware-image#t2i",
+      "model_line_id": "runware-image",
+      "legacy_model_id": "google:nano-banana@2-lite",
+      "mode": "t2i",
+      "family": "runware",
+      "status": "active",
+      "capabilities": ["t2i"],
+      "runtime": { "croco": { "gateway": "google:nano-banana@2-lite" } },
+      "ui": { "selection_group": "image", "visible_in": ["project_settings", "series_settings", "global_settings"], "recommended": true, "order": 100, "badges": ["Croco"] }
+    },
+    "minimax/minimax-h3#i2v": {
+      "id": "minimax/minimax-h3#i2v",
+      "model_line_id": "minimax-h3",
+      "legacy_model_id": "minimax-h3",
+      "mode": "i2v",
+      "family": "minimax",
+      "status": "active",
+      "capabilities": ["i2v"],
+      "runtime": { "croco": { "gateway": "minimax-h3" } },
+      "ui": { "selection_group": "i2v", "visible_in": ["project_settings", "series_settings", "global_settings", "video_sidebar"], "recommended": true, "order": 100, "badges": ["Croco"] }
+    },
+    "minimax/minimax-h3#r2v": {
+      "id": "minimax/minimax-h3#r2v",
+      "model_line_id": "minimax-h3",
+      "legacy_model_id": "minimax-h3-r2v",
+      "mode": "r2v",
+      "family": "minimax",
+      "status": "active",
+      "capabilities": ["r2v"],
+      "runtime": { "croco": { "gateway": "minimax-h3" } },
+      "ui": { "selection_group": "r2v", "visible_in": ["global_settings", "video_sidebar"], "recommended": true, "order": 100, "badges": ["Croco"] }
+    }
+  }
+}

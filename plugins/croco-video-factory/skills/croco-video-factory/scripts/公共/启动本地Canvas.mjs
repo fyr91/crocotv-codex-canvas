@@ -7,29 +7,34 @@ import { spawn } from "node:child_process";
 
 const apiOrigin = process.env.CROCO_LOCAL_API_ORIGIN || "http://127.0.0.1:4399";
 const webOrigin = process.env.CROCO_LOCAL_WEB_ORIGIN || "http://localhost:3000";
+const studioOrigin = process.env.CROCO_LOCAL_STUDIO_ORIGIN || "http://localhost:3010";
 const configPath = path.join(homedir(), ".config", "crocotv", "config.json");
 const configured = readJson(configPath);
 const workspaceRoot = resolveWorkspace(process.env.CROCOTV_HOME, configured.home, process.cwd());
 
 try {
     const initial = await serviceStatus();
-    if (initial.api && initial.web) {
+    if (initial.api && initial.web && initial.studio) {
         console.log(JSON.stringify({ ...initial, started: false }, null, 2));
         process.exit(0);
     }
 
-    const npmScript = !initial.api && !initial.web ? "dev" : !initial.api ? "dev:server" : "dev:web";
+    const npmScripts = [
+        ...(!initial.api ? ["dev:server"] : []),
+        ...(!initial.web ? ["dev:canvas"] : []),
+        ...(!initial.studio ? ["dev:studio"] : []),
+    ];
     const runtimeDir = path.join(workspaceRoot, "data", "runtime");
     mkdirSync(runtimeDir, { recursive: true });
     const logPath = path.join(runtimeDir, "crocotv.log");
-    await startDetached(npmScript, logPath);
+    for (const npmScript of npmScripts) await startDetached(npmScript, logPath);
 
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
         await wait(400);
         const current = await serviceStatus();
-        if (current.api && current.web) {
-            console.log(JSON.stringify({ ...current, started: true, npmScript, logPath }, null, 2));
+        if (current.api && current.web && current.studio) {
+            console.log(JSON.stringify({ ...current, started: true, npmScripts, logPath }, null, 2));
             process.exit(0);
         }
     }
@@ -50,8 +55,8 @@ function resolveWorkspace(...candidates) {
 }
 
 async function serviceStatus() {
-    const [app, web] = await Promise.all([readStatus(`${apiOrigin}/api/status`), reachable(webOrigin)]);
-    return { api: Boolean(app), web, apiOrigin, webOrigin, version: app?.version || null };
+    const [app, web, studio] = await Promise.all([readStatus(`${apiOrigin}/api/status`), reachable(webOrigin), reachable(studioOrigin)]);
+    return { api: Boolean(app), web, studio, apiOrigin, webOrigin, studioOrigin, version: app?.version || null };
 }
 
 async function startDetached(npmScript, logPath) {
@@ -86,7 +91,10 @@ async function readStatus(url) {
 
 async function reachable(url) {
     try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(1500) });
+        // Next.js may spend several seconds compiling its first page in dev.
+        // A short timeout misclassifies a healthy listening Studio as missing
+        // and can launch a duplicate process on the same port.
+        const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
         return response.ok;
     } catch {
         return false;

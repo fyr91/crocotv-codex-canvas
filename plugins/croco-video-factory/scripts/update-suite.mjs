@@ -39,6 +39,7 @@ if (target === "main") await run("git", ["merge", "--ff-only", "origin/main"], h
 else await run("git", ["switch", "--detach", target], home, true);
 await run("npm", ["ci"], home, true);
 await run("npm", ["ci", "--prefix", "web", "--legacy-peer-deps"], home, true);
+await run("npm", ["ci", "--prefix", "studio"], home, true);
 await run("npm", ["run", "build"], home, true);
 await run("npm", ["run", "setup"], home, true);
 

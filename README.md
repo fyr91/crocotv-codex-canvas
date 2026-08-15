@@ -8,6 +8,7 @@ CrocoTV 的本地无限画布、Canvas MCP 和 Croco Video Factory Skills 组成
 .
 ├── server/                         # CrocoTV 本地 API 与 Canvas 运行时
 ├── web/                            # CrocoTV 本地前端
+├── studio/                         # 基于 LumenX 原版 UI 的本地视频工坊
 ├── plugins/croco-video-factory/
 │   ├── .codex-plugin/plugin.json  # Plugin 元数据与版本
 │   ├── .mcp.json                  # MCP 安装入口
@@ -35,6 +36,7 @@ cp .codex/.env.example .codex/.env
 # 编辑 .codex/.env，填入本机需要的密钥
 npm ci
 npm ci --prefix web --legacy-peer-deps
+npm ci --prefix studio
 npm run build
 npm run setup
 ```
@@ -79,7 +81,9 @@ codex plugin add croco-video-factory@croco
 npm run dev
 ```
 
-浏览器打开 `http://localhost:3000`。API Key 只由本地服务读取，不会写入画布项目、浏览器存储、Plugin 清单或 Git。
+浏览器打开 `http://localhost:3000`；Header 中的“视频工坊”会打开 `http://localhost:3010`。API Key 只由本地服务读取，不会写入画布项目、浏览器存储、Plugin 清单或 Git。
+
+`npm run dev` 会同时启动 Canvas（3000）、视频工坊（3010）和本地 API（4399）。为兼容旧的启动器，根目录的 `npm run dev:web` 也会启动这套完整服务；只调试 Canvas 前端时使用 `npm run dev:canvas`。
 
 已有旧版根目录 `.env` 时，可一次性安全迁移到共享位置：
 
