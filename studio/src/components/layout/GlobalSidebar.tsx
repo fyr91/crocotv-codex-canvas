@@ -24,7 +24,7 @@ export const GLOBAL_NAV_ITEMS: { id: GlobalTab; icon: typeof LayoutGrid; hash: s
   { id: "settings", icon: Settings, hash: "#/settings" },
 ];
 
-const APP_VERSION = "v0.2.0";
+const APP_VERSION = "v0.1.0";
 
 function NavButton({
   active,

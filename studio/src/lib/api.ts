@@ -108,6 +108,23 @@ export interface ProviderSecretStatus {
     updatedAt?: string;
 }
 
+export interface PromptRegistryEntry {
+    templateKey: string;
+    templateVersion: string;
+    title: string;
+    stage: string;
+    contentSha256: string;
+    active: boolean;
+    legacy?: boolean;
+    modelPolicy: { defaultModel: string; modelFamily: string; allowOverride: boolean };
+    inputModes: string[];
+}
+
+export interface PromptRegistryResponse {
+    schemaVersion: number;
+    templates: PromptRegistryEntry[];
+}
+
 // R2V v2 Phase 4 — Cross-episode reconcile types
 export interface ReconcileSuggestion {
     local_id: string;
@@ -1203,6 +1220,11 @@ export const api = {
 
     getModelCatalog: async () => {
         const res = await axios.get(`${API_URL}/model-catalog`);
+        return res.data;
+    },
+
+    getPromptRegistry: async (): Promise<PromptRegistryResponse> => {
+        const res = await axios.get<PromptRegistryResponse>(`${API_URL}/prompt-registry`);
         return res.data;
     },
 
