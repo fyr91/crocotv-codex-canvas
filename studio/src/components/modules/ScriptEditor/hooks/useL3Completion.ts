@@ -44,8 +44,9 @@ export function useL3Completion(editor: Editor | null, projectId: string | null)
     // 无 projectId → 不触发
     if (!projectId) return false;
 
-    // 已经在 loading → 不重复触发
-    if (l3Status === 'loading') return false;
+    // Loading and failed requests never auto-retry. A failed request can only
+    // be retried by the explicit action in L3CompletionPanel.
+    if (l3Status === 'loading' || l3Status === 'error') return false;
 
     // confidence 高于阈值 → 不需要 L3
     if (confidenceScore >= CONFIDENCE_THRESHOLD) return false;
@@ -91,6 +92,7 @@ export function useL3Completion(editor: Editor | null, projectId: string | null)
 
       // L3 失败不阻塞编辑流，静默降级
       setL3Status('error');
+      setL3LastFetchTime(Date.now());
       console.warn('[L3Completion] derive_gaps failed:', error);
     }
   }, [

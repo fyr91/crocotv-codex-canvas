@@ -235,12 +235,16 @@ studioApiRouter.get("/asset-sources", route(async (_request, response) => respon
 studioApiRouter.post("/projects/:id/document", projectRoute(async (request, response, id) => {
   const content = objectValue(request.body?.content || request.body);
   const text = typeof request.body?.plain_text === "string"
-    ? boundedText(request.body.plain_text, "plain_text", 1_000_000)
+    ? boundedTextAllowEmpty(request.body.plain_text, "plain_text", 1_000_000)
     : studioDocumentToText(content);
+  const derivation = request.body?.derivation && typeof request.body.derivation === "object" && !Array.isArray(request.body.derivation)
+    ? objectValue(request.body.derivation)
+    : null;
   const updatedAt = new Date().toISOString();
   const project = await mutateStudioProject(id, (state) => ({
     ...state,
     originalText: text,
+    metadata: derivation ? { ...state.metadata, derivation } : state.metadata,
     document: {
       ...state.document,
       content,
@@ -302,6 +306,7 @@ function boundedCount(value: unknown) { const count = Number(value); return Math
 function optionalVersion(value: unknown) { const version = Number(value); return Number.isInteger(version) && version > 0 ? version : undefined; }
 function boundedLimit(value: unknown, fallback: number) { const limit = Number(value); return Number.isInteger(limit) ? Math.max(1, Math.min(100, limit)) : fallback; }
 function boundedText(value: unknown, label: string, maximum: number) { const text = String(value ?? ""); if (!text.trim()) throw new Error(`${label} 不能为空`); if (text.length > maximum) throw new Error(`${label} 超过 ${maximum} 字符`); return text; }
+function boundedTextAllowEmpty(value: unknown, label: string, maximum: number) { const text = String(value ?? ""); if (text.length > maximum) throw new Error(`${label} 超过 ${maximum} 字符`); return text; }
 function optionalText(value: unknown, maximum: number) { const text = String(value ?? ""); if (!text) return undefined; if (text.length > maximum) throw new Error(`文本超过 ${maximum} 字符`); return text; }
 function optionalTemplateKey(value: unknown) { const key = String(value || "").trim(); if (!key) return undefined; if (!/^[a-z0-9._-]{1,100}$/.test(key)) throw new Error("templateKey 无效"); return key; }
 function promptOperation(value: unknown): StudioPromptOperation { const operation = String(value || "") as StudioPromptOperation; if (!(operation in STUDIO_PROMPT_TEMPLATE_MAP)) throw new Error(`不支持的 Studio Prompt 操作：${value}`); return operation; }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { EditorContent } from '@tiptap/react';
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, X } from 'lucide-react';
+import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, Wand2, X } from 'lucide-react';
 import { useEditorStore } from '@/store/editorStore';
 import { useEditorSetup } from './hooks/useEditorSetup';
 import FormatToolbar from './toolbar/FormatToolbar';
@@ -13,7 +13,6 @@ import { useContinuityCheck } from './hooks/useContinuityCheck';
 import { useSceneFolding } from './hooks/useSceneFolding';
 import { useViewMode } from './hooks/useViewMode';
 import { useOfflineCache } from './hooks/useOfflineCache';
-import { useL3Completion } from './hooks/useL3Completion';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useDerivation } from './hooks/useDerivation';
 import { PasteHintBar } from './components/PasteHintBar';
@@ -25,8 +24,10 @@ import StoryboardView from './views/StoryboardView';
 import ReadModeOverlay from './components/ReadModeOverlay';
 import PipelineLinkDialog from './dialogs/PipelineLinkDialog';
 import { scriptEditorApi } from '@/lib/scriptEditorApi';
+import { api } from '@/lib/api';
 import { useProjectStore } from '@/store/projectStore';
 import { toast } from '@/store/toastStore';
+import ScriptEntityExtractionConfirm from './components/ScriptEntityExtractionConfirm';
 
 export interface ScriptEditorShellProps {
   mode?: 'full' | 'embedded' | 'focus';
@@ -48,7 +49,6 @@ export default function ScriptEditorShell({
   const { enabled: foldingEnabled, isAllExpanded, totalScenes: foldingTotal } = useSceneFolding(editor);
   const { mode: viewMode, setMode: setViewMode, isReadOnly, showToolbar, showSidebars } = useViewMode();
   const { hasNewerLocal, restoreFromLocal, dismissLocalRestore, isOffline } = useOfflineCache(projectId, editor);
-  useL3Completion(editor, projectId ?? null);
   useDerivation(editor);
   const { save } = useAutoSave(editor, projectId ?? null);
 
@@ -56,6 +56,7 @@ export default function ScriptEditorShell({
   const [projectPickerOpen, setProjectPickerOpen] = useState(!projectId);
   const currentProject = useProjectStore((s) => s.currentProject);
   const selectProject = useProjectStore((s) => s.selectProject);
+  const isAnalyzing = useProjectStore((s) => s.isAnalyzing);
 
   const isDirty = useEditorStore((s) => s.isDirty);
   const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
@@ -170,6 +171,49 @@ export default function ScriptEditorShell({
     window.location.hash = `#/project/${linkedProjectId}/editor`;
   }, []);
 
+  const handleExtractEntities = useCallback(async () => {
+    if (!projectId || !editor) return;
+    const text = editor.getText({ blockSeparator: '\n' });
+    if (!text.trim()) {
+      toast.warning(tScript('scriptEmpty'));
+      return;
+    }
+
+    useProjectStore.setState({ isAnalyzing: true });
+    const toastId = toast.progress(tScript('analyzingScript'), {
+      projectId,
+      projectTitle: currentProject?.id === projectId ? currentProject.title : undefined,
+      body: tScript('analyzingScriptBody'),
+    });
+    try {
+      await save(false);
+      const preview = await api.extractPreview(projectId, text);
+      useProjectStore.setState({
+        pendingExtraction: preview,
+        pendingExtractionScript: text,
+        isAnalyzing: false,
+      });
+      toast.update(toastId, {
+        kind: 'success',
+        title: tScript('analysisDone'),
+        body: tScript('analysisDoneBody', {
+          c: preview.characters.length,
+          s: preview.scenes.length,
+          p: preview.props.length,
+        }),
+        autoCloseMs: 5000,
+      });
+    } catch (error) {
+      useProjectStore.setState({ isAnalyzing: false });
+      console.error('[ScriptEditor] Entity extraction failed:', error);
+      toast.update(toastId, {
+        kind: 'error',
+        title: tScript('analysisFailedShort'),
+        body: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [currentProject?.id, currentProject?.title, editor, projectId, save, tScript]);
+
   const handleShotClick = useCallback((shotId: string) => {
     setViewMode('edit');
     if (editor) {
@@ -224,6 +268,17 @@ export default function ScriptEditorShell({
             )}
           </div>
           <div className="flex items-center gap-3">
+            {projectId ? (
+              <button
+                type="button"
+                onClick={() => void handleExtractEntities()}
+                disabled={documentLoading || isAnalyzing || isEditorEmpty}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isAnalyzing ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+                {isAnalyzing ? tScript('analyzingScript') : tScript('extractEntities')}
+              </button>
+            ) : null}
             <span className="text-sm text-text-muted">
               {isDirty ? t('status.unsaved') : lastSavedAt ? t('status.savedAt', { time: lastSavedAt.toLocaleTimeString() }) : ''}
             </span>
@@ -376,6 +431,7 @@ export default function ScriptEditorShell({
 
       {/* Shortcut Help Panel */}
       <ShortcutHelpPanel open={showShortcutHelp} onClose={closeShortcutHelp} />
+      <ScriptEntityExtractionConfirm />
       <PipelineLinkDialog
         open={projectPickerOpen}
         onClose={() => {

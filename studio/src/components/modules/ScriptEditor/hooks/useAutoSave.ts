@@ -14,7 +14,8 @@ const AUTOSAVE_DEBOUNCE_MS = 1_200;
  * - beforeunload 事件拦截（离开页面前提醒保存）
  */
 export function useAutoSave(editor: Editor | null, projectId: string | null) {
-  const { isDirty, setDirty, setLastSavedAt } = useEditorStore();
+  const setDirty = useEditorStore((state) => state.setDirty);
+  const setLastSavedAt = useEditorStore((state) => state.setLastSavedAt);
   const isSavingRef = useRef(false);
   const saveQueuedRef = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -31,10 +32,18 @@ export function useAutoSave(editor: Editor | null, projectId: string | null) {
 
       const content = editor.getJSON();
       const plainText = editor.getText({ blockSeparator: '\n' });
+      const editorState = useEditorStore.getState();
+      const derivation = {
+        scenes: editorState.derivedScenes,
+        characters: editorState.derivedCharacters,
+        estimated_duration: editorState.estimatedDuration,
+        word_count: editorState.wordCount,
+        confidence_score: editorState.confidenceScore,
+      };
       isSavingRef.current = true;
 
       try {
-        const response = await scriptEditorApi.saveDocument(projectId, content, plainText, createSnapshot);
+        const response = await scriptEditorApi.saveDocument(projectId, content, plainText, createSnapshot, derivation);
         const currentProject = useProjectStore.getState().currentProject;
         if (currentProject?.id === projectId) {
           useProjectStore.getState().updateProject(projectId, {

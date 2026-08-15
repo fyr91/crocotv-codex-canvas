@@ -23,3 +23,9 @@ test("structured block nodes keep one plain-text line per block", () => {
 
   assert.equal(studioDocumentToText(document), "内景. 办公室 - 日\n小明\n你好。");
 });
+
+test("an empty Studio document remains empty", () => {
+  const document = studioTextToDocument("");
+
+  assert.equal(studioDocumentToText(document), "");
+});

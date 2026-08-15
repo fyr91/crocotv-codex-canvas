@@ -288,11 +288,12 @@ server.registerTool("studio_set_script_document", {
     content: z.record(z.string(), z.unknown()),
     plainText: z.string().max(1_000_000),
     createSnapshot: z.boolean().default(false),
+    derivation: z.record(z.string(), z.unknown()).optional(),
   },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-}, async ({ projectId, content, plainText, createSnapshot }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/document`, {
+}, async ({ projectId, content, plainText, createSnapshot, derivation }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/document`, {
   method: "POST",
-  body: { content, plain_text: plainText, create_snapshot: createSnapshot },
+  body: { content, plain_text: plainText, create_snapshot: createSnapshot, derivation },
 })));
 
 server.registerTool("studio_set_art_direction", {

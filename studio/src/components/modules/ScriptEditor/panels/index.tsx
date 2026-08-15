@@ -53,8 +53,11 @@ export default function RightPanelContainer({
   ];
 
   const TABS_EMBEDDED: TabDef[] = [
+    { id: 'characters', label: t('panels.characters'), icon: <Users size={14} />, group: 'primary' },
     { id: 'shots', label: t('panels.shots'), icon: <Camera size={14} />, group: 'primary' },
     { id: 'pipeline', label: t('panels.pipeline'), icon: <Workflow size={14} />, group: 'primary' },
+    { id: 'locations', label: t('panels.locations'), icon: <MapPin size={14} />, group: 'secondary' },
+    { id: 'props', label: t('panels.props'), icon: <Package size={14} />, group: 'secondary' },
   ];
 
   const togglePanelLock = useCallback(() => {
@@ -69,7 +72,7 @@ export default function RightPanelContainer({
     const valid = tabs.find((t) => t.id === activePanel);
     if (valid) return valid.id;
     // Default fallback
-    return isEmbedded ? 'shots' : 'characters';
+    return 'characters';
   })();
 
   const handleTabChange = useCallback(
@@ -90,9 +93,7 @@ export default function RightPanelContainer({
       for (let depth = $from.depth; depth >= 0; depth--) {
         const node = $from.node(depth);
         if (node.type.name === 'characterCue') {
-          if (!isEmbedded) {
-            setActivePanel('characters');
-          }
+          setActivePanel('characters');
           return;
         }
         if (node.type.name === 'shotBlock') {
@@ -191,7 +192,7 @@ export default function RightPanelContainer({
             exit={{ opacity: 0, x: -10 }}
             transition={{ duration: 0.15 }}
           >
-            {currentTab === 'characters' && !isEmbedded && (
+            {currentTab === 'characters' && (
               <CharacterPanel editor={editor} />
             )}
             {currentTab === 'shots' && (
@@ -203,10 +204,10 @@ export default function RightPanelContainer({
                 onEnterPipeline={onEnterPipeline}
               />
             )}
-            {currentTab === 'locations' && !isEmbedded && (
+            {currentTab === 'locations' && (
               <LocationPanel editor={editor} />
             )}
-            {currentTab === 'props' && !isEmbedded && (
+            {currentTab === 'props' && (
               <PropsPanel editor={editor} />
             )}
             {currentTab === 'notes' && !isEmbedded && (

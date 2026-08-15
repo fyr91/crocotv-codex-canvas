@@ -46,12 +46,14 @@ export const scriptEditorApi = {
     projectId: string,
     content: object,
     plainText: string,
-    createSnapshot = false
+    createSnapshot = false,
+    derivation?: Record<string, unknown>
   ): Promise<DocumentResponse> => {
     const res = await axios.post(`${API_BASE}/projects/${projectId}/document`, {
       content,
       plain_text: plainText,
       create_snapshot: createSnapshot,
+      ...(derivation ? { derivation } : {}),
     });
     return res.data;
   },

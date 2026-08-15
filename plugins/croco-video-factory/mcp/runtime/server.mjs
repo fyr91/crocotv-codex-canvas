@@ -32730,10 +32730,29 @@ var init_server3 = __esm({
       return toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/prompt-executions?${query}`));
     });
     server.registerTool("studio_set_script", {
-      description: "Replace the Studio source script and atomically update its stable managed Canvas Text node without touching free Canvas nodes.",
+      description: "Replace the Studio source script, regenerate its compatible structured editor document, and atomically update the stable managed Canvas Text node without touching free Canvas nodes.",
       inputSchema: { projectId: external_exports.string().uuid(), text: external_exports.string().max(1e6), expectedVersion: external_exports.number().int().positive().optional() },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
     }, async ({ projectId, text, expectedVersion }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/text`, { method: "PUT", body: { text, expectedVersion } })));
+    server.registerTool("studio_get_script_document", {
+      description: "Read the structured LumenX script document plus its compatible plain text and shared project version.",
+      inputSchema: { projectId: external_exports.string().uuid() },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    }, async ({ projectId }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/document`)));
+    server.registerTool("studio_set_script_document", {
+      description: "Atomically replace the structured LumenX script document and its compatible plain-text projection. This increments the shared project version and updates Studio-managed Canvas nodes.",
+      inputSchema: {
+        projectId: external_exports.string().uuid(),
+        content: external_exports.record(external_exports.string(), external_exports.unknown()),
+        plainText: external_exports.string().max(1e6),
+        createSnapshot: external_exports.boolean().default(false),
+        derivation: external_exports.record(external_exports.string(), external_exports.unknown()).optional()
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+    }, async ({ projectId, content, plainText, createSnapshot, derivation }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/document`, {
+      method: "POST",
+      body: { content, plain_text: plainText, create_snapshot: createSnapshot, derivation }
+    })));
     server.registerTool("studio_set_art_direction", {
       description: "Atomically save the selected Studio Art Direction and update its managed Canvas projection. The style remains structured Studio state, not free-form Canvas metadata.",
       inputSchema: {

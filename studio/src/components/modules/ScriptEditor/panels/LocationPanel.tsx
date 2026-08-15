@@ -1,122 +1,39 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, ChevronDown } from 'lucide-react';
+import { useMemo } from 'react';
+import { MapPin } from 'lucide-react';
 import type { Editor } from '@tiptap/react';
 import { useTranslations } from 'next-intl';
-import { useEditorStore, type DerivedScene } from '@/store/editorStore';
+import { useEditorStore } from '@/store/editorStore';
+import ProjectEntityPanel from './ProjectEntityPanel';
 
 export interface LocationPanelProps {
   editor: Editor | null;
 }
 
-interface LocationEntry {
-  name: string;
-  scenes: DerivedScene[];
-}
-
-function LocationCard({ entry }: { entry: LocationEntry }) {
-  const [expanded, setExpanded] = useState(false);
+export default function LocationPanel({ editor: _editor }: LocationPanelProps) {
   const t = useTranslations('scriptEditor');
-
-  return (
-    <motion.div
-      layout
-      className="rounded-lg border border-foreground/10 bg-elevated/80 p-3 cursor-pointer hover:border-foreground/20 hover:bg-elevated transition-colors"
-      onClick={() => setExpanded(!expanded)}
-    >
-      <div className="flex items-start gap-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-hover-bg">
-          <MapPin size={14} className="text-text-secondary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground truncate">{entry.name}</p>
-          <span className="text-sm text-text-muted">{t('panels.characterScenes', { count: entry.scenes.length })}</span>
-        </div>
-        <motion.div
-          animate={{ rotate: expanded ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <ChevronDown size={14} className="text-text-muted" />
-        </motion.div>
-      </div>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-3 pt-2 border-t border-foreground/5">
-              <p className="text-sm text-text-muted mb-1.5">{t('panels.relatedScenes')}</p>
-              <ul className="space-y-1">
-                {entry.scenes.map((scene) => (
-                  <li
-                    key={scene.id}
-                    className="text-sm text-text-secondary px-2 py-1 rounded bg-surface/50"
-                  >
-                    {scene.number != null ? `#${scene.number} ` : ''}
-                    {scene.title || t('panels.untitledScene')}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
-export default function LocationPanel({ editor }: LocationPanelProps) {
-  const t = useTranslations('scriptEditor');
-  const derivedScenes = useEditorStore((s) => s.derivedScenes);
-
-  const locations = useMemo<LocationEntry[]>(() => {
-    const map = new Map<string, DerivedScene[]>();
+  const derivedScenes = useEditorStore((state) => state.derivedScenes);
+  const suggestions = useMemo(() => {
+    const locations = new Map<string, number>();
     for (const scene of derivedScenes) {
-      if (scene.location) {
-        const key = scene.location.trim();
-        if (!map.has(key)) {
-          map.set(key, []);
-        }
-        map.get(key)!.push(scene);
-      }
+      const location = scene.location?.trim();
+      if (location) locations.set(location, (locations.get(location) || 0) + 1);
     }
-    return Array.from(map.entries()).map(([name, scenes]) => ({ name, scenes }));
-  }, [derivedScenes]);
-
-  if (locations.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-elevated mb-3">
-          <MapPin size={20} className="text-text-muted" />
-        </div>
-        <p className="text-sm text-text-muted">{t('panels.locationEmpty')}</p>
-        <p className="text-sm text-text-muted/60 mt-1">
-          {t('panels.locationEmptyHint')}
-        </p>
-      </div>
-    );
-  }
+    return Array.from(locations.entries()).map(([name, count]) => ({
+      name,
+      description: t('panels.characterScenes', { count }),
+    }));
+  }, [derivedScenes, t]);
 
   return (
-    <div className="p-3">
-      <div className="flex items-center gap-2 mb-3">
-        <MapPin size={14} className="text-text-muted" />
-        <span className="text-sm font-medium text-text-muted uppercase tracking-wider">
-          {t('panels.locationCount', { count: locations.length })}
-        </span>
-      </div>
-      <div className="space-y-2">
-        {locations.map((entry) => (
-          <LocationCard key={entry.name} entry={entry} />
-        ))}
-      </div>
-    </div>
+    <ProjectEntityPanel
+      kind="scene"
+      suggestions={suggestions}
+      icon={<MapPin size={15} />}
+      emptyTitle={t('panels.locationEmpty')}
+      emptyHint={t('panels.locationEmptyHint')}
+      countLabel={(count) => t('panels.locationCount', { count })}
+    />
   );
 }
