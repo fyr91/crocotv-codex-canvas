@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { EditorContent } from '@tiptap/react';
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, X } from 'lucide-react';
@@ -20,6 +20,7 @@ import { ContinuityIndicator } from './components/ContinuityIndicator';
 import RightPanelContainer from './panels';
 import LeftSidebar from './sidebar';
 import StoryboardView from './views/StoryboardView';
+import ReadModeOverlay from './components/ReadModeOverlay';
 
 export interface ScriptEditorShellProps {
   mode?: 'full' | 'embedded' | 'focus';
@@ -57,6 +58,11 @@ export default function ScriptEditorShell({
   const showRight = mode === 'full' && !rightCollapsed && showSidebars;
   const hideAllSidebars = mode === 'focus' || viewMode === 'focus';
   const hideLeftOnly = mode === 'embedded';
+  const isEditorEmpty = !editor || editor.isEmpty;
+
+  useEffect(() => {
+    editor?.setEditable(!isReadOnly);
+  }, [editor, isReadOnly]);
 
   const handleShotClick = useCallback((shotId: string) => {
     setViewMode('edit');
@@ -77,7 +83,14 @@ export default function ScriptEditorShell({
   }, [editor, setViewMode]);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-background">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-background">
+      {viewMode === 'read' && (
+        <ReadModeOverlay
+          isEmpty={isReady && isEditorEmpty}
+          onExit={() => setViewMode('edit')}
+        />
+      )}
+
       {/* Format Toolbar */}
       {!hideAllSidebars && showToolbar && (
         <FormatToolbar editor={editor} viewMode={viewMode} onViewModeChange={setViewMode} />

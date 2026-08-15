@@ -1696,6 +1696,7 @@
       "generateBatch": "生成 ×{count}"
     },
     "mode": {
+      "categoryLabel": "生成类型",
       "image": "图像生成",
       "video": "视频生成",
       "groupImage": "图像",
@@ -1963,6 +1964,9 @@
       "edit": "编辑",
       "storyboard": "分镜",
       "read": "阅读",
+      "exitRead": "退出阅读",
+      "readEmpty": "暂无剧本内容",
+      "readEmptyHint": "返回编辑模式开始写作。",
       "focus": "专注",
       "statusDraft": "草稿",
       "statusConfirmed": "已确认",

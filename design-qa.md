@@ -49,3 +49,62 @@
 - [x] Full repository build, Studio typecheck, color-token guard, and all 94 Studio tests passed.
 
 final result: passed
+
+---
+
+# Studio UI Polish — Design QA
+
+## Comparison Targets
+
+- Playground source visual truth: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-8c6358f2-bce2-4d07-9575-54f8efcc0fa4.png` (462 × 272 px).
+- Playground implementation: `/tmp/codex-ui-polish-playground-focused.png` (372 × 174 px focused component capture), rendered at a 1280 × 720 CSS viewport.
+- Series dialog source visual truth: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-f6b53135-f19d-44ab-96d2-7dca3869ab4b.png` (907 × 894 px).
+- Series dialog implementation: `/tmp/codex-ui-polish-series-matched.png` (907 × 894 px), rendered at a matching 907 × 894 CSS viewport.
+- Draft badge source visual truth: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-cb7c45c7-424c-4d32-98e0-37551b71122d.png` (706 × 100 px).
+- Draft badge implementation: `/tmp/codex-ui-polish-workspace-focused.png` (700 × 110 px focused workspace capture), rendered at a 1280 × 720 CSS viewport.
+- Browser density: `devicePixelRatio: 1`; browser screenshot pixels equal CSS pixels. Comparison boards used contain-fit normalization into equal 620 × 700 px regions without changing aspect ratio.
+
+## State And Evidence
+
+- Theme: Studio dark theme in all source and implementation captures.
+- Playground state: video-generation top-level tab selected; only `文生 / 图生 / 参考生 / 编辑` submodes visible.
+- Series state: new-series dialog open; basic workflow selected; the second workflow card disabled and labelled `更多流程正在开发中`.
+- Workspace state: gallery and list views both checked with draft projects visible.
+- Full-view evidence: `/tmp/codex-ui-polish-playground-current.png`, `/tmp/codex-ui-polish-series-matched.png`, `/tmp/codex-ui-polish-workspace.png`.
+- Focused comparison evidence: `/tmp/codex-ui-polish-playground-comparison-focused.png`, `/tmp/codex-ui-polish-series-comparison-matched.png`, `/tmp/codex-ui-polish-workspace-comparison-focused.png`.
+- Primary interactions tested: image/video category switching, category-specific submode visibility, new-series menu opening, disabled workflow card state, workspace gallery/list switching.
+- Console checked. The existing result fixtures emit a missing `playground.card.imageUnavailable` translation error; it predates and is outside the confirmed controls, workflow-card, and badge scope. No console error was introduced by the changed interactions.
+
+## Findings
+
+- No actionable P0, P1, or P2 mismatch remains in the confirmed scope.
+- Fonts and typography: existing Studio type families, weights, tracking, hierarchy, and compact submode labels are preserved; the final video submode row does not wrap.
+- Spacing and layout rhythm: the new primary category tabs fit the existing mode card and preserve its radius, padding, and two-level hierarchy. The series dialog matches the reference at the normalized viewport.
+- Colors and visual tokens: draft badges now use dedicated green foreground, border, and background semantic tokens in gallery and list views. Runtime computed colors confirm the green state without changing operational pending-state blue tokens.
+- Image quality and asset fidelity: no raster imagery is introduced or replaced. Category and workflow affordances use the repository's existing Lucide icon library.
+- Copy and content: series workflow copy exactly reuses the new-project disabled state. Content-mode and visual-control copy remain unchanged.
+
+## Comparison History
+
+1. Initial Playground pass found a P2 wrapping issue after expanding all four video submode labels. The labels were restored to compact context-aware copy because the new `视频生成` primary tab already supplies the category context.
+2. Post-fix evidence in `/tmp/codex-ui-polish-playground-comparison-focused.png` shows a single-line four-option row with an unambiguous selected video category.
+3. The first series comparison used a shorter browser viewport that cropped the modal. The capture was normalized to the source's 907 × 894 viewport; `/tmp/codex-ui-polish-series-comparison-matched.png` confirms the complete dialog and card alignment.
+
+## Open Questions
+
+- None for the confirmed scope. The unrelated missing result-card translation can be handled as a separate bug if desired.
+
+## Implementation Checklist
+
+- [x] Use semantic green tokens for draft badges in gallery and list views.
+- [x] Present image and video generation as accessible top-level tabs.
+- [x] Render only the submodes belonging to the selected category.
+- [x] Share one basic-workflow selection component between project and series dialogs.
+- [x] Force new-series creation to submit the basic `r2v` workflow.
+- [x] Verify tests, type checks, production build, interactions, and visual states.
+
+## Follow-up Polish
+
+- No P3 polish item is required for acceptance.
+
+final result: passed

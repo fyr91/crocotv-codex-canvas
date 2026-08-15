@@ -12,6 +12,7 @@ import { useOnline } from "@/lib/useOnline";
 import { rovingKeyDown } from "@/lib/a11y";
 import ProjectCard, { deriveStatus, deriveCover, type DerivedStatus } from "@/components/project/ProjectCard";
 import CreateProjectDialog from "@/components/project/CreateProjectDialog";
+import BasicWorkflowSelection from "@/components/project/BasicWorkflowSelection";
 import EnvConfigDialog from "@/components/project/EnvConfigDialog";
 import CreativeCanvas from "@/components/canvas/CreativeCanvas";
 import AppShell from "@/components/layout/AppShell";
@@ -33,7 +34,6 @@ const ScriptEditorShell = dynamic(() => import("@/components/modules/ScriptEdito
 function CreateSeriesDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [workflowMode, setWorkflowMode] = useState<"r2v" | "i2v_legacy">("r2v");
   // R2V v2 Phase 6 — content_mode (scripted | freeform)
   const [contentMode, setContentMode] = useState<"scripted" | "freeform">("scripted");
   // PR-3e — default per-shot generation mode (r2v=节奏优先 / i2v=画面优先)
@@ -103,13 +103,12 @@ function CreateSeriesDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
       const { api } = await import("@/lib/api");
       const series = await api.createSeriesV2(title.trim(), {
         description: description.trim() || undefined,
-        workflow_mode: workflowMode,
+        workflow_mode: "r2v",
         content_mode: contentMode,
         default_generation_mode: defaultGenerationMode,
       });
       setTitle("");
       setDescription("");
-      setWorkflowMode("r2v");
       setContentMode("scripted");
       setDefaultGenerationMode("r2v");
       onClose();
@@ -152,47 +151,7 @@ function CreateSeriesDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () 
             />
           </div>
 
-          {/* Workflow Mode */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">{tp("workflowMode")}</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setWorkflowMode("r2v")}
-                className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                  workflowMode === "r2v"
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-surface hover:border-text-muted"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Zap size={16} className={workflowMode === "r2v" ? "text-primary" : "text-text-secondary"} />
-                  <span className="font-medium text-sm text-foreground">{tp("workflowR2V")}</span>
-                </div>
-                <p className="text-sm text-text-secondary leading-relaxed">{tp("workflowR2VDesc")}</p>
-                {workflowMode === "r2v" && (
-                  <span className="recommendation-badge absolute top-2 right-2">
-                    {tc("recommended")}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setWorkflowMode("i2v_legacy")}
-                className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                  workflowMode === "i2v_legacy"
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-surface hover:border-text-muted"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Film size={16} className={workflowMode === "i2v_legacy" ? "text-primary" : "text-text-secondary"} />
-                  <span className="font-medium text-sm text-foreground">{tp("workflowI2V")}</span>
-                </div>
-                <p className="text-sm text-text-secondary leading-relaxed">{tp("workflowI2VDesc")}</p>
-              </button>
-            </div>
-          </div>
+          <BasicWorkflowSelection />
 
           {/* R2V v2 Phase 6 — Content mode picker */}
           <div>
@@ -347,7 +306,7 @@ function ProjectRow({ project, crumb }: { project: Project; crumb: string }) {
   const badge = {
     completed: { label: t("statusCompleted"), cls: "text-status-completed-fg bg-status-completed-bg border-status-completed-border" },
     processing: { label: t("statusProcessing"), cls: "text-status-processing-fg bg-status-processing-bg border-status-processing-border" },
-    pending: { label: t("statusDraft"), cls: "text-status-pending-fg bg-status-pending-bg border-status-pending-border" },
+    pending: { label: t("statusDraft"), cls: "text-status-draft-fg bg-status-draft-bg border-status-draft-border" },
   }[status];
 
   return (

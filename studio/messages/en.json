@@ -1696,6 +1696,7 @@
       "generateBatch": "Generate ×{count}"
     },
     "mode": {
+      "categoryLabel": "Generation type",
       "image": "Image",
       "video": "Video",
       "groupImage": "Image",
@@ -1963,6 +1964,9 @@
       "edit": "Edit",
       "storyboard": "Storyboard",
       "read": "Read",
+      "exitRead": "Exit reading",
+      "readEmpty": "No script content yet",
+      "readEmptyHint": "Return to edit mode to start writing.",
       "focus": "Focus",
       "statusDraft": "Draft",
       "statusConfirmed": "Confirmed",

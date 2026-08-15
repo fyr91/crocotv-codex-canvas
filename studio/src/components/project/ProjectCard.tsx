@@ -124,7 +124,7 @@ export default function ProjectCard({ project, onDelete }: ProjectCardProps) {
     const badge = {
         completed: { label: t("statusCompleted"), cls: "text-status-completed-fg bg-status-completed-bg border-status-completed-border" },
         processing: { label: t("statusProcessing"), cls: "text-status-processing-fg bg-status-processing-bg border-status-processing-border" },
-        pending: { label: t("statusDraft"), cls: "text-status-pending-fg bg-status-pending-bg border-status-pending-border" },
+        pending: { label: t("statusDraft"), cls: "text-status-draft-fg bg-status-draft-bg border-status-draft-border" },
     }[status];
 
     const rawCreated = (project as any).created_at;
