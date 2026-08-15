@@ -327,7 +327,7 @@ server.registerTool("studio_set_storyboard", {
 }, async ({ projectId, frames }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/storyboard`, { method: "PUT", body: { frames: frames.map((frame, order) => ({ id: frame.id, title: frame.title || `镜头 ${order + 1}`, prompt: frame.prompt, scene_id: frame.sceneId, duration: frame.duration, dialogue: frame.dialogue, character_ids: frame.characterIds, order })) } })));
 
 server.registerTool("studio_run_stage", {
-  description: "Run one high-level Studio stage through Croco Canvas generation-module nodes and the shared runtime. Generation calls may use configured external providers and can incur cost. Read the project after each stage before deciding the next one.",
+  description: "Run one high-level Studio stage through Croco Canvas generation-module nodes and the shared runtime. The extract_entities stage makes one DeepSeek V4 Flash call with thinking disabled and atomically saves that result. Other generation calls may use configured external providers and can incur cost. Read the project after each stage before deciding the next one.",
   inputSchema: { projectId: z.string().uuid(), stage: z.enum(["extract_entities", "analyze_art_direction", "analyze_storyboard", "generate_assets", "render_storyboard", "generate_videos", "generate_audio", "merge"]) },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
 }, async ({ projectId, stage }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/run-stage`, { method: "POST", body: { stage } })));

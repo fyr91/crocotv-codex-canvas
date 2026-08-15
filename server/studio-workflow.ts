@@ -11,8 +11,11 @@ import { models } from "./providers";
 import { readProject, resourceById } from "./storage";
 import { executeStudioPrompt, type StudioPromptOperation } from "./studio-prompt-runtime";
 import { createStudioGenerationJob } from "./studio-generation-jobs";
+import type { TextThinkingMode } from "./providers";
 
 type EntityKind = "character" | "scene" | "prop";
+const ENTITY_EXTRACTION_MODEL = "deepseek-v4-flash-ga-260731";
+const ENTITY_EXTRACTION_THINKING: TextThinkingMode = "disabled";
 
 export async function recoverInterruptedStudioGenerations() {
   for (const summary of await listStudioProjectResponses()) {
@@ -50,7 +53,7 @@ export async function recoverInterruptedStudioGenerations() {
 export async function extractStudioEntities(projectId: string, text: string, originClientId: string) {
   await mutateStudioProject(projectId, (state) => ({ ...state, originalText: text }), { originClientId });
   const configId = stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
-  const parsed = await runStudioPromptJson({ projectId, configId, operation: "entity_extraction", draftPrompt: text, originClientId });
+  const parsed = await runStudioPromptJson({ projectId, configId, operation: "entity_extraction", draftPrompt: text, requestedModel: ENTITY_EXTRACTION_MODEL, thinking: ENTITY_EXTRACTION_THINKING, originClientId });
   return mutateStudioProject(projectId, (state) => ({
     ...state,
     characters: normalizeEntities(parsed.characters),
@@ -61,8 +64,20 @@ export async function extractStudioEntities(projectId: string, text: string, ori
 
 export async function previewStudioEntities(projectId: string, text: string, originClientId: string) {
   const configId = stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
-  const parsed = await runStudioPromptJson({ projectId, configId, operation: "entity_extraction", draftPrompt: text, originClientId });
+  const parsed = await runStudioPromptJson({ projectId, configId, operation: "entity_extraction", draftPrompt: text, requestedModel: ENTITY_EXTRACTION_MODEL, thinking: ENTITY_EXTRACTION_THINKING, originClientId });
   return { characters: normalizeEntities(parsed.characters), scenes: normalizeEntities(parsed.scenes), props: normalizeEntities(parsed.props) };
+}
+
+export async function applyStudioEntityExtraction(projectId: string, text: string, extraction: unknown, originClientId: string) {
+  const parsed = objectValue(extraction);
+  if (!Array.isArray(parsed.characters) || !Array.isArray(parsed.scenes) || !Array.isArray(parsed.props)) throw new Error("实体提取结果必须包含 characters、scenes 和 props 数组");
+  return mutateStudioProject(projectId, (state) => ({
+    ...state,
+    originalText: text,
+    characters: normalizeEntities(parsed.characters),
+    scenes: normalizeEntities(parsed.scenes),
+    props: normalizeEntities(parsed.props),
+  }), { originClientId });
 }
 
 export async function analyzeStudioArtDirection(projectId: string, text: string, originClientId: string) {
@@ -568,8 +583,8 @@ export async function previewStudioVoice(projectId: string, voiceId: string, tex
   }
 }
 
-async function runStudioPromptJson(input: { projectId: string; configId: string; operation: StudioPromptOperation; draftPrompt: string; originClientId: string }) {
-  const result = await executeStudioPrompt({ projectId: input.projectId, operation: input.operation, draftPrompt: input.draftPrompt, configNodeId: input.configId, originClientId: input.originClientId });
+async function runStudioPromptJson(input: { projectId: string; configId: string; operation: StudioPromptOperation; draftPrompt: string; requestedModel?: string; thinking?: TextThinkingMode; originClientId: string }) {
+  const result = await executeStudioPrompt({ projectId: input.projectId, operation: input.operation, draftPrompt: input.draftPrompt, requestedModel: input.requestedModel, thinking: input.thinking, configNodeId: input.configId, originClientId: input.originClientId });
   return parseJson(result.text);
 }
 

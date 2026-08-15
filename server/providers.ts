@@ -9,7 +9,9 @@ import { providerModels as models } from "./model-catalog";
 
 export { models };
 
-export async function generateText(prompt: string, requestedModel?: string, inputResourceIds: string[] = [], inputDataUrls: string[] = [], systemPrompt = "") {
+export type TextThinkingMode = "enabled" | "disabled" | "auto";
+
+export async function generateText(prompt: string, requestedModel?: string, inputResourceIds: string[] = [], inputDataUrls: string[] = [], systemPrompt = "", options: { thinking?: TextThinkingMode } = {}) {
   const normalizedRequestedModel = requestedModel === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : requestedModel;
   const logicalModel = normalizedRequestedModel && [...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(normalizedRequestedModel) ? normalizedRequestedModel : models.volcengineLlm[0];
   const channel = models.runwareLlm.includes(logicalModel) ? "runware" : models.bigmodelLlm.includes(logicalModel) ? "bigmodel" : "volcengine";
@@ -40,7 +42,7 @@ export async function generateText(prompt: string, requestedModel?: string, inpu
       : [{ role: "user", content }];
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages, ...(logicalModel === "deepseek-v4-flash-ga-260731" ? { thinking: { type: "enabled" } } : {}), stream: false }),
+      body: JSON.stringify({ model, messages, ...(logicalModel === "deepseek-v4-flash-ga-260731" ? { thinking: { type: options.thinking || "enabled" } } : {}), stream: false }),
       signal: AbortSignal.timeout(420_000),
     });
     const channelLabel = channel === "runware" ? "Runware" : channel === "bigmodel" ? "智谱 BigModel" : "火山引擎 Ark";

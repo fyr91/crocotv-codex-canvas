@@ -8,6 +8,7 @@ import { STUDIO_PROMPT_TEMPLATE_MAP } from "./studio-schemas";
 import type { StudioGenerationExecution } from "./studio-types";
 import { readProject } from "./storage";
 import { models } from "./providers";
+import type { TextThinkingMode } from "./providers";
 import { stableStudioNodeId } from "./studio-canvas-mapping";
 import { avoidStudioNodeOverlaps } from "./studio-node-placement";
 
@@ -25,6 +26,7 @@ export type StudioGenerationRequest = {
   orderedResourceIds?: string[];
   resourceRoles?: Array<{ resourceId: string; role: string }>;
   requestedModel?: string;
+  thinking?: TextThinkingMode;
   configNodeId: string;
   originClientId: string;
 };
@@ -116,6 +118,7 @@ export async function executeStudioPrompt(input: StudioGenerationRequest): Promi
           generationMode: "text",
           model: resolved.model,
           requestedModel: input.requestedModel || "",
+          thinking: input.thinking || "",
           composerContent,
           count: 1,
           templateKey: resolved.templateKey,
@@ -152,6 +155,7 @@ export async function executeStudioPrompt(input: StudioGenerationRequest): Promi
     systemPromptSha256: resolved.systemPromptSha256,
     systemPromptNodeIds: stringArray(snapshot.systemPromptNodeIds),
     model: resolved.model,
+    ...(input.thinking ? { thinking: input.thinking } : {}),
     sourceNodeIds: stringArray(snapshot.sourceNodeIds),
     imageResourceIds: resources.filter((resource) => resource.type === "image").map((resource) => resource.resourceId),
     videoResourceIds: resources.filter((resource) => resource.type === "video").map((resource) => resource.resourceId),

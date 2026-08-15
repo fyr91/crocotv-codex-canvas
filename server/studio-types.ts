@@ -108,6 +108,7 @@ export type StudioGenerationExecution = {
   systemPromptSha256: string;
   systemPromptNodeIds: string[];
   model: string;
+  thinking?: "enabled" | "disabled" | "auto";
   sourceNodeIds: string[];
   imageResourceIds: string[];
   videoResourceIds: string[];

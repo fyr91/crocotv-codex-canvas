@@ -396,11 +396,11 @@ export const useProjectStore = create<ProjectStore>()(
             pendingExtraction: null,
             pendingExtractionScript: null,
             confirmExtraction: async () => {
-                const { currentProject, pendingExtractionScript } = get();
-                if (!currentProject?.id || !pendingExtractionScript) return;
+                const { currentProject, pendingExtraction, pendingExtractionScript } = get();
+                if (!currentProject?.id || !pendingExtraction || !pendingExtractionScript) return;
                 set({ isAnalyzing: true });
                 try {
-                    const project = await api.reparseProject(currentProject.id, pendingExtractionScript);
+                    const project = await api.applyExtraction(currentProject.id, pendingExtractionScript, pendingExtraction);
                     set((state) => ({
                         projects: state.projects.map((p) =>
                             p.id === project.id ? { ...project, updatedAt: new Date().toISOString() } : p
