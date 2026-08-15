@@ -153,7 +153,7 @@ export default function PipelineSidebar({ activeStep, onStepChange, steps, bread
                             {isActive && (
                                 <motion.div
                                     layoutId="active-pill"
-                                    className="absolute left-0 top-1/2 -translate-y-1/2 h-3/5 w-1 rounded-r-sm bg-primary shadow-none"
+                                    className="absolute left-0 top-[20%] bottom-[20%] w-1 rounded-r-sm bg-primary shadow-none"
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                 />
