@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { CanvasOperation } from "./canvas-commands";
 import { models } from "./providers";
-import { STUDIO_MAPPING_VERSION, type StudioMappingEntityType, type StudioNamedEntity, type StudioProjectState, type StudioStoryboardFrame, type StudioVideoTask } from "./studio-types";
+import { STUDIO_MAPPING_VERSION, type StudioCanvasBinding, type StudioMappingEntityType, type StudioNamedEntity, type StudioProjectState, type StudioStoryboardFrame, type StudioVideoTask } from "./studio-types";
 
 type ExistingNode = { id: string; type: string; title?: string; metadata?: Record<string, unknown> };
 type ExistingConnection = { id: string; fromNodeId: string; toNodeId: string; fromPort?: string; toPort?: string };
@@ -19,7 +19,17 @@ export function studioMappingOperations(input: {
   connections?: ExistingConnection[];
 }): CanvasOperation[] {
   const desired = projectGraph(input.projectId, input.state);
+  for (const override of input.state.canvasNodeOverrides) {
+    const target = desired.nodes.find((node) => node.id === override.nodeId);
+    if (!target) continue;
+    if (override.title) target.title = override.title;
+    target.metadata = { ...target.metadata, ...override.metadata };
+  }
   const existingById = new Map(input.nodes.map((node) => [node.id, node]));
+  const availableNodeIds = new Set([...input.nodes.map((node) => node.id), ...desired.nodes.map((node) => node.id)]);
+  for (const binding of input.state.canvasBindings) {
+    if (availableNodeIds.has(binding.fromNodeId) && availableNodeIds.has(binding.toNodeId)) desired.edges.push({ fromNodeId: binding.fromNodeId, toNodeId: binding.toNodeId, fromPort: binding.fromPort, toPort: binding.toPort });
+  }
   const desiredIds = new Set(desired.nodes.map((node) => node.id));
   const operations: CanvasOperation[] = [];
   const replacedIds = new Set(desired.nodes.filter((node) => existingById.has(node.id) && existingById.get(node.id)!.type !== node.type).map((node) => node.id));
@@ -29,7 +39,8 @@ export function studioMappingOperations(input: {
     const to = existingById.get(connection.toNodeId);
     return from?.metadata?.studioManaged === true || to?.metadata?.studioManaged === true;
   });
-  const desiredKeys = new Set(desired.edges.map(edgeKey));
+  const desiredEdges = [...new Map(desired.edges.map((edge) => [edgeKey(edge), edge])).values()];
+  const desiredKeys = new Set(desiredEdges.map(edgeKey));
   const disconnectedKeys = new Set<string>();
   for (const connection of currentConnections) {
     const key = edgeKey(connection);
@@ -50,8 +61,14 @@ export function studioMappingOperations(input: {
   }
 
   const currentKeys = new Set(currentConnections.map(edgeKey));
-  for (const edge of desired.edges) {
-    if (!currentKeys.has(edgeKey(edge)) || disconnectedKeys.has(edgeKey(edge))) operations.push({ op: "connect", from: edge.fromNodeId, to: edge.toNodeId, fromPort: "workflow-output", toPort: "workflow-input" });
+  for (const edge of desiredEdges) {
+    if (!currentKeys.has(edgeKey(edge)) || disconnectedKeys.has(edgeKey(edge))) operations.push({
+      op: "connect",
+      from: edge.fromNodeId,
+      to: edge.toNodeId,
+      fromPort: edge.fromPort || "workflow-output",
+      toPort: edge.toPort || "workflow-input",
+    });
   }
   return operations;
 }
@@ -63,7 +80,7 @@ export function studioScriptMappingOperations(input: { projectId: string; state:
 
 function projectGraph(projectId: string, state: StudioProjectState) {
   const nodes: DesiredNode[] = [];
-  const edges: Array<{ fromNodeId: string; toNodeId: string }> = [];
+  const edges: Array<Pick<StudioCanvasBinding, "fromNodeId" | "toNodeId" | "fromPort" | "toPort">> = [];
   const groups = {
     script: group(projectId, "script", "script", "Studio · Script", 160, 160, 760, 560),
     art: group(projectId, "art-direction", "art-direction", "Studio · Art Direction", 1040, 160, 760, 620),

@@ -17,6 +17,7 @@ import { getPromptTemplate, listPromptTemplates } from "./prompt-registry";
 import { STUDIO_PROMPT_TEMPLATE_MAP } from "./studio-schemas";
 import { getStudioModelCatalog } from "./model-catalog";
 import { clearProviderSecret, listProviderSecretStatuses, revealProviderSecret, updateProviderSecret } from "./provider-secrets";
+import { applyStudioCanvasEdits } from "./studio-canvas-translation";
 
 export const studioApiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
@@ -124,6 +125,7 @@ studioApiRouter.get("/tasks/:taskId", route(async (request, response) => respons
 studioApiRouter.post("/projects/:id/merge", projectRoute(async (request, response, id) => response.json(await mergeStudioProject(id, clientId(request)))));
 studioApiRouter.post("/projects/:id/generate_video", projectRoute(async (request, response, id) => response.json(await mergeStudioProject(id, clientId(request)))));
 studioApiRouter.post("/projects/:id/run-stage", projectRoute(async (request, response, id) => response.json(await runStudioStage(id, String(request.body?.stage || ""), clientId(request)))));
+studioApiRouter.post("/projects/:id/canvas-edits", projectRoute(async (request, response, id) => response.json(await applyStudioCanvasEdits(id, request.body?.edits, { expectedVersion: optionalVersion(request.body?.expectedVersion), originClientId: clientId(request) }))));
 
 studioApiRouter.post("/video/polish_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), String(request.body?.draft_prompt || ""), clientId(request), promptRuntimeOptions(request.body, "video_polish")))));
 studioApiRouter.post("/video/polish_r2v_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), String(request.body?.draft_prompt || ""), clientId(request), promptRuntimeOptions(request.body, "r2v_polish")))));
@@ -200,6 +202,7 @@ function objectValue(value: unknown): Record<string, any> { return value && type
 function stringArray(value: unknown) { return Array.isArray(value) ? value.map(String) : []; }
 function stringRecord(value: unknown) { return Object.fromEntries(Object.entries(objectValue(value)).filter(([, item]) => typeof item === "string")) as Record<string, string>; }
 function boundedCount(value: unknown) { const count = Number(value); return Math.max(1, Math.min(3, Number.isFinite(count) ? Math.floor(count) : 1)); }
+function optionalVersion(value: unknown) { const version = Number(value); return Number.isInteger(version) && version > 0 ? version : undefined; }
 function decodePresetVoice(value: string) { const parts = value.split("."); if ((parts[0] === "design" || parts[0] === "clone") && parts[1]) { try { return Buffer.from(parts[1], "base64url").toString("utf8"); } catch {} } return value; }
 
 function promptRuntimeOptions(raw: any, operation: "storyboard_polish" | "video_polish" | "r2v_polish", frameId?: string) {

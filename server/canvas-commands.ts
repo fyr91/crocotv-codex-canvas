@@ -25,6 +25,7 @@ export type CanvasOperation =
   | { op: "rename_project"; title: string }
   | { op: "set_viewport"; viewport: { x: number; y: number; k: number } }
   | { op: "set_studio_state"; state: StudioProjectState }
+  | { op: "add_studio_canvas_bindings"; bindings: Array<{ fromNodeId: string; toNodeId: string; fromPort?: string; toPort?: string }> }
   | { op: "layout_shot_columns"; factoryRunId: string; shotIds?: string[]; origin?: Position; groupPadding?: number; nodeGap?: number; sectionGap?: number; columnGap?: number; preserveManualLayout?: boolean };
 
 type ApplyCanvasOperationOptions = {
@@ -137,6 +138,25 @@ export async function applyCanvasOperations(projectId: string, operations: Canva
       if (operation.op === "set_studio_state") {
         if (!options.allowStudioManagedWrites) throw new Error("Studio state 只能通过 Studio 结构化命令修改");
         studio = parseStudioProjectState(operation.state);
+        continue;
+      }
+      if (operation.op === "add_studio_canvas_bindings") {
+        if (!options.allowStudioManagedWrites) throw new Error("Studio Canvas 绑定只能通过结构化命令修改");
+        if (operation.bindings.length > 100) throw new Error("一次最多新增 100 个 Studio Canvas 绑定");
+        const state = parseStudioProjectState(studio);
+        const bindings = [...state.canvasBindings];
+        for (const binding of operation.bindings) {
+          const from = nodes.find((node) => node.id === binding.fromNodeId);
+          const to = nodes.find((node) => node.id === binding.toNodeId);
+          if (!from || !to) throw new Error("Studio Canvas 绑定包含不存在的节点");
+          if (!isStudioManaged(from) && !isStudioManaged(to)) throw new Error("Studio Canvas 绑定必须连接至少一个 Studio 托管节点");
+          const fromPort = binding.fromPort || "workflow-output";
+          const toPort = binding.toPort || "workflow-input";
+          if (!allowedConnectionPorts.has(fromPort) || !allowedConnectionPorts.has(toPort)) throw new Error("Studio Canvas 绑定端口无效");
+          const alreadyBound = bindings.some((item) => item.fromNodeId === from.id && item.toNodeId === to.id && (item.fromPort || "workflow-output") === fromPort && (item.toPort || "workflow-input") === toPort);
+          if (!alreadyBound) bindings.push({ id: randomUUID(), fromNodeId: from.id, toNodeId: to.id, ...(binding.fromPort ? { fromPort: binding.fromPort as "node" | "workflow-input" | "workflow-output" } : {}), ...(binding.toPort ? { toPort: binding.toPort as "node" | "workflow-input" | "workflow-output" } : {}) });
+        }
+        studio = { ...state, canvasBindings: bindings };
         continue;
       }
       if (operation.op === "set_viewport") viewport = validViewport(operation.viewport) || viewport;

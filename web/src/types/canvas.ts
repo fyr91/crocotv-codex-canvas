@@ -135,6 +135,12 @@ export type CanvasNodeMetadata = {
     workflowRunId?: string;
     workflowResultOf?: string;
     workflowBatchIndex?: number;
+    studioManaged?: boolean;
+    studioEntityType?: "script" | "art-direction" | "character" | "scene" | "prop" | "frame" | "take" | "audio" | "assembly";
+    studioEntityId?: string;
+    studioRole?: string;
+    studioMappingVersion?: number;
+    layoutManaged?: boolean;
 };
 
 export type CanvasNodeData = {

@@ -114,6 +114,20 @@ export type StudioGenerationExecution = {
   createdAt: string;
 };
 
+export type StudioCanvasBinding = {
+  id: string;
+  fromNodeId: string;
+  toNodeId: string;
+  fromPort?: "node" | "workflow-input" | "workflow-output";
+  toPort?: "node" | "workflow-input" | "workflow-output";
+};
+
+export type StudioCanvasNodeOverride = {
+  nodeId: string;
+  title?: string;
+  metadata: Record<string, unknown>;
+};
+
 export type StudioProjectState = {
   schemaVersion: typeof STUDIO_SCHEMA_VERSION;
   mappingVersion: typeof STUDIO_MAPPING_VERSION;
@@ -134,6 +148,8 @@ export type StudioProjectState = {
   promptBindings: Record<string, StudioPromptBinding>;
   projectPromptVersions: StudioProjectPromptVersion[];
   generationExecutions: StudioGenerationExecution[];
+  canvasBindings: StudioCanvasBinding[];
+  canvasNodeOverrides: StudioCanvasNodeOverride[];
   characters: StudioNamedEntity[];
   scenes: StudioNamedEntity[];
   props: StudioNamedEntity[];

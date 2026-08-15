@@ -423,9 +423,28 @@ async function mutateAndPublish(projectId: string, operations: CanvasOperation[]
   // This runtime is the canonical internal execution path for both free Canvas
   // nodes and Studio-projected nodes. Studio semantic writes remain blocked at
   // the public command layer; only runtime status/result updates are allowed.
-  const result = await applyCanvasOperations(projectId, operations, undefined, { allowStudioManagedWrites: true });
+  const connections = operations.filter((operation): operation is Extract<CanvasOperation, { op: "connect" }> => operation.op === "connect");
+  const current = connections.length ? asProject(await readProject(projectId)) : undefined;
+  const nextOperations = current?.studio ? withRuntimeStudioBindings(current, operations) : operations;
+  const result = await applyCanvasOperations(projectId, nextOperations, undefined, { allowStudioManagedWrites: true });
   publishProjectUpdated(result.project, originClientId);
   return result;
+}
+
+function withRuntimeStudioBindings(project: CanvasProject, operations: CanvasOperation[]) {
+  const nodes = new Map(project.nodes.map((node) => [node.id, node]));
+  for (const operation of operations) {
+    if (operation.op === "add_node" && operation.node.id) nodes.set(operation.node.id, operation.node as CanvasNode);
+  }
+  const bindings: Extract<CanvasOperation, { op: "add_studio_canvas_bindings" }>["bindings"] = [];
+  for (const operation of operations) {
+    if (operation.op !== "connect") continue;
+    const from = nodes.get(operation.from);
+    const to = nodes.get(operation.to);
+    if (from?.metadata?.studioManaged !== true && to?.metadata?.studioManaged !== true) continue;
+    bindings.push({ fromNodeId: operation.from, toNodeId: operation.to, ...(operation.fromPort ? { fromPort: operation.fromPort } : {}), ...(operation.toPort ? { toPort: operation.toPort } : {}) });
+  }
+  return bindings.length ? [...operations, { op: "add_studio_canvas_bindings", bindings } as CanvasOperation] : operations;
 }
 
 function resourceMetadata(resource: StoredResource) {

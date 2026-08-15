@@ -1,5 +1,11 @@
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 
+export type StudioCanvasEdit =
+    | { op: "update_node"; nodeId: string; content?: string; title?: string; metadata?: Record<string, unknown> }
+    | { op: "delete_node"; nodeId: string }
+    | { op: "connect"; fromNodeId: string; toNodeId: string; fromPort?: string; toPort?: string }
+    | { op: "disconnect"; connectionId: string };
+
 const sessionKey = "croco-canvas-client-id";
 
 export function canvasClientId() {
@@ -51,4 +57,31 @@ export function subscribeCanvasProject(projectId: string, onProject: (project: C
         closed = true;
         source.close();
     };
+}
+
+export async function applyStudioCanvasEdits(projectId: string, edits: StudioCanvasEdit[]) {
+    const response = await fetch(`/api/studio/projects/${encodeURIComponent(projectId)}/canvas-edits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Croco-Client-Id": canvasClientId() },
+        body: JSON.stringify({ edits }),
+    });
+    if (!response.ok) throw new Error(await responseError(response, "Studio 结构化修改失败"));
+    return await response.json() as CanvasProject;
+}
+
+export async function readCanvasProject(projectId: string) {
+    const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+        headers: { "X-Croco-Client-Id": canvasClientId() },
+    });
+    if (!response.ok) throw new Error(await responseError(response, "读取画布最新版本失败"));
+    return await response.json() as CanvasProject;
+}
+
+async function responseError(response: Response, fallback: string) {
+    try {
+        const payload = await response.json() as { error?: string; detail?: string };
+        return payload.error || payload.detail || `${fallback}（${response.status}）`;
+    } catch {
+        return `${fallback}（${response.status}）`;
+    }
 }

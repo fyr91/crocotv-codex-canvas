@@ -99,6 +99,18 @@ const generationExecutionSchema = z.object({
   outputNodeIds: z.array(boundedId).max(20),
   createdAt: z.string().min(1).max(80),
 }).strict();
+const canvasBindingSchema = z.object({
+  id: boundedId,
+  fromNodeId: boundedId,
+  toNodeId: boundedId,
+  fromPort: z.enum(["node", "workflow-input", "workflow-output"]).optional(),
+  toPort: z.enum(["node", "workflow-input", "workflow-output"]).optional(),
+}).strict();
+const canvasNodeOverrideSchema = z.object({
+  nodeId: boundedId,
+  title: z.string().trim().min(1).max(180).optional(),
+  metadata: looseRecord,
+}).strict();
 
 export const studioProjectStateSchema = z.object({
   schemaVersion: z.literal(STUDIO_SCHEMA_VERSION),
@@ -120,6 +132,8 @@ export const studioProjectStateSchema = z.object({
   promptBindings: z.record(z.string(), promptBindingSchema).default({}),
   projectPromptVersions: z.array(projectPromptVersionSchema).max(100).default([]),
   generationExecutions: z.array(generationExecutionSchema).max(500).default([]),
+  canvasBindings: z.array(canvasBindingSchema).max(1_000).default([]),
+  canvasNodeOverrides: z.array(canvasNodeOverrideSchema).max(10_000).default([]),
   characters: z.array(namedEntitySchema).max(10_000),
   scenes: z.array(namedEntitySchema).max(10_000),
   props: z.array(namedEntitySchema).max(10_000),
@@ -161,6 +175,8 @@ export function newStudioProjectState(originalText = "", workflowMode: StudioWor
     promptBindings: defaultPromptBindings(),
     projectPromptVersions: [],
     generationExecutions: [],
+    canvasBindings: [],
+    canvasNodeOverrides: [],
     characters: [],
     scenes: [],
     props: [],
@@ -216,7 +232,7 @@ function migratePromptConfig(input: Record<string, unknown>) {
     }
     bindings[operation] = { templateKey, templateVersion, source: "legacy-studio-migration" };
   }
-  return { ...input, promptBindings: bindings, projectPromptVersions: versions, generationExecutions: Array.isArray(input.generationExecutions) ? input.generationExecutions : [] };
+  return { ...input, promptBindings: bindings, projectPromptVersions: versions, generationExecutions: Array.isArray(input.generationExecutions) ? input.generationExecutions : [], canvasBindings: Array.isArray(input.canvasBindings) ? input.canvasBindings : [], canvasNodeOverrides: Array.isArray(input.canvasNodeOverrides) ? input.canvasNodeOverrides : [] };
 }
 
 function normalizeLegacyEntities(value: unknown) {

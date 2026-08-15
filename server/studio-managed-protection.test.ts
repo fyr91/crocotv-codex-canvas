@@ -66,3 +66,17 @@ test("full Canvas saves preserve Studio state and managed semantics while accept
   assert.equal(saved.nodes.some((node: Record<string, any>) => node.id === groupNode.id), true);
   assert.equal(saved.nodes.some((node: Record<string, any>) => node.id === "forged-studio-node"), false);
 });
+
+test("runtime connections register Studio bindings atomically", async () => {
+  const project = await storage.readProject(projectId) as Record<string, any>;
+  const textNode = project.nodes.find((node: Record<string, any>) => node.metadata?.studioRole === "source-text");
+  const freeNode = project.nodes.find((node: Record<string, any>) => node.type === "comment");
+  assert.ok(textNode && freeNode);
+  const result = await commands.applyCanvasOperations(projectId, [
+    { op: "connect", from: freeNode.id, to: textNode.id },
+    { op: "add_studio_canvas_bindings", bindings: [{ fromNodeId: freeNode.id, toNodeId: textNode.id }] },
+  ], project.version, { allowStudioManagedWrites: true });
+  const saved = result.project as Record<string, any>;
+  assert.ok(saved.connections.some((connection: Record<string, any>) => connection.fromNodeId === freeNode.id && connection.toNodeId === textNode.id));
+  assert.ok(saved.studio.canvasBindings.some((binding: Record<string, any>) => binding.fromNodeId === freeNode.id && binding.toNodeId === textNode.id));
+});

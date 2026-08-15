@@ -57,7 +57,7 @@ import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/a
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { AudioSegmentationPanel } from "@/components/audio/audio-segmentation-panel";
 import { useCanvasStore, type CanvasProject, type CanvasSaveState } from "@/stores/canvas/use-canvas-store";
-import { canvasClientId, subscribeCanvasProject } from "@/services/canvas-live-sync";
+import { applyStudioCanvasEdits, canvasClientId, readCanvasProject, subscribeCanvasProject, type StudioCanvasEdit } from "@/services/canvas-live-sync";
 import { isCanvasReadOnly } from "@/lib/canvas/canvas-project-access";
 import { buildCanvasResourceReferences, buildNodeMentionReferences, getPendingUploadResourceNodes } from "@/lib/canvas/canvas-resource-references";
 import { completeCanvasUploadNode, useCanvasUploadStore, type CanvasUploadKind, type CanvasUploadTask } from "@/stores/canvas/use-canvas-upload-store";
@@ -411,6 +411,64 @@ function CrocoCanvasPage() {
     const skipRemoteProjectSaveRef = useRef(false);
     const skipRemoteViewportSaveRef = useRef(false);
     const remoteHydrationVersionRef = useRef(0);
+    const studioEditTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+    const pendingStudioNodeEditsRef = useRef(new Map<string, Extract<StudioCanvasEdit, { op: "update_node" }>>());
+
+    const applyCanonicalStudioProject = useCallback(async (remoteProject: CanvasProject) => {
+        const remoteVersion = Math.max(0, Number(remoteProject.version) || 0);
+        if (remoteVersion && remoteVersion < remoteHydrationVersionRef.current) return;
+        if (remoteVersion) remoteHydrationVersionRef.current = remoteVersion;
+        applyRemoteProject(remoteProject);
+        const remoteNodes = await hydrateCanvasImages(remoteProject.nodes || []);
+        if (remoteVersion && remoteVersion !== remoteHydrationVersionRef.current) return;
+        skipRemoteProjectSaveRef.current = true;
+        setNodes(remoteNodes);
+        setConnections(remoteProject.connections || []);
+        setSelectedNodeIds((selected) => new Set([...selected].filter((id) => remoteNodes.some((node) => node.id === id))));
+    }, [applyRemoteProject]);
+
+    const commitStudioCanvasEdits = useCallback(async (edits: StudioCanvasEdit[]) => {
+        if (!edits.length) return;
+        try {
+            await applyCanonicalStudioProject(await applyStudioCanvasEdits(projectId, edits));
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "Studio 结构化修改失败");
+            try {
+                await applyCanonicalStudioProject(await readCanvasProject(projectId));
+            } catch {
+                // Live sync will retry. Keep the original actionable error visible.
+            }
+            throw error;
+        }
+    }, [applyCanonicalStudioProject, message, projectId]);
+
+    const queueStudioNodeEdit = useCallback((nodeId: string, patch: Omit<Extract<StudioCanvasEdit, { op: "update_node" }>, "op" | "nodeId">) => {
+        if (nodesRef.current.find((node) => node.id === nodeId)?.metadata?.studioManaged !== true) return;
+        const previous = pendingStudioNodeEditsRef.current.get(nodeId);
+        pendingStudioNodeEditsRef.current.set(nodeId, {
+            op: "update_node",
+            nodeId,
+            ...(previous?.content === undefined ? {} : { content: previous.content }),
+            ...(previous?.title === undefined ? {} : { title: previous.title }),
+            ...(previous?.metadata ? { metadata: previous.metadata } : {}),
+            ...patch,
+            ...(previous?.metadata || patch.metadata ? { metadata: { ...(previous?.metadata || {}), ...(patch.metadata || {}) } } : {}),
+        });
+        const previousTimer = studioEditTimersRef.current.get(nodeId);
+        if (previousTimer) clearTimeout(previousTimer);
+        studioEditTimersRef.current.set(nodeId, setTimeout(() => {
+            studioEditTimersRef.current.delete(nodeId);
+            const edit = pendingStudioNodeEditsRef.current.get(nodeId);
+            pendingStudioNodeEditsRef.current.delete(nodeId);
+            if (edit) void commitStudioCanvasEdits([edit]).catch(() => undefined);
+        }, 350));
+    }, [commitStudioCanvasEdits]);
+
+    useEffect(() => () => {
+        studioEditTimersRef.current.forEach((timer) => clearTimeout(timer));
+        studioEditTimersRef.current.clear();
+        pendingStudioNodeEditsRef.current.clear();
+    }, [projectId]);
 
     const createHistoryEntry = useCallback(
         (): CanvasHistoryEntry => ({
@@ -809,6 +867,14 @@ function CrocoCanvasPage() {
                 return;
             }
             setConnections((prev) => [...prev, ...plan.connections]);
+            const studioConnections = plan.connections.filter((connection) => [connection.fromNodeId, connection.toNodeId].some((nodeId) => nodesRef.current.find((node) => node.id === nodeId)?.metadata?.studioManaged === true));
+            if (studioConnections.length) void commitStudioCanvasEdits(studioConnections.map((connection) => ({
+                op: "connect" as const,
+                fromNodeId: connection.fromNodeId,
+                toNodeId: connection.toNodeId,
+                ...(connection.fromPort ? { fromPort: connection.fromPort } : {}),
+                ...(connection.toPort ? { toPort: connection.toPort } : {}),
+            }))).catch(() => undefined);
             const skipped = plan.skipped + lockedCount;
             if (handles.length > 1) {
                 if (skipped) message.warning(`已连接 ${plan.connections.length} 个节点，跳过 ${skipped} 个`);
@@ -816,7 +882,7 @@ function CrocoCanvasPage() {
             }
             setContextMenu(null);
         },
-        [message],
+        [commitStudioCanvasEdits, message],
     );
 
     const createConnectedNode = useCallback(
@@ -839,6 +905,14 @@ function CrocoCanvasPage() {
             }
             setNodes((prev) => [...prev, newNode]);
             setConnections((prev) => [...prev, ...plan.connections]);
+            const studioConnections = plan.connections.filter((connection) => [connection.fromNodeId, connection.toNodeId].some((nodeId) => planNodes.find((node) => node.id === nodeId)?.metadata?.studioManaged === true));
+            if (studioConnections.length) void commitStudioCanvasEdits(studioConnections.map((connection) => ({
+                op: "connect" as const,
+                fromNodeId: connection.fromNodeId,
+                toNodeId: connection.toNodeId,
+                ...(connection.fromPort ? { fromPort: connection.fromPort } : {}),
+                ...(connection.toPort ? { toPort: connection.toPort } : {}),
+            }))).catch(() => undefined);
             setSelectedNodeIds(new Set([newNode.id]));
             setSelectedConnectionId(null);
             if (type !== CanvasNodeType.Text && type !== CanvasNodeType.Audio && type !== CanvasNodeType.Group) setDialogNodeId(newNode.id);
@@ -850,7 +924,7 @@ function CrocoCanvasPage() {
                 else message.success(`新节点已连接 ${plan.connections.length} 个输入`);
             }
         },
-        [effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.imagePromptOptimize, effectiveConfig.imageSearch, effectiveConfig.imageWebSearch, effectiveConfig.model, effectiveConfig.musicModel, effectiveConfig.size, effectiveConfig.textModel, effectiveConfig.videoCount, effectiveConfig.videoInputMode, effectiveConfig.videoModel, effectiveConfig.videoPromptEnhance, effectiveConfig.videoReturnLastFrame, effectiveConfig.videoSeconds, effectiveConfig.videoStage1Review, effectiveConfig.vquality, message, setConnecting],
+        [commitStudioCanvasEdits, effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.imagePromptOptimize, effectiveConfig.imageSearch, effectiveConfig.imageWebSearch, effectiveConfig.model, effectiveConfig.musicModel, effectiveConfig.size, effectiveConfig.textModel, effectiveConfig.videoCount, effectiveConfig.videoInputMode, effectiveConfig.videoModel, effectiveConfig.videoPromptEnhance, effectiveConfig.videoReturnLastFrame, effectiveConfig.videoSeconds, effectiveConfig.videoStage1Review, effectiveConfig.vquality, message, setConnecting],
     );
 
     const cancelPendingConnectionCreate = useCallback(() => {
@@ -1068,6 +1142,8 @@ function CrocoCanvasPage() {
             });
             if (allIds.size < ids.size) message.warning("已跳过仍处于锁定状态的节点");
             if (!allIds.size) return;
+            const studioNodeIds = [...allIds].filter((id) => currentNodes.find((node) => node.id === id)?.metadata?.studioManaged === true);
+            if (studioNodeIds.length) void commitStudioCanvasEdits(studioNodeIds.map((nodeId) => ({ op: "delete_node" as const, nodeId }))).catch(() => undefined);
             const cancelJobIds = cancelableQueuedLtxJobIds(currentNodes, allIds, (model) => providerIdForModel(model) === "ltx");
             if (cancelJobIds.length) {
                 void Promise.allSettled(cancelJobIds.map(cancelGeneration)).then((results) => {
@@ -1112,7 +1188,7 @@ function CrocoCanvasPage() {
             setContextMenu((current) => (current?.type === "node" && allIds.has(current.nodeId) ? null : current));
             cleanupCanvasFiles({ projectId, nodes: nodesRef.current.filter((node) => !allIds.has(node.id)), chatSessions });
         },
-        [chatSessions, cleanupCanvasFiles, message, projectId],
+        [chatSessions, cleanupCanvasFiles, commitStudioCanvasEdits, message, projectId],
     );
 
     const deleteConnection = useCallback((connectionId: string) => {
@@ -1121,10 +1197,13 @@ function CrocoCanvasPage() {
             message.warning("请先解锁连接的节点");
             return;
         }
+        if (connection && [connection.fromNodeId, connection.toNodeId].some((id) => nodesRef.current.find((node) => node.id === id)?.metadata?.studioManaged === true)) {
+            void commitStudioCanvasEdits([{ op: "disconnect", connectionId }]).catch(() => undefined);
+        }
         setConnections((prev) => prev.filter((conn) => conn.id !== connectionId));
         setSelectedConnectionId((current) => (current === connectionId ? null : current));
         setContextMenu((current) => (current?.type === "connection" && current.connectionId === connectionId ? null : current));
-    }, [message]);
+    }, [commitStudioCanvasEdits, message]);
 
     const deselectCanvas = useCallback(() => {
         cancelPendingConnectionCreate();
@@ -1817,7 +1896,8 @@ function CrocoCanvasPage() {
     const handleNodeContentChange = useCallback((nodeId: string, content: string) => {
         if (isCanvasNodeLocked(nodesRef.current.find((node) => node.id === nodeId), nodesRef.current)) return;
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, content } } : node)));
-    }, []);
+        queueStudioNodeEdit(nodeId, { content });
+    }, [queueStudioNodeEdit]);
 
     const updateCommentNode = useCallback((nodeId: string, patch: Pick<CanvasNodeMetadata, "commentColor" | "commentModel">) => {
         if (isCanvasNodeLocked(nodesRef.current.find((node) => node.id === nodeId), nodesRef.current)) return;
@@ -1845,7 +1925,8 @@ function CrocoCanvasPage() {
     const handleNodeTitleChange = useCallback((nodeId: string, title: string) => {
         if (isCanvasNodeLocked(nodesRef.current.find((node) => node.id === nodeId), nodesRef.current)) return;
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, title } : node)));
-    }, []);
+        queueStudioNodeEdit(nodeId, { title });
+    }, [queueStudioNodeEdit]);
 
     const toggleBatchExpanded = useCallback((nodeId: string) => {
         if (isCanvasNodeLocked(nodesRef.current.find((node) => node.id === nodeId), nodesRef.current)) return;
@@ -1934,7 +2015,8 @@ function CrocoCanvasPage() {
     const handleConfigNodeChange = useCallback((nodeId: string, patch: Partial<CanvasNodeData["metadata"]>) => {
         if (isCanvasNodeLocked(nodesRef.current.find((node) => node.id === nodeId), nodesRef.current)) return;
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? applyNodeConfigPatch(node, patch) : node)));
-    }, []);
+        queueStudioNodeEdit(nodeId, { metadata: patch as Record<string, unknown> });
+    }, [queueStudioNodeEdit]);
 
     const handleCanvasAudioSegments = useCallback(async (input: AudioSegmentationSubmit) => {
         const uploaded = await Promise.all(input.segments.map(async (segment) => ({
