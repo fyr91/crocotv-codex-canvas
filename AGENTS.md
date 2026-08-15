@@ -18,6 +18,30 @@
 4. 实施过程中出现新的或变化的要求时，暂停受影响的部分，更新方案并重新确认后继续。
 5. 每项修改完成并验证后，必须创建本地 Git commit 作为可回退节点。提交只包含本次任务涉及的文件，不得混入工作区中的其他修改；范围较大的任务应按可独立回退的阶段拆分提交。除非用户明确要求，否则不得自动 push。
 
+## Git 分支与 Worktree 规范
+
+`main` 只用于集成已经完成并验证的修改，主 worktree 必须保持干净，不得直接在 `main` 上开发 Feature 或 Bug。只要主 worktree 存在未提交修改，就必须暂停向 `main` 执行 rebase、merge 或功能清理，等待正在进行的开发完成或迁移到独立分支。
+
+每个 Feature 和 Bug 都必须使用一个独立分支及一个对应的独立 worktree：
+
+- Feature 分支命名为 `FEAT-<short-kebab-case-name>`，例如 `FEAT-lumenx-basic-workflow-only`；
+- Bug 分支命名为 `BUG-<short-kebab-case-name>`，例如 `BUG-studio-project-create-state`；
+- `<short-kebab-case-name>` 使用简短、明确的英文小写单词并以连字符分隔；
+- Feature 和 Bug 分支不得添加 `codex/` 等额外前缀；
+- worktree 目录命名为 `<repository-name>-<branch-name>`，并默认放在主仓库相邻目录，例如 `crocotv-codex-canvas-FEAT-lumenx-basic-workflow-only`。
+
+标准生命周期如下：
+
+1. 从目标分支已经提交的最新 commit 创建功能分支和 worktree。未提交或未跟踪文件不会自动进入新 worktree，不得复制这些内容作为长期开发基线；如果新任务依赖它们，应先形成明确的基础 commit，或明确从对应的依赖分支创建。
+2. 所有开发、测试和提交都在功能 worktree 中完成。一个 worktree 只承载一个明确范围的 Feature 或 Bug，不得把其他任务的文件混入 commit。
+3. 集成前确认功能 worktree 干净，并将功能分支同步到最新 `main`。仅由当前开发者使用的功能分支优先执行 rebase；多人共享的分支不得擅自重写历史，应合入最新 `main`。
+4. 同步后重新完成与风险相称的验证以及本文件要求的仓库验证。
+5. 只有 `main` worktree 干净时才能集成。已 rebase 到最新 `main` 的功能分支优先使用 `git merge --ff-only <branch>`；若无法 fast-forward，返回功能 worktree 查明原因，不得用强制操作绕过。
+6. 合并后在 `main` 上完成必要的 smoke test。确认合并成功后，依次执行 `git worktree remove <path>`、`git branch -d <branch>` 和 `git worktree prune`。
+7. 未提交、未验证或未合并的 worktree 和分支不得强制删除。除非用户明确要求，否则不得自动 push。
+
+并行 worktree 的代码目录相互隔离：一个功能合入 `main` 不会立即改写其他功能 worktree，其他功能应在各自集成前同步最新 `main` 并解决冲突。但本地运行资源可能仍然共享；同时运行多个 worktree 时，必须避免 API、Canvas 和 Studio 端口冲突，避免写入同一个 `data/` 目录，也不得在共享软链接的 `node_modules` 上并行执行依赖安装或升级。
+
 ## 仓库结构
 
 - `server/index.ts`：本地 Express API 和服务启动入口。
