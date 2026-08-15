@@ -64,6 +64,9 @@ html.light {
   --color-status-pending-fg: #2563eb;
   --color-status-pending-border: rgba(37, 99, 235, 0.28);
   --color-status-pending-bg: rgba(37, 99, 235, 0.08);
+  --color-status-draft-fg: #15803d;
+  --color-status-draft-border: rgba(21, 128, 61, 0.28);
+  --color-status-draft-bg: rgba(21, 128, 61, 0.08);
   --color-status-processing-fg: #b45309;
   --color-status-processing-border: rgba(180, 83, 9, 0.28);
   --color-status-processing-bg: rgba(180, 83, 9, 0.08);
@@ -150,6 +153,9 @@ html.dark {
   --color-status-pending-fg: #93c5fd;
   --color-status-pending-border: rgba(147, 197, 253, 0.30);
   --color-status-pending-bg: rgba(147, 197, 253, 0.10);
+  --color-status-draft-fg: #86efac;
+  --color-status-draft-border: rgba(134, 239, 172, 0.30);
+  --color-status-draft-bg: rgba(134, 239, 172, 0.10);
   --color-status-processing-fg: #fcd34d;
   --color-status-processing-border: rgba(252, 211, 77, 0.30);
   --color-status-processing-bg: rgba(252, 211, 77, 0.10);

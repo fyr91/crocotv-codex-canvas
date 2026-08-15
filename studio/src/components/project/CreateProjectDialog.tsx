@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Zap, Sparkles } from "lucide-react";
+import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useProjectStore } from "@/store/projectStore";
+import BasicWorkflowSelection from "@/components/project/BasicWorkflowSelection";
 
 
 interface CreateProjectDialogProps {
@@ -95,43 +96,7 @@ export default function CreateProjectDialog({ isOpen, onClose, seriesId, seriesT
                                 />
                             </div>
 
-                            {/* Workflow Mode Selection */}
-                            <div>
-                                <label className="block text-sm font-medium text-foreground mb-2">
-                                    {t("workflowMode")}
-                                </label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        className="relative p-4 rounded-xl border-2 border-primary bg-primary/10 text-left transition-all"
-                                    >
-                                        <div className="flex items-center gap-2 mb-1.5">
-                                            <Zap size={16} className="text-primary" />
-                                            <span className="font-medium text-sm text-foreground">{t("workflowR2V")}</span>
-                                        </div>
-                                        <p className="text-sm text-text-secondary leading-relaxed">
-                                            {t("workflowR2VDesc")}
-                                        </p>
-                                        <span className="recommendation-badge absolute top-2 right-2">
-                                            {tc("recommended")}
-                                        </span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled
-                                        aria-disabled="true"
-                                        className="relative p-4 rounded-xl border-2 border-border bg-surface/60 text-left opacity-60 cursor-not-allowed"
-                                    >
-                                        <div className="flex items-center gap-2 mb-1.5">
-                                            <Sparkles size={16} className="text-text-secondary" />
-                                            <span className="font-medium text-sm text-text-secondary">{t("workflowComingSoon")}</span>
-                                        </div>
-                                        <p className="text-sm text-text-secondary leading-relaxed">
-                                            {t("workflowComingSoonDesc")}
-                                        </p>
-                                    </button>
-                                </div>
-                            </div>
+                            <BasicWorkflowSelection />
 
                             <div>
                                 <label className="block text-sm font-medium text-foreground mb-2">

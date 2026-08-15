@@ -1645,6 +1645,7 @@
       "generateBatch": "Generate ×{count}"
     },
     "mode": {
+      "categoryLabel": "Generation type",
       "image": "Image",
       "video": "Video",
       "groupImage": "Image",

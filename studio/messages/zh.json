@@ -1645,6 +1645,7 @@
       "generateBatch": "生成 ×{count}"
     },
     "mode": {
+      "categoryLabel": "生成类型",
       "image": "图像生成",
       "video": "视频生成",
       "groupImage": "图像",
