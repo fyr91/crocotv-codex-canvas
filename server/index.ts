@@ -18,6 +18,7 @@ import { verifyCanvasVideoAsr } from "./canvas-asr-runtime";
 import { mergeCanvasVideos, recordCanvasVisualReview, useCanvasVideoFrames } from "./canvas-video-tools";
 import { relayoutCanvasShotColumns, upsertCanvasShotColumn } from "./canvas-shot-columns";
 import { suiteCompatibility } from "./version";
+import { studioApiRouter } from "./studio-api";
 
 await ensureStorage();
 await initializeCanvasRunJobs();
@@ -31,6 +32,7 @@ const upload = multer({ dest: uploadTemp, limits: { fileSize: 2 * 1024 * 1024 * 
 
 app.use(cors({ origin: ["http://localhost:3000", "http://127.0.0.1:3000"] }));
 app.use(express.json({ limit: "10mb" }));
+app.use("/api/studio", studioApiRouter);
 
 app.get("/api/status", (_request, response) => response.json({
   version: suiteCompatibility.components.crocoTV,

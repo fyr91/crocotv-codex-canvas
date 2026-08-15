@@ -66,10 +66,16 @@ function preserveRuntimeManagedNodes(current: Record<string, unknown>, incoming:
   const currentNodes = Array.isArray(current.nodes) ? current.nodes as Array<Record<string, unknown>> : [];
   const incomingNodes = Array.isArray(incoming.nodes) ? incoming.nodes as Array<Record<string, unknown>> : [];
   const currentById = new Map(currentNodes.map((node) => [String(node.id || ""), node]));
+  const studioManagedIds = new Set(currentNodes.filter(isStudioManagedNode).map((node) => String(node.id || "")));
   const savedIds = new Set<string>();
   const nodes = incomingNodes.flatMap((node) => {
     const id = String(node.id || "");
     const existing = currentById.get(id);
+    if (existing && isStudioManagedNode(existing)) {
+      savedIds.add(id);
+      return [preserveStudioManagedNode(existing, node)];
+    }
+    if (!existing && isStudioManagedNode(node)) return [];
     const incomingRemote = Boolean((node.metadata as Record<string, unknown> | undefined)?.remoteOperationActive);
     const existingRemote = Boolean((existing?.metadata as Record<string, unknown> | undefined)?.remoteOperationActive);
     if (incomingRemote || existingRemote) {
@@ -82,12 +88,39 @@ function preserveRuntimeManagedNodes(current: Record<string, unknown>, incoming:
   });
   for (const node of currentNodes) {
     const id = String(node.id || "");
-    if (!savedIds.has(id) && Boolean((node.metadata as Record<string, unknown> | undefined)?.remoteOperationActive)) nodes.push(node);
+    if (!savedIds.has(id) && (Boolean((node.metadata as Record<string, unknown> | undefined)?.remoteOperationActive) || isStudioManagedNode(node))) nodes.push(node);
   }
   const nodeIds = new Set(nodes.map((node) => String(node.id || "")));
   const incomingConnections = Array.isArray(incoming.connections) ? incoming.connections as Array<Record<string, unknown>> : [];
-  const connections = incomingConnections.filter((connection) => nodeIds.has(String(connection.fromNodeId || "")) && nodeIds.has(String(connection.toNodeId || "")));
-  return { ...incoming, nodes, connections };
+  const currentConnections = Array.isArray(current.connections) ? current.connections as Array<Record<string, unknown>> : [];
+  const freeConnections = incomingConnections.filter((connection) => {
+    const fromNodeId = String(connection.fromNodeId || "");
+    const toNodeId = String(connection.toNodeId || "");
+    return nodeIds.has(fromNodeId) && nodeIds.has(toNodeId) && !studioManagedIds.has(fromNodeId) && !studioManagedIds.has(toNodeId);
+  });
+  const managedConnections = currentConnections.filter((connection) => {
+    const fromNodeId = String(connection.fromNodeId || "");
+    const toNodeId = String(connection.toNodeId || "");
+    return nodeIds.has(fromNodeId) && nodeIds.has(toNodeId) && (studioManagedIds.has(fromNodeId) || studioManagedIds.has(toNodeId));
+  });
+  const { studio: _ignoredStudio, ...safeIncoming } = incoming;
+  return { ...safeIncoming, ...(current.studio ? { studio: current.studio } : {}), nodes, connections: [...freeConnections, ...managedConnections] };
+}
+
+function isStudioManagedNode(node: Record<string, unknown>) {
+  return (node.metadata as Record<string, unknown> | undefined)?.studioManaged === true;
+}
+
+function preserveStudioManagedNode(existing: Record<string, unknown>, incoming: Record<string, unknown>) {
+  const position = incoming.position as { x?: unknown; y?: unknown } | undefined;
+  const width = Number(incoming.width);
+  const height = Number(incoming.height);
+  return {
+    ...existing,
+    ...(position && Number.isFinite(Number(position.x)) && Number.isFinite(Number(position.y)) ? { position: { x: Number(position.x), y: Number(position.y) } } : {}),
+    ...(Number.isFinite(width) && width > 0 ? { width } : {}),
+    ...(Number.isFinite(height) && height > 0 ? { height } : {}),
+  };
 }
 
 export async function mutateProject(

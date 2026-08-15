@@ -417,7 +417,10 @@ async function publishVideoProgress(projectId: string, configNodeId: string, out
 }
 
 async function mutateAndPublish(projectId: string, operations: CanvasOperation[], originClientId: string) {
-  const result = await applyCanvasOperations(projectId, operations);
+  // This runtime is the canonical internal execution path for both free Canvas
+  // nodes and Studio-projected nodes. Studio semantic writes remain blocked at
+  // the public command layer; only runtime status/result updates are allowed.
+  const result = await applyCanvasOperations(projectId, operations, undefined, { allowStudioManagedWrites: true });
   publishProjectUpdated(result.project, originClientId);
   return result;
 }

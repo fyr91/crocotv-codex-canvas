@@ -1,0 +1,124 @@
+import { applyCanvasOperations, type CanvasOperation } from "./canvas-commands";
+import { publishProjectUpdated } from "./canvas-events";
+import { createStudioProjectSchema, newStudioProjectState, parseStudioProjectState, updateStudioScriptSchema } from "./studio-schemas";
+import { studioMappingOperations } from "./studio-canvas-mapping";
+import { createProject, listProjects, readProject, trashProject } from "./storage";
+import type { StudioBackedProject, StudioProjectState } from "./studio-types";
+
+export async function createStudioProject(raw: unknown, originClientId = "studio-api") {
+  const input = createStudioProjectSchema.parse(raw);
+  const base = await createProject(input.title, input.id);
+  const state = {
+    ...newStudioProjectState(input.text, input.workflow_mode),
+    ...(input.series_id ? { seriesId: input.series_id } : {}),
+    ...(input.episode_number ? { episodeNumber: input.episode_number } : {}),
+  };
+  try {
+    const operations: CanvasOperation[] = [
+      { op: "set_studio_state", state },
+      ...studioMappingOperations({ projectId: String(base.id), state, nodes: [], connections: [] }),
+    ];
+    const result = await applyCanvasOperations(String(base.id), operations, Number(base.version), { allowStudioManagedWrites: true });
+    publishProjectUpdated(result.project, originClientId);
+    return studioProjectResponse(result.project as unknown as StudioBackedProject);
+  } catch (error) {
+    await trashProject(String(base.id)).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function updateStudioScript(projectId: string, raw: unknown, originClientId = "studio-api") {
+  const input = updateStudioScriptSchema.parse(raw);
+  return mutateStudioProject(projectId, (state) => ({ ...state, originalText: input.text }), { expectedVersion: input.expectedVersion, originClientId });
+}
+
+export async function mutateStudioProject(
+  projectId: string,
+  updater: (state: StudioProjectState, project: StudioBackedProject) => StudioProjectState | Promise<StudioProjectState>,
+  options: { expectedVersion?: number; originClientId?: string; title?: string } = {},
+) {
+  const project = asStudioProject(await readProject(projectId));
+  const state = parseStudioProjectState(await updater(structuredClone(project.studio), project));
+  const operations: CanvasOperation[] = [
+    ...(options.title ? [{ op: "rename_project", title: options.title } as CanvasOperation] : []),
+    { op: "set_studio_state", state },
+    ...studioMappingOperations({ projectId, state, nodes: project.nodes, connections: project.connections }),
+  ];
+  const result = await applyCanvasOperations(projectId, operations, options.expectedVersion ?? project.version, { allowStudioManagedWrites: true });
+  publishProjectUpdated(result.project, options.originClientId || "studio-api");
+  return studioProjectResponse(result.project as unknown as StudioBackedProject);
+}
+
+export async function getStudioProject(projectId: string) {
+  return studioProjectResponse(asStudioProject(await readProject(projectId)));
+}
+
+export async function getStudioBackedProject(projectId: string) {
+  return asStudioProject(await readProject(projectId));
+}
+
+export async function listStudioProjectResponses(options: { kind?: "episode" | "series" | "playground" } = {}) {
+  const projects = await listProjects();
+  const responses = await Promise.all(projects.map(async (summary) => {
+    try {
+      const project = asStudioProject(await readProject(String(summary!.id)));
+      if (options.kind && project.studio.projectKind !== options.kind) return null;
+      return studioProjectResponse(project);
+    } catch {
+      return null;
+    }
+  }));
+  return responses.filter((item): item is NonNullable<typeof item> => Boolean(item));
+}
+
+export async function deleteStudioProject(projectId: string) {
+  asStudioProject(await readProject(projectId));
+  await trashProject(projectId);
+}
+
+export function asStudioProject(value: unknown) {
+  const project = value as StudioBackedProject;
+  if (!project?.id || !project.studio || !Array.isArray(project.nodes) || !Array.isArray(project.connections)) throw new Error("Studio 项目不存在");
+  return { ...project, studio: parseStudioProjectState(project.studio) } as StudioBackedProject & { studio: StudioProjectState };
+}
+
+export function studioProjectResponse(project: StudioBackedProject) {
+  const studio = parseStudioProjectState(project.studio);
+  return {
+    id: project.id,
+    title: project.title,
+    original_text: studio.originalText,
+    workflow_mode: studio.workflowMode,
+    characters: studio.characters,
+    scenes: studio.scenes,
+    props: studio.props,
+    frames: [...studio.frames].sort((a, b) => a.order - b.order),
+    video_tasks: studio.videoTasks,
+    status: studio.status,
+    starred: studio.starred,
+    series_id: studio.seriesId,
+    episode_number: studio.episodeNumber,
+    aspect_ratio: studio.aspectRatio,
+    style_preset: studio.stylePreset,
+    style_prompt: studio.stylePrompt,
+    art_direction: studio.artDirection,
+    model_settings: studio.modelSettings,
+    prompt_config: studio.promptConfig,
+    merged_video_url: studio.assembly.mergedVideoUrl,
+    bgm_url: studio.assembly.bgmUrl,
+    mix_settings: studio.assembly.mixSettings,
+    next_hook: studio.nextHook,
+    last_episode_summary: studio.lastEpisodeSummary,
+    created_at: timestamp(project.createdAt),
+    updated_at: timestamp(project.updatedAt),
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+    canvas_project_id: project.id,
+    project_version: project.version,
+  };
+}
+
+function timestamp(value: string) {
+  const milliseconds = Date.parse(String(value || ""));
+  return Number.isFinite(milliseconds) ? milliseconds / 1000 : 0;
+}

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mutateProject } from "./storage";
+import { parseStudioProjectState } from "./studio-schemas";
+import type { StudioProjectState } from "./studio-types";
 
 type Position = { x: number; y: number };
 type CanvasNode = {
@@ -22,12 +24,17 @@ export type CanvasOperation =
   | { op: "disconnect"; connectionId?: string; from?: string; to?: string }
   | { op: "rename_project"; title: string }
   | { op: "set_viewport"; viewport: { x: number; y: number; k: number } }
+  | { op: "set_studio_state"; state: StudioProjectState }
   | { op: "layout_shot_columns"; factoryRunId: string; shotIds?: string[]; origin?: Position; groupPadding?: number; nodeGap?: number; sectionGap?: number; columnGap?: number; preserveManualLayout?: boolean };
+
+type ApplyCanvasOperationOptions = {
+  allowStudioManagedWrites?: boolean;
+};
 
 const allowedNodeTypes = new Set(["text", "image", "video", "audio", "music", "config", "split", "group", "comment"]);
 const allowedConnectionPorts = new Set(["node", "workflow-input", "workflow-output"]);
 
-export async function applyCanvasOperations(projectId: string, operations: CanvasOperation[], expectedVersion?: number) {
+export async function applyCanvasOperations(projectId: string, operations: CanvasOperation[], expectedVersion?: number, options: ApplyCanvasOperationOptions = {}) {
   if (!operations.length) throw new Error("至少需要一个画布操作");
   const createdRefs: Record<string, string> = {};
   const project = await mutateProject(projectId, (current) => {
@@ -35,10 +42,12 @@ export async function applyCanvasOperations(projectId: string, operations: Canva
     let connections = cloneArray<CanvasConnection>(current.connections);
     let title = cleanTitle(current.title) || "未命名画布";
     let viewport = validViewport(current.viewport) || { x: 0, y: 0, k: 1 };
+    let studio = current.studio;
 
     for (const operation of operations) {
       if (operation.op === "add_node") {
         if (!allowedNodeTypes.has(operation.node.type)) throw new Error(`不支持的节点类型：${operation.node.type}`);
+        if (operation.node.metadata?.studioManaged && !options.allowStudioManagedWrites) throw new Error("Studio 托管节点只能通过 Studio 结构化命令创建");
         const id = cleanId(operation.node.id) || randomUUID();
         if (nodes.some((node) => node.id === id)) throw new Error(`节点已存在：${id}`);
         const defaults = nodeDefaults(operation.node.type);
@@ -64,6 +73,9 @@ export async function applyCanvasOperations(projectId: string, operations: Canva
         const index = nodes.findIndex((node) => node.id === nodeId);
         if (index < 0) throw new Error(`节点不存在：${nodeId}`);
         const currentNode = nodes[index];
+        if (isStudioManaged(currentNode) && !options.allowStudioManagedWrites && !isStudioVisualPatch(operation.patch)) {
+          throw new Error(`Studio 托管节点 ${nodeId} 的内容和语义只能通过 Studio 结构化命令修改`);
+        }
         nodes[index] = {
           ...currentNode,
           ...(operation.patch.title != null ? { title: cleanTitle(operation.patch.title) || currentNode.title } : {}),
@@ -78,6 +90,7 @@ export async function applyCanvasOperations(projectId: string, operations: Canva
       if (operation.op === "delete_node") {
         const nodeId = resolveNodeId(operation.nodeId, createdRefs);
         if (!nodes.some((node) => node.id === nodeId)) throw new Error(`节点不存在：${nodeId}`);
+        if (isStudioManaged(nodes.find((node) => node.id === nodeId)) && !options.allowStudioManagedWrites) throw new Error(`Studio 托管节点 ${nodeId} 不能直接删除`);
         nodes = nodes.filter((node) => node.id !== nodeId);
         connections = connections.filter((connection) => connection.fromNodeId !== nodeId && connection.toNodeId !== nodeId);
         continue;
@@ -89,6 +102,9 @@ export async function applyCanvasOperations(projectId: string, operations: Canva
         if (operation.toPort && !allowedConnectionPorts.has(operation.toPort)) throw new Error(`不支持的终点端口：${operation.toPort}`);
         if (!nodes.some((node) => node.id === fromNodeId)) throw new Error(`起点节点不存在：${fromNodeId}`);
         if (!nodes.some((node) => node.id === toNodeId)) throw new Error(`终点节点不存在：${toNodeId}`);
+        if (!options.allowStudioManagedWrites && [fromNodeId, toNodeId].some((nodeId) => isStudioManaged(nodes.find((node) => node.id === nodeId)))) {
+          throw new Error("Studio 托管节点的连接只能通过 Studio 结构化命令修改");
+        }
         if (fromNodeId === toNodeId) throw new Error("节点不能连接到自身");
         const duplicate = connections.some((connection) => connection.fromNodeId === fromNodeId && connection.toNodeId === toNodeId && connection.fromPort === operation.fromPort && connection.toPort === operation.toPort);
         if (!duplicate) {
@@ -102,6 +118,12 @@ export async function applyCanvasOperations(projectId: string, operations: Canva
         const before = connections.length;
         const from = operation.from ? resolveNodeId(operation.from, createdRefs) : undefined;
         const to = operation.to ? resolveNodeId(operation.to, createdRefs) : undefined;
+        const selectedConnections = connections.filter((connection) => operation.connectionId
+          ? connection.id === operation.connectionId
+          : Boolean(from && to && connection.fromNodeId === from && connection.toNodeId === to));
+        if (!options.allowStudioManagedWrites && selectedConnections.some((connection) => [connection.fromNodeId, connection.toNodeId].some((nodeId) => isStudioManaged(nodes.find((node) => node.id === nodeId))))) {
+          throw new Error("Studio 托管节点的连接只能通过 Studio 结构化命令修改");
+        }
         connections = connections.filter((connection) => operation.connectionId
           ? connection.id !== operation.connectionId
           : !(from && to && connection.fromNodeId === from && connection.toNodeId === to));
@@ -112,16 +134,25 @@ export async function applyCanvasOperations(projectId: string, operations: Canva
         title = cleanTitle(operation.title) || title;
         continue;
       }
+      if (operation.op === "set_studio_state") {
+        if (!options.allowStudioManagedWrites) throw new Error("Studio state 只能通过 Studio 结构化命令修改");
+        studio = parseStudioProjectState(operation.state);
+        continue;
+      }
       if (operation.op === "set_viewport") viewport = validViewport(operation.viewport) || viewport;
       if (operation.op === "layout_shot_columns") nodes = layoutShotColumns(nodes, operation);
     }
 
-    return { ...current, title, viewport, nodes, connections };
+    return { ...current, title, viewport, nodes, connections, ...(studio ? { studio } : {}) };
   }, expectedVersion);
   return { project, createdRefs };
 }
 
 function resolveNodeId(value: string, refs: Record<string, string>) { return refs[value] || value; }
+function isStudioManaged(node: CanvasNode | undefined) { return node?.metadata?.studioManaged === true; }
+function isStudioVisualPatch(patch: Extract<CanvasOperation, { op: "update_node" }>["patch"]) {
+  return Object.keys(patch).every((key) => key === "position" || key === "width" || key === "height");
+}
 function cleanId(value: unknown) { const text = String(value || "").trim(); return /^[A-Za-z0-9_-]{1,80}$/.test(text) ? text : ""; }
 function cleanTitle(value: unknown) { return String(value || "").trim().slice(0, 180); }
 function positiveNumber(value: unknown) { const number = Number(value); return Number.isFinite(number) && number > 0 ? number : undefined; }

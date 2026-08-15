@@ -57,7 +57,7 @@ export async function useCanvasVideoFrames(input: { projectId: string; videoNode
     created.push({ role, nodeId, resourceId: frameResource.id, time });
   }
   if (shotLayout.factoryRunId) operations.push({ op: "layout_shot_columns", factoryRunId: shotLayout.factoryRunId, preserveManualLayout: true });
-  const result = await applyCanvasOperations(input.projectId, operations);
+  const result = await applyCanvasOperations(input.projectId, operations, undefined, { allowStudioManagedWrites: true });
   publishProjectUpdated(result.project, input.originClientId);
   return { projectId: input.projectId, videoNodeId: video.id, duration, frames: created, projectVersion: result.project.version };
 }
@@ -87,12 +87,12 @@ export async function recordCanvasVisualReview(input: { projectId: string; video
     : { op: "add_node", node: { id: nodeId, type: "comment", title: `视觉验收 · ${video.title}`, position: { x: video.position.x + video.width + 500, y: video.position.y }, width: 420, height: 360, metadata } };
   const operations: CanvasOperation[] = [operation];
   if (shotLayout.factoryRunId) operations.push({ op: "layout_shot_columns", factoryRunId: shotLayout.factoryRunId, preserveManualLayout: true });
-  const result = await applyCanvasOperations(input.projectId, operations);
+  const result = await applyCanvasOperations(input.projectId, operations, undefined, { allowStudioManagedWrites: true });
   publishProjectUpdated(result.project, input.originClientId);
   return { projectId: input.projectId, videoNodeId: video.id, resultNodeId: nodeId, verdict: input.verdict, projectVersion: result.project.version };
 }
 
-export async function mergeCanvasVideos(input: { projectId: string; videoNodeIds: string[]; title?: string; requireVerification?: boolean; originClientId: string }) {
+export async function mergeCanvasVideos(input: { projectId: string; videoNodeIds: string[]; title?: string; requireVerification?: boolean; bgmResourceId?: string; dialogueVolume?: number; bgmVolume?: number; originClientId: string }) {
   const project = asProject(await readProject(input.projectId));
   const ids = [...new Set(input.videoNodeIds.map(String).filter(Boolean))];
   if (ids.length < 2) throw new Error("合片至少需要两个视频节点");
@@ -127,18 +127,72 @@ export async function mergeCanvasVideos(input: { projectId: string; videoNodeIds
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", concat, "-c", "copy", "-movflags", "+faststart", output]);
   await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-i", output, "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"]);
   const [stagedAudioSha256, mergedAudioSha256] = await Promise.all([
-    hashDecodedAudio(["-f", "concat", "-safe", "0", "-i", concat]),
-    hashDecodedAudio(["-i", output]),
+    hashAudioPackets(["-f", "concat", "-safe", "0", "-i", concat]),
+    hashAudioPackets(["-i", output]),
   ]);
   if (stagedAudioSha256 !== mergedAudioSha256) throw new Error("安全合片失败：拼接前后 PCM 音频哈希不一致，拒绝保存");
-  const stored = await writeGenerated("canvas", "mp4", await readFile(output));
-  const resource = await addResource({ id: stored.id, name: `${input.title || "完整视频"}.mp4`, type: "video", mimeType: "video/mp4", size: await fileSize(stored.target), fileName: stored.fileName, createdAt: new Date().toISOString(), source: "canvas", metadata: { artifactType: "merged-video", sourceVideoNodeIds: ids, sourceVideoSha256: sourceSha256, stagedAudioSha256, mergedAudioSha256, width: first.width, height: first.height } });
+  let finalOutput = output;
+  let bgmMetadata: Record<string, unknown> = {};
+  if (input.bgmResourceId) {
+    const bgm = await resourceById(input.bgmResourceId);
+    if (!bgm || bgm.type !== "audio") throw new Error("所选 BGM 不是可用的本地音频资源");
+    const mixed = path.join(work, "mixed.mp4");
+    const dialogueVolume = normalizedVolume(input.dialogueVolume, 1);
+    const bgmVolume = normalizedVolume(input.bgmVolume, 0.35);
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", output, "-stream_loop", "-1", "-i", safeResourcePath(bgm.fileName), "-filter_complex", `[0:a]volume=${dialogueVolume.toFixed(3)}[dialogue];[1:a]volume=${bgmVolume.toFixed(3)}[bgm];[dialogue][bgm]amix=inputs=2:duration=first:dropout_transition=2[mixed]`, "-map", "0:v:0", "-map", "[mixed]", "-c:v", "copy", "-c:a", "aac", "-ar", "32000", "-ac", "2", "-b:a", "128k", "-shortest", "-movflags", "+faststart", mixed]);
+    await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-i", mixed, "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"]);
+    finalOutput = mixed;
+    bgmMetadata = { bgmResourceId: bgm.id, dialogueVolume, bgmVolume };
+  }
+  const stored = await writeGenerated("canvas", "mp4", await readFile(finalOutput));
+  const resource = await addResource({ id: stored.id, name: `${input.title || "完整视频"}.mp4`, type: "video", mimeType: "video/mp4", size: await fileSize(stored.target), fileName: stored.fileName, createdAt: new Date().toISOString(), source: "canvas", metadata: { artifactType: "merged-video", sourceVideoNodeIds: ids, sourceVideoSha256: sourceSha256, stagedAudioSha256, mergedAudioSha256, width: first.width, height: first.height, ...bgmMetadata } });
   const nodeId = randomUUID();
   const right = Math.max(...videos.map((video) => video.position.x + video.width));
-  const operations: CanvasOperation[] = [{ op: "add_node", node: { id: nodeId, type: "video", title: input.title || "完整视频", position: { x: right + 128, y: Math.min(...videos.map((video) => video.position.y)) }, width: 400, height: 300, metadata: { content: resource.url, storageKey: resource.id, mimeType: resource.mimeType, bytes: resource.size, status: "success", generationState: "ready", artifactType: "merged-video", sourceVideoNodeIds: ids, sourceVideoSha256: sourceSha256, stagedAudioSha256, mergedAudioSha256 } } }, ...ids.map((id): CanvasOperation => ({ op: "connect", from: id, to: nodeId }))];
-  const result = await applyCanvasOperations(input.projectId, operations);
+  const operations: CanvasOperation[] = [{ op: "add_node", node: { id: nodeId, type: "video", title: input.title || "完整视频", position: { x: right + 128, y: Math.min(...videos.map((video) => video.position.y)) }, width: 400, height: 300, metadata: { content: resource.url, storageKey: resource.id, mimeType: resource.mimeType, bytes: resource.size, status: "success", generationState: "ready", artifactType: "merged-video", sourceVideoNodeIds: ids, sourceVideoSha256: sourceSha256, stagedAudioSha256, mergedAudioSha256, ...bgmMetadata } } }, ...ids.map((id): CanvasOperation => ({ op: "connect", from: id, to: nodeId }))];
+  const result = await applyCanvasOperations(input.projectId, operations, undefined, { allowStudioManagedWrites: true });
   publishProjectUpdated(result.project, input.originClientId);
   return { projectId: input.projectId, nodeId, resourceId: resource.id, sourceVideoNodeIds: ids, projectVersion: result.project.version };
+}
+
+export async function dubCanvasVideo(input: { projectId: string; videoNodeId: string; audioNodeId: string; offsetMs?: number; title?: string; targetNodeId?: string; originClientId: string }) {
+  const project = asProject(await readProject(input.projectId));
+  const video = requiredVideo(project, input.videoNodeId);
+  const audio = project.nodes.find((node) => node.id === input.audioNodeId);
+  if (!audio || audio.type !== "audio") throw new Error(`音频节点不存在：${input.audioNodeId}`);
+  const [videoResource, audioResource] = await Promise.all([requiredNodeResource(video), requiredNodeResource(audio)]);
+  const videoPath = safeResourcePath(videoResource.fileName);
+  const audioPath = safeResourcePath(audioResource.fileName);
+  const work = path.join(dataDir, "runtime", "video-dub", randomUUID());
+  await mkdir(work, { recursive: true });
+  const output = path.join(work, "dubbed.mp4");
+  const offsetSeconds = Math.max(-60, Math.min(60, Number(input.offsetMs || 0) / 1000));
+  const args = ["-y", "-hide_banner", "-loglevel", "error", "-i", videoPath];
+  if (offsetSeconds >= 0) args.push("-itsoffset", offsetSeconds.toFixed(3), "-i", audioPath);
+  else args.push("-ss", Math.abs(offsetSeconds).toFixed(3), "-i", audioPath);
+  args.push("-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-ar", "32000", "-ac", "2", "-b:a", "128k", "-shortest", "-movflags", "+faststart", output);
+  await run("ffmpeg", args);
+  await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-i", output, "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"]);
+  const stored = await writeGenerated("canvas", "mp4", await readFile(output));
+  const resource = await addResource({
+    id: stored.id,
+    name: `${input.title || `${video.title} · 配音`}.mp4`,
+    type: "video",
+    mimeType: "video/mp4",
+    size: await fileSize(stored.target),
+    fileName: stored.fileName,
+    createdAt: new Date().toISOString(),
+    source: "canvas",
+    metadata: { artifactType: "studio-dubbed-video", sourceVideoNodeId: video.id, sourceAudioNodeId: audio.id, offsetMs: Math.round(offsetSeconds * 1000) },
+  });
+  const nodeId = String(input.targetNodeId || randomUUID());
+  const metadata = { content: resource.url, storageKey: resource.id, mimeType: resource.mimeType, bytes: resource.size, status: "success", generationState: "ready", artifactType: "studio-dubbed-video", sourceVideoNodeId: video.id, sourceAudioNodeId: audio.id, offsetMs: Math.round(offsetSeconds * 1000) };
+  const existing = project.nodes.find((node) => node.id === nodeId);
+  const operation: CanvasOperation = existing
+    ? { op: "update_node", nodeId, patch: { title: input.title || `${video.title} · 配音`, metadata } }
+    : { op: "add_node", node: { id: nodeId, type: "video", title: input.title || `${video.title} · 配音`, position: { x: video.position.x + video.width + 96, y: video.position.y }, width: 400, height: 300, metadata } };
+  const result = await applyCanvasOperations(input.projectId, [operation, { op: "connect", from: video.id, to: nodeId }, { op: "connect", from: audio.id, to: nodeId }], undefined, { allowStudioManagedWrites: true });
+  publishProjectUpdated(result.project, input.originClientId);
+  return { projectId: input.projectId, nodeId, resourceId: resource.id, url: resource.url, offsetMs: Math.round(offsetSeconds * 1000), projectVersion: result.project.version };
 }
 
 function asProject(value: unknown) { const project = value as Project; if (!Array.isArray(project?.nodes) || !Array.isArray(project?.connections)) throw new Error("画布数据结构无效"); return project; }
@@ -152,9 +206,10 @@ function shotLayoutMetadata(node: Node) {
   return { factoryRunId, child: (layoutOrder: number) => factoryRunId && groupId && shotId ? { factoryRunId, groupId, shotId, layoutManaged: true, layoutSection: "verification", layoutOrder } : {} };
 }
 function frameTime(role: FrameRole, duration: number) { if (role === "first") return Math.min(0.25, duration * 0.1); if (role === "middle") return duration * 0.5; return Math.max(0, duration - Math.min(0.3, duration * 0.1)); }
+function normalizedVolume(value: unknown, fallback: number) { const numeric = Number(value); if (!Number.isFinite(numeric)) return fallback; return Math.max(0, Math.min(2, numeric > 2 ? numeric / 100 : numeric)); }
 async function probeDuration(input: string) { const value = Number((await capture("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", input])).trim()); if (!(value > 0)) throw new Error("无法读取视频时长"); return value; }
 async function probeVideo(input: string) { const raw = JSON.parse(await capture("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type,width,height:format=duration", "-of", "json", input])); const video = raw.streams?.find((item: { codec_type?: string }) => item.codec_type === "video"); if (!video?.width || !video?.height) throw new Error("无法读取视频规格"); return { width: Number(video.width), height: Number(video.height), duration: Number(raw.format?.duration || 0), hasAudio: Boolean(raw.streams?.some((item: { codec_type?: string }) => item.codec_type === "audio")) }; }
 async function run(command: string, args: string[]) { await new Promise<void>((resolve, reject) => { let error = ""; const child = spawn(process.env.FFMPEG_PATH && command === "ffmpeg" ? process.env.FFMPEG_PATH : command, args, { stdio: ["ignore", "ignore", "pipe"] }); child.stderr.setEncoding("utf8"); child.stderr.on("data", (chunk) => error += chunk); child.once("error", reject); child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command} 失败：${error.trim().slice(-1000)}`))); }); }
-async function hashDecodedAudio(inputArgs: string[]) { return new Promise<string>((resolve, reject) => { const hash = createHash("sha256"); let error = ""; const command = process.env.FFMPEG_PATH || "ffmpeg"; const child = spawn(command, ["-hide_banner", "-loglevel", "error", ...inputArgs, "-map", "0:a:0", "-ac", "2", "-ar", "32000", "-c:a", "pcm_s16le", "-f", "s16le", "-"], { stdio: ["ignore", "pipe", "pipe"] }); child.stdout.on("data", (chunk) => hash.update(chunk)); child.stderr.setEncoding("utf8"); child.stderr.on("data", (chunk) => error += chunk); child.once("error", reject); child.once("exit", (code) => code === 0 ? resolve(hash.digest("hex")) : reject(new Error(`音频哈希计算失败：${error.trim()}`))); }); }
+async function hashAudioPackets(inputArgs: string[]) { const output = await capture(process.env.FFMPEG_PATH || "ffmpeg", ["-hide_banner", "-loglevel", "error", ...inputArgs, "-map", "0:a:0", "-c:a", "copy", "-f", "hash", "-hash", "sha256", "-"]); const match = output.match(/SHA256=([a-f0-9]{64})/i); if (!match) throw new Error("音频包哈希计算失败"); return match[1].toLowerCase(); }
 async function sha256File(filePath: string) { return createHash("sha256").update(await readFile(filePath)).digest("hex"); }
 async function capture(command: string, args: string[]) { return new Promise<string>((resolve, reject) => { let output = "", error = ""; const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] }); child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8"); child.stdout.on("data", (chunk) => output += chunk); child.stderr.on("data", (chunk) => error += chunk); child.once("error", reject); child.once("exit", (code) => code === 0 ? resolve(output) : reject(new Error(`${command} 失败：${error.trim()}`))); }); }

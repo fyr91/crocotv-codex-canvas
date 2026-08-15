@@ -32313,15 +32313,21 @@ async function api(endpoint, input = {}) {
 }
 async function ensureLocalService(forceStart = false) {
   const status = await serviceStatus();
-  if (status.api && status.web) return { ...status, started: false };
-  if (!forceStart && status.api) return { ...status, started: false };
+  if (status.api && status.web && status.studio) return { ...status, started: false };
   const runtimeDir = path2.join(workspaceRoot, "data", "runtime");
   mkdirSync(runtimeDir, { recursive: true });
   const logPath = path2.join(runtimeDir, "crocotv.log");
   const log = openSync(logPath, "a");
+  const scripts = [
+    ...!status.api ? ["dev:server"] : [],
+    ...!status.web ? ["dev:canvas"] : [],
+    ...!status.studio ? ["dev:studio"] : []
+  ];
   try {
-    const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev"], { cwd: workspaceRoot, detached: true, stdio: ["ignore", log, log], env: process.env });
-    child.unref();
+    for (const script of scripts) {
+      const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["run", script], { cwd: workspaceRoot, detached: true, stdio: ["ignore", log, log], env: process.env });
+      child.unref();
+    }
   } finally {
     closeSync(log);
   }
@@ -32329,17 +32335,19 @@ async function ensureLocalService(forceStart = false) {
   while (Date.now() < deadline) {
     await wait(500);
     const current = await serviceStatus();
-    if (current.api && current.web) return { ...current, started: true, logPath };
+    if (current.api && current.web && current.studio) return { ...current, started: true, scripts, logPath };
   }
-  throw new Error(`CrocoTV \u542F\u52A8\u8D85\u65F6\uFF0C\u8BF7\u67E5\u770B ${logPath}`);
+  throw new Error(`CrocoTV \u5B8C\u6574\u5957\u4EF6\u542F\u52A8\u8D85\u65F6\uFF08\u7F3A\u5931\uFF1A${scripts.join("\u3001") || "\u672A\u77E5"}\uFF09\uFF0C\u8BF7\u67E5\u770B ${logPath}`);
 }
 async function serviceStatus() {
   const [app, webReady] = await Promise.all([readStatus(`${apiOrigin}/api/status`), reachable(webOrigin)]);
   return {
     api: Boolean(app),
     web: webReady,
+    studio: await reachable(studioOrigin),
     apiOrigin,
     webOrigin,
+    studioOrigin,
     app,
     pluginVersion: bundleManifest.pluginVersion,
     mcpVersion: bundleManifest.mcpVersion,
@@ -32356,7 +32364,7 @@ async function readStatus(url2) {
 }
 async function reachable(url2) {
   try {
-    const response = await fetch(url2, { signal: AbortSignal.timeout(1500) });
+    const response = await fetch(url2, { signal: AbortSignal.timeout(1e4) });
     return response.ok;
   } catch {
     return false;
@@ -32394,7 +32402,7 @@ function findPluginRoot(start) {
     current = parent;
   }
 }
-var moduleDirectory, pluginRoot, bundleManifest, workspaceRoot, apiOrigin, webOrigin, mcpClientId, server, positionSchema, metadataSchema, generationParamsSchema, connectionPortSchema, generationCapabilitySchema, generationTaskSchema, nodeSchema, operationSchema, shotColumnLayoutSchema;
+var moduleDirectory, pluginRoot, bundleManifest, workspaceRoot, apiOrigin, webOrigin, studioOrigin, mcpClientId, server, positionSchema, metadataSchema, generationParamsSchema, connectionPortSchema, generationCapabilitySchema, generationTaskSchema, nodeSchema, operationSchema, shotColumnLayoutSchema, studioEntitySchema, studioFrameSchema;
 var init_server3 = __esm({
   async "plugins/croco-video-factory/mcp/server.ts"() {
     "use strict";
@@ -32407,6 +32415,7 @@ var init_server3 = __esm({
     workspaceRoot = path2.resolve(process.env.CROCOTV_HOME || process.cwd());
     apiOrigin = process.env.CROCO_LOCAL_API_ORIGIN || "http://127.0.0.1:4399";
     webOrigin = process.env.CROCO_LOCAL_WEB_ORIGIN || "http://localhost:3000";
+    studioOrigin = process.env.CROCO_LOCAL_STUDIO_ORIGIN || "http://localhost:3010";
     mcpClientId = `mcp-${process.pid}`;
     server = new McpServer({ name: "crocotv", version: bundleManifest.mcpVersion }, {
       instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic multi-node changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Use canvas_create_project when a new canvas is requested. For new Canvas-provider generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. When Codex built-in ImageGen has already produced a GPT image, use canvas_place_imagegen_result to import it and preserve Prompt/Reference provenance without fabricating a provider Config. Generated or imported files must enter the local resource library before being placed on a canvas."
@@ -32460,6 +32469,21 @@ var init_server3 = __esm({
       columnGap: external_exports.number().min(48).max(400).optional(),
       preserveManualLayout: external_exports.boolean().default(true)
     });
+    studioEntitySchema = external_exports.object({
+      id: external_exports.string().min(1).max(80).optional(),
+      name: external_exports.string().min(1).max(180),
+      description: external_exports.string().max(1e5).default(""),
+      attributes: external_exports.record(external_exports.string(), external_exports.unknown()).optional()
+    });
+    studioFrameSchema = external_exports.object({
+      id: external_exports.string().min(1).max(80).optional(),
+      title: external_exports.string().min(1).max(180).optional(),
+      prompt: external_exports.string().max(1e5),
+      sceneId: external_exports.string().min(1).max(80).optional(),
+      duration: external_exports.number().min(1).max(30).optional(),
+      dialogue: external_exports.string().max(2e4).optional(),
+      characterIds: external_exports.array(external_exports.string().min(1).max(80)).max(100).optional()
+    });
     server.registerTool("canvas_start_local_service", {
       description: "Start the local CrocoTV API and web app if they are not already running. Safe to call repeatedly.",
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
@@ -32475,6 +32499,103 @@ var init_server3 = __esm({
     }, async ({ title }) => {
       const project = await api("/api/projects", { method: "POST", body: { title } });
       return toolResult({ project, canvasUrl: `${webOrigin}/canvas/${project.id}` });
+    });
+    server.registerTool("studio_create_project", {
+      description: "Create one Studio-backed Croco project. The Studio structured state and its managed Canvas Script nodes share the same project ID, atomic version, storage folder, and live update stream.",
+      inputSchema: {
+        title: external_exports.string().min(1).max(180),
+        text: external_exports.string().max(1e6).default(""),
+        workflowMode: external_exports.enum(["r2v", "i2v_legacy"]).default("r2v")
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+    }, async ({ title, text, workflowMode }) => {
+      const project = await api("/api/studio/projects", { method: "POST", body: { title, text, workflow_mode: workflowMode } });
+      return toolResult({ project, canvasUrl: `${webOrigin}/canvas/${project.id}`, studioUrl: `${studioOrigin}/#/project/${project.id}` });
+    });
+    server.registerTool("studio_get_project", {
+      description: "Read the structured Studio projection for a Studio-backed Canvas project, including its shared project version.",
+      inputSchema: { projectId: external_exports.string().uuid() },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    }, async ({ projectId }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}`)));
+    server.registerTool("studio_set_script", {
+      description: "Replace the Studio source script and atomically update its stable managed Canvas Text node without touching free Canvas nodes.",
+      inputSchema: { projectId: external_exports.string().uuid(), text: external_exports.string().max(1e6), expectedVersion: external_exports.number().int().positive().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+    }, async ({ projectId, text, expectedVersion }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/text`, { method: "PUT", body: { text, expectedVersion } })));
+    server.registerTool("studio_set_art_direction", {
+      description: "Atomically save the selected Studio Art Direction and update its managed Canvas projection. The style remains structured Studio state, not free-form Canvas metadata.",
+      inputSchema: {
+        projectId: external_exports.string().uuid(),
+        selectedStyleId: external_exports.string().min(1).max(180),
+        styleConfig: external_exports.record(external_exports.string(), external_exports.unknown()),
+        customStyles: external_exports.array(external_exports.record(external_exports.string(), external_exports.unknown())).max(100).default([]),
+        recommendations: external_exports.array(external_exports.record(external_exports.string(), external_exports.unknown())).max(100).default([])
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+    }, async ({ projectId, selectedStyleId, styleConfig, customStyles, recommendations }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/art_direction/save`, { method: "POST", body: { selected_style_id: selectedStyleId, style_config: styleConfig, custom_styles: customStyles, ai_recommendations: recommendations } })));
+    server.registerTool("studio_upsert_asset", {
+      description: "Create or structurally update one Studio character, scene, or prop. Its deterministic managed Canvas nodes and stage connections are updated atomically.",
+      inputSchema: { projectId: external_exports.string().uuid(), assetType: external_exports.enum(["character", "scene", "prop"]), asset: studioEntitySchema },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
+    }, async ({ projectId, assetType, asset }) => {
+      const plural = assetType === "character" ? "characters" : assetType === "scene" ? "scenes" : "props";
+      const path3 = asset.id ? `/api/studio/projects/${encodeURIComponent(projectId)}/assets/${assetType}/${encodeURIComponent(asset.id)}` : `/api/studio/projects/${encodeURIComponent(projectId)}/${plural}`;
+      return toolResult(await api(path3, { method: asset.id ? "PUT" : "POST", body: { name: asset.name, description: asset.description, ...asset.attributes || {} } }));
+    });
+    server.registerTool("studio_set_storyboard", {
+      description: "Atomically replace the structured Studio storyboard and project it into deterministic managed Canvas frame/config nodes while preserving free Canvas nodes.",
+      inputSchema: { projectId: external_exports.string().uuid(), frames: external_exports.array(studioFrameSchema).max(2e3) },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+    }, async ({ projectId, frames }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/storyboard`, { method: "PUT", body: { frames: frames.map((frame, order) => ({ id: frame.id, title: frame.title || `\u955C\u5934 ${order + 1}`, prompt: frame.prompt, scene_id: frame.sceneId, duration: frame.duration, dialogue: frame.dialogue, character_ids: frame.characterIds, order })) } })));
+    server.registerTool("studio_run_stage", {
+      description: "Run one high-level Studio stage through Croco Canvas generation-module nodes and the shared runtime. Generation calls may use configured external providers and can incur cost. Read the project after each stage before deciding the next one.",
+      inputSchema: { projectId: external_exports.string().uuid(), stage: external_exports.enum(["extract_entities", "analyze_art_direction", "analyze_storyboard", "generate_assets", "render_storyboard", "generate_videos", "generate_audio", "merge"]) },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
+    }, async ({ projectId, stage }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/run-stage`, { method: "POST", body: { stage } })));
+    server.registerTool("studio_generate_asset_video", {
+      description: "Generate a Cast character/scene/prop motion-reference video through the shared Canvas H3 runtime. This can call the configured external video provider and incur cost.",
+      inputSchema: {
+        projectId: external_exports.string().uuid(),
+        assetType: external_exports.enum(["character", "scene", "prop"]),
+        assetId: external_exports.string().min(1).max(80),
+        prompt: external_exports.string().max(2e4).optional(),
+        duration: external_exports.number().int().min(3).max(15).default(5)
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
+    }, async ({ projectId, assetType, assetId, prompt, duration: duration3 }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/assets/generate_motion_ref`, { method: "POST", body: { asset_type: assetType, asset_id: assetId, prompt, duration: duration3, batch_size: 1 } })));
+    server.registerTool("studio_control_workflow", {
+      description: "Control local Studio storyboard and assembly decisions without UI clicks: select a take, extract a last frame, preview/apply/revert dialogue dub, choose local BGM and mix levels, or merge the project.",
+      inputSchema: {
+        projectId: external_exports.string().uuid(),
+        action: external_exports.enum(["select_video", "auto_select_video", "extract_last_frame", "preview_dub", "apply_dub", "revert_dub", "set_audio_mix", "merge"]),
+        frameId: external_exports.string().min(1).max(80).optional(),
+        videoTaskId: external_exports.string().min(1).max(80).optional(),
+        offsetMs: external_exports.number().int().min(-6e4).max(6e4).default(0),
+        bgmResourceId: external_exports.string().min(1).max(80).nullable().optional(),
+        dialogueVolume: external_exports.number().min(0).max(200).optional(),
+        bgmVolume: external_exports.number().min(0).max(200).optional(),
+        sfxVolume: external_exports.number().min(0).max(200).optional()
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
+    }, async ({ projectId, action, frameId, videoTaskId, offsetMs, bgmResourceId, dialogueVolume, bgmVolume, sfxVolume }) => {
+      const project = encodeURIComponent(projectId);
+      const frame = frameId ? encodeURIComponent(frameId) : "";
+      const requireFrame = () => {
+        if (!frame) throw new Error(`${action} \u9700\u8981 frameId`);
+        return frame;
+      };
+      const requireTask = () => {
+        if (!videoTaskId) throw new Error(`${action} \u9700\u8981 videoTaskId`);
+        return videoTaskId;
+      };
+      if (action === "select_video") return toolResult(await api(`/api/studio/projects/${project}/frames/${requireFrame()}/select_video`, { method: "POST", body: { video_id: requireTask() } }));
+      if (action === "auto_select_video") return toolResult(await api(`/api/studio/projects/${project}/frames/${requireFrame()}/auto_select_latest_video`, { method: "POST", body: {} }));
+      if (action === "extract_last_frame") return toolResult(await api(`/api/studio/projects/${project}/frames/${requireFrame()}/extract_last_frame`, { method: "POST", body: { video_task_id: requireTask() } }));
+      if (action === "preview_dub") return toolResult(await api(`/api/studio/projects/${project}/frames/${requireFrame()}/dub/preview`, { method: "POST", body: { video_task_id: requireTask(), offset_ms: offsetMs } }));
+      if (action === "apply_dub") return toolResult(await api(`/api/studio/projects/${project}/frames/${requireFrame()}/dub/apply`, { method: "POST", body: {} }));
+      if (action === "revert_dub") return toolResult(await api(`/api/studio/projects/${project}/frames/${requireFrame()}/dub`, { method: "DELETE" }));
+      if (action === "set_audio_mix") return toolResult(await api(`/api/studio/projects/${project}/audio_mix`, { method: "PUT", body: { bgm_url: bgmResourceId ? `/files/by-id/${bgmResourceId}` : bgmResourceId, dialogue_volume: dialogueVolume, bgm_volume: bgmVolume, sfx_volume: sfxVolume } }));
+      return toolResult(await api(`/api/studio/projects/${project}/merge`, { method: "POST", body: {} }));
     });
     server.registerTool("canvas_list_projects", {
       description: "List all local CrocoTV canvases with IDs, names, update times, and node counts.",
