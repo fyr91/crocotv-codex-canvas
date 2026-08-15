@@ -81,6 +81,39 @@ export type StudioAssemblyState = {
   mixSettings?: Record<string, number>;
 };
 
+export type StudioPromptBindingSource = "builtin" | "legacy-studio-migration";
+
+export type StudioPromptBinding = {
+  templateKey: string;
+  templateVersion?: string;
+  source: StudioPromptBindingSource;
+};
+
+export type StudioProjectPromptVersion = {
+  templateKey: string;
+  templateVersion: string;
+  systemPrompt: string;
+  systemPromptSha256: string;
+  source: "legacy-studio-migration";
+  createdAt: string;
+};
+
+export type StudioGenerationExecution = {
+  id: string;
+  operation: string;
+  templateKey: string;
+  templateVersion: string;
+  systemPromptSha256: string;
+  systemPromptNodeIds: string[];
+  model: string;
+  sourceNodeIds: string[];
+  imageResourceIds: string[];
+  videoResourceIds: string[];
+  audioResourceIds: string[];
+  outputNodeIds: string[];
+  createdAt: string;
+};
+
 export type StudioProjectState = {
   schemaVersion: typeof STUDIO_SCHEMA_VERSION;
   mappingVersion: typeof STUDIO_MAPPING_VERSION;
@@ -98,6 +131,9 @@ export type StudioProjectState = {
   artDirection?: StudioArtDirection;
   modelSettings: Record<string, unknown>;
   promptConfig: Record<string, string>;
+  promptBindings: Record<string, StudioPromptBinding>;
+  projectPromptVersions: StudioProjectPromptVersion[];
+  generationExecutions: StudioGenerationExecution[];
   characters: StudioNamedEntity[];
   scenes: StudioNamedEntity[];
   props: StudioNamedEntity[];

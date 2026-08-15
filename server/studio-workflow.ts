@@ -8,14 +8,14 @@ import { getStudioBackedProject, mutateStudioProject } from "./studio-commands";
 import type { StudioImageAsset, StudioImageVariant, StudioNamedEntity, StudioProjectState, StudioStoryboardFrame, StudioVideoTask } from "./studio-types";
 import { models } from "./providers";
 import { readProject } from "./storage";
+import { executeStudioPrompt, type StudioPromptOperation } from "./studio-prompt-runtime";
 
 type EntityKind = "character" | "scene" | "prop";
 
 export async function extractStudioEntities(projectId: string, text: string, originClientId: string) {
-  const project = await getStudioBackedProject(projectId);
   await mutateStudioProject(projectId, (state) => ({ ...state, originalText: text }), { originClientId });
   const configId = stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
-  const parsed = await runTextJson(projectId, configId, undefined, originClientId);
+  const parsed = await runStudioPromptJson({ projectId, configId, operation: "entity_extraction", draftPrompt: text, originClientId });
   return mutateStudioProject(projectId, (state) => ({
     ...state,
     characters: normalizeEntities(parsed.characters),
@@ -26,14 +26,15 @@ export async function extractStudioEntities(projectId: string, text: string, ori
 
 export async function previewStudioEntities(projectId: string, text: string, originClientId: string) {
   const configId = stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
-  const parsed = await runTextJson(projectId, configId, `分析下面剧本并提取角色、场景、道具。只返回 JSON：{characters:[{id,name,description}],scenes:[...],props:[...]}\n\n${text}`, originClientId);
+  const parsed = await runStudioPromptJson({ projectId, configId, operation: "entity_extraction", draftPrompt: text, originClientId });
   return { characters: normalizeEntities(parsed.characters), scenes: normalizeEntities(parsed.scenes), props: normalizeEntities(parsed.props) };
 }
 
 export async function analyzeStudioArtDirection(projectId: string, text: string, originClientId: string) {
   const configId = stableStudioNodeId(projectId, "art-direction", projectId, "analysis-config");
-  const parsed = await runTextJson(projectId, configId, `根据下面剧本推荐 3 个可执行视觉风格，只返回 JSON：{recommendations:[{id,name,description,positive_prompt,negative_prompt}]}\n\n${text}`, originClientId);
-  const recommendations = Array.isArray(parsed.recommendations) ? parsed.recommendations.map((item, index) => normalizeStyle(item, index)) : [];
+  const parsed = await runStudioPromptJson({ projectId, configId, operation: "style_analysis", draftPrompt: text, originClientId });
+  const candidates = Array.isArray(parsed.options) ? parsed.options : parsed.recommendations;
+  const recommendations = Array.isArray(candidates) ? candidates.map((item, index) => normalizeStyle(item, index)) : [];
   return { recommendations };
 }
 
@@ -119,8 +120,8 @@ export async function generateStudioAsset(projectId: string, raw: any, originCli
 
 export async function analyzeStudioStoryboard(projectId: string, text: string, originClientId: string) {
   const configId = stableStudioNodeId(projectId, "frame", projectId, "analysis-config");
-  const parsed = await runTextJson(projectId, configId, `把以下剧本拆成连续镜头，只返回 JSON：{frames:[{id,title,prompt,scene_id,duration,dialogue}]}\n\n${text}`, originClientId);
-  const frames = normalizeFrames(parsed.frames);
+  const parsed = await runStudioPromptJson({ projectId, configId, operation: "storyboard_extraction", draftPrompt: text, originClientId });
+  const frames = normalizeFrames(parsed.frames || parsed.shots);
   return mutateStudioProject(projectId, (state) => ({ ...state, originalText: text || state.originalText, frames, assembly: { ...state.assembly, orderedFrameIds: frames.map((frame) => frame.id) } }), { originClientId });
 }
 
@@ -351,11 +352,41 @@ export async function revertStudioDub(projectId: string, frameId: string, origin
   return mutateStudioProject(projectId, (state) => ({ ...state, frames: state.frames.map((item) => item.id === frameId ? { ...item, dubbed_video_url: undefined, dubbed_video_resource_id: undefined, dubbed_video_node_id: undefined, dubbed_video_task_id: undefined, dub_applied: false } : item) }), { originClientId });
 }
 
-export async function polishStudioText(projectId: string, prompt: string, originClientId: string) {
-  const configId = stableStudioNodeId(projectId, "frame", projectId, "analysis-config");
-  const text = await runText(projectId, configId, `把以下视频提示词优化为清晰、可执行的中文和英文版本，只返回 JSON：{prompt_cn:string,prompt_en:string}\n\n${prompt}`, originClientId);
-  const parsed = parseJson(text);
-  return { prompt_cn: String(parsed.prompt_cn || prompt), prompt_en: String(parsed.prompt_en || parsed.prompt_cn || prompt) };
+export async function polishStudioText(projectId: string, prompt: string, originClientId: string, options: {
+  frameId?: string;
+  operation?: Extract<StudioPromptOperation, "storyboard_polish" | "video_polish" | "r2v_polish">;
+  feedback?: string;
+  prevCn?: string;
+  targetDurationSeconds?: number;
+  orderedResourceIds?: string[];
+  resourceRoles?: Array<{ resourceId: string; role: string }>;
+  requestedModel?: string;
+} = {}) {
+  const operation = options.operation || "storyboard_polish";
+  const configId = options.frameId
+    ? stableStudioNodeId(projectId, "frame", options.frameId, "prompt-revision-config")
+    : stableStudioNodeId(projectId, "frame", projectId, "prompt-revision-config");
+  const result = await executeStudioPrompt({
+    projectId,
+    frameId: options.frameId,
+    operation,
+    draftPrompt: prompt,
+    feedback: options.feedback,
+    prevCn: options.prevCn,
+    targetDurationSeconds: options.targetDurationSeconds,
+    orderedResourceIds: options.orderedResourceIds,
+    resourceRoles: options.resourceRoles,
+    requestedModel: options.requestedModel,
+    configNodeId: configId,
+    originClientId,
+  });
+  if (operation === "video_polish" || operation === "r2v_polish") {
+    return { prompt_cn: options.prevCn || prompt, prompt_en: result.text.trim(), execution: result.execution };
+  }
+  const parsed = parseJson(result.text);
+  const promptCn = String(parsed.revisedDescriptionCn || parsed.prompt_cn || prompt);
+  const promptEn = String(parsed.revisedDescriptionEn || parsed.prompt_en || promptCn);
+  return { prompt_cn: promptCn, prompt_en: promptEn, execution: result.execution };
 }
 
 export async function previewStudioVoice(projectId: string, voiceId: string, text: string, instructions: string, originClientId: string) {
@@ -387,24 +418,9 @@ export async function previewStudioVoice(projectId: string, voiceId: string, tex
   }
 }
 
-async function runTextJson(projectId: string, configNodeId: string, prompt: string | undefined, originClientId: string) {
-  return parseJson(await runText(projectId, configNodeId, prompt, originClientId));
-}
-
-async function runText(projectId: string, configNodeId: string, prompt: string | undefined, originClientId: string) {
-  if (prompt) await configureNode(projectId, configNodeId, { composerContent: prompt }, originClientId);
-  try {
-    const result = await runCanvasConfigNodes({ projectId, configNodeIds: [configNodeId], concurrency: 1, originClientId });
-    const run = result.results[0];
-    if (!run || run.status === "error") throw new Error(run?.error || "Studio 文字工作流执行失败");
-    const project = await readProject(projectId) as any;
-    const output = project.nodes.find((node: any) => node.id === run.outputNodeIds[0]);
-    const content = String(output?.metadata?.content || "").trim();
-    if (!content) throw new Error("Studio 文字工作流没有返回内容");
-    return content;
-  } finally {
-    if (prompt) await mutateStudioProject(projectId, (state) => state, { originClientId }).catch(() => undefined);
-  }
+async function runStudioPromptJson(input: { projectId: string; configId: string; operation: StudioPromptOperation; draftPrompt: string; originClientId: string }) {
+  const result = await executeStudioPrompt({ projectId: input.projectId, operation: input.operation, draftPrompt: input.draftPrompt, configNodeId: input.configId, originClientId: input.originClientId });
+  return parseJson(result.text);
 }
 
 async function configureNode(projectId: string, nodeId: string, metadata: Record<string, unknown>, originClientId: string) {

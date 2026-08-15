@@ -1,6 +1,6 @@
 ---
 templateKey: croco.p4.director-planning
-templateVersion: 1.1.0
+templateVersion: 1.2.0
 modelFamily: gemini
 ---
 
@@ -17,3 +17,5 @@ modelFamily: gemini
 无需先生成正式音频。按“对白/旁白朗读时间预估 → 补足未与语言并行的动作时间 → 加前后留白 → 向上取整”的顺序计算，并输出 `预估生成时长：N 秒` 与简短时长依据。单个 H3 生成片段限制为 3–15 秒整数；这只是 P6/P8 的目标生成参数，不得称为最终视频时长。若完整分镜在 15 秒内难以承载，保持本分镜的剧本覆盖与导演规划不变，标记 P6 需要拆成多个生成片段；拆分点优先选择场景切换或不连续画面/动作边界，非必要不得拆连续动作。
 
 先决定信息和状态，再决定摄影。关键画面只是文字锚点。不要生成 Storyboard Prompt、图片、H3 Prompt、正式语音或音乐；时长只能预估，不得为了测时先生成音频。
+
+只返回结构化 JSON，顶层格式为 `{ "directorOverview": {}, "frames": [{ "id": "", "title": "", "prompt": "", "scene_id": "", "duration": 6, "dialogue": "" }] }`。`id` 必须稳定且只含字母、数字、下划线或连字符，`duration` 必须是 3–15 的整数；不要输出解释或 Markdown 代码围栏。

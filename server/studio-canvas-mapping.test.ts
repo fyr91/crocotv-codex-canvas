@@ -26,6 +26,9 @@ test("rich Studio stages project assets, shots, takes, and assembly into one man
   assert.equal(nodes.filter((node) => node.type === "group").length, 5);
   assert.ok(nodes.some((node) => node.metadata?.studioRole === "image-output-portrait-1" && node.metadata.storageKey === "image-1"));
   assert.ok(nodes.some((node) => node.metadata?.studioRole === "video-output" && node.metadata.storageKey === "video-1"));
+  assert.ok(nodes.some((node) => node.metadata?.studioRole === "visual-context-config" && node.metadata.artifactType === "studio-visual-context-config"));
+  assert.ok(nodes.some((node) => node.metadata?.studioRole === "prompt-revision-config" && node.metadata.artifactType === "studio-shot-revision-config"));
+  assert.ok(nodes.some((node) => node.metadata?.studioEntityId === projectId && node.metadata.artifactType === "studio-video-prompt-config"));
   assert.ok(operations.some((operation) => operation.op === "connect" && operation.to === stableStudioNodeId(projectId, "assembly", projectId, "timeline")));
 });
 

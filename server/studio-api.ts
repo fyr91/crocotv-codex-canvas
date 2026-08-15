@@ -14,6 +14,7 @@ import {
 import { studioCompatRouter } from "./studio-compat-api";
 import { studioPlaygroundRouter } from "./studio-playground-api";
 import { getPromptTemplate, listPromptTemplates } from "./prompt-registry";
+import { STUDIO_PROMPT_TEMPLATE_MAP } from "./studio-schemas";
 
 export const studioApiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
@@ -28,15 +29,6 @@ const STYLE_PRESETS = {
     { id: "stylized-animation", category: "animation", name: "Stylized Animation", name_zh: "风格动画", positive_prompt: "stylized animation, expressive shapes, cohesive palette, cinematic composition", negative_prompt: "photorealistic, noisy details, text, watermark", thumbnail: null },
   ],
 };
-const PROMPT_DEFAULTS = {
-  entity_extraction: "分析剧本并提取角色、场景和关键道具，只返回结构化 JSON。",
-  style_analysis: "根据剧本推荐可执行的视觉风格，只返回结构化 JSON。",
-  storyboard_extraction: "将剧本拆成连续、可生成的镜头，只返回结构化 JSON。",
-  storyboard_polish: "优化分镜画面描述，保持角色、场景和时空连续性。",
-  video_polish: "将草稿改写为清晰、可执行的视频生成提示词。",
-  r2v_polish: "结合参考素材槽位改写 R2V 提示词。",
-};
-
 studioApiRouter.get("/health", route(async (_request, response) => response.json({ ok: true, time: Date.now() / 1000, log_file: "data/runtime/server.log", log_dir: "data/runtime", studio_projects: (await listStudioProjectResponses({ kind: "episode" })).length })));
 studioApiRouter.get("/system/check", route(async (_request, response) => response.json({ status: "ok", system_info: { runtime: "Croco Canvas" }, dependencies: { ffmpeg: { available: true, message: "由 Croco Canvas 运行时管理", path: "ffmpeg" } } })));
 studioApiRouter.get("/diagnose/log_tail", route(async (_request, response) => response.json({ path: "data/runtime", lines: [], errors: [], missing: false, total_lines: 0, returned_lines: 0 })));
@@ -91,8 +83,9 @@ studioApiRouter.put("/projects/:id/storyboard", projectRoute(async (request, res
 studioApiRouter.post("/projects/:id/generate_storyboard", projectRoute(async (request, response, id) => { const project = await getStudioBackedProject(id); response.json(await analyzeStudioStoryboard(id, project.studio.originalText, clientId(request))); }));
 studioApiRouter.post("/projects/:id/storyboard/render", projectRoute(async (request, response, id) => response.json(await renderStudioFrame(id, request.body, clientId(request)))));
 studioApiRouter.post("/projects/:id/storyboard/refine_prompt", projectRoute(async (request, response, id) => {
-  const polished = await polishStudioText(id, String(request.body?.raw_prompt || ""), clientId(request));
-  const project = await patchStudioFrame(id, requiredId(request.body?.frame_id), { prompt: polished.prompt_cn, prompt_cn: polished.prompt_cn, prompt_en: polished.prompt_en }, clientId(request));
+  const frameId = requiredId(request.body?.frame_id);
+  const polished = await polishStudioText(id, String(request.body?.raw_prompt || ""), clientId(request), promptRuntimeOptions(request.body, "storyboard_polish", frameId));
+  const project = await patchStudioFrame(id, frameId, { prompt: polished.prompt_cn, prompt_cn: polished.prompt_cn, prompt_en: polished.prompt_en }, clientId(request));
   response.json({ ...polished, frame_updated: project });
 }));
 studioApiRouter.post("/projects/:id/frames", projectRoute(async (request, response, id) => response.json(await createStudioFrame(id, request.body, clientId(request)))));
@@ -106,13 +99,13 @@ studioApiRouter.post("/projects/:id/frames/:frameId/select_video", projectRoute(
 studioApiRouter.post("/projects/:id/frames/:frameId/auto_select_latest_video", projectRoute(async (request, response, id) => response.json(await selectStudioVideo(id, param(request.params.frameId), undefined, clientId(request)))));
 studioApiRouter.post("/projects/:id/frames/:frameId/unpin_video", projectRoute(async (request, response, id) => response.json(await patchStudioFrame(id, param(request.params.frameId), { video_pinned: false }, clientId(request)))));
 studioApiRouter.post("/projects/:id/frames/:frameId/audio", projectRoute(async (request, response, id) => response.json(await generateStudioFrameAudio(id, param(request.params.frameId), request.body, clientId(request)))));
-studioApiRouter.post("/projects/:id/frames/:frameId/refine", projectRoute(async (request, response, id) => { const project = await getStudioBackedProject(id); const frame = project.studio.frames.find((item) => item.id === param(request.params.frameId)); const polished = await polishStudioText(id, frame?.prompt || "", clientId(request)); response.json(await patchStudioFrame(id, param(request.params.frameId), { prompt: polished.prompt_cn, prompt_cn: polished.prompt_cn, prompt_en: polished.prompt_en }, clientId(request))); }));
+studioApiRouter.post("/projects/:id/frames/:frameId/refine", projectRoute(async (request, response, id) => { const project = await getStudioBackedProject(id); const frameId = param(request.params.frameId); const frame = project.studio.frames.find((item) => item.id === frameId); const polished = await polishStudioText(id, frame?.prompt || "", clientId(request), promptRuntimeOptions(request.body, "storyboard_polish", frameId)); response.json(await patchStudioFrame(id, frameId, { prompt: polished.prompt_cn, prompt_cn: polished.prompt_cn, prompt_en: polished.prompt_en }, clientId(request))); }));
 studioApiRouter.post("/projects/:id/storyboard/refine_batch", projectRoute(async (request, response, id) => {
   response.status(200); response.setHeader("Content-Type", "text/event-stream"); response.setHeader("Cache-Control", "no-cache"); response.flushHeaders();
   const project = await getStudioBackedProject(id); let index = 0;
   for (const frame of project.studio.frames) {
     response.write(`event: frame_refine_start\ndata: ${JSON.stringify({ frame_id: frame.id, frame_index: index, total: project.studio.frames.length })}\n\n`);
-    try { const polished = await polishStudioText(id, frame.prompt, clientId(request)); await patchStudioFrame(id, frame.id, { prompt: polished.prompt_cn, prompt_cn: polished.prompt_cn, prompt_en: polished.prompt_en }, clientId(request)); response.write(`event: frame_refine_complete\ndata: ${JSON.stringify({ frame_id: frame.id, frame_index: index, total: project.studio.frames.length })}\n\n`); }
+    try { const polished = await polishStudioText(id, frame.prompt, clientId(request), promptRuntimeOptions(request.body, "storyboard_polish", frame.id)); await patchStudioFrame(id, frame.id, { prompt: polished.prompt_cn, prompt_cn: polished.prompt_cn, prompt_en: polished.prompt_en }, clientId(request)); response.write(`event: frame_refine_complete\ndata: ${JSON.stringify({ frame_id: frame.id, frame_index: index, total: project.studio.frames.length })}\n\n`); }
     catch (error) { response.write(`event: frame_refine_error\ndata: ${JSON.stringify({ frame_id: frame.id, frame_index: index, total: project.studio.frames.length, error: error instanceof Error ? error.message : "refine failed" })}\n\n`); }
     index += 1;
   }
@@ -129,13 +122,13 @@ studioApiRouter.post("/projects/:id/merge", projectRoute(async (request, respons
 studioApiRouter.post("/projects/:id/generate_video", projectRoute(async (request, response, id) => response.json(await mergeStudioProject(id, clientId(request)))));
 studioApiRouter.post("/projects/:id/run-stage", projectRoute(async (request, response, id) => response.json(await runStudioStage(id, String(request.body?.stage || ""), clientId(request)))));
 
-studioApiRouter.post("/video/polish_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), String(request.body?.draft_prompt || ""), clientId(request)))));
-studioApiRouter.post("/video/polish_r2v_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), `${String(request.body?.draft_prompt || "")}\n${JSON.stringify(request.body?.slots || [])}`, clientId(request)))));
+studioApiRouter.post("/video/polish_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), String(request.body?.draft_prompt || ""), clientId(request), promptRuntimeOptions(request.body, "video_polish")))));
+studioApiRouter.post("/video/polish_r2v_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), String(request.body?.draft_prompt || ""), clientId(request), promptRuntimeOptions(request.body, "r2v_polish")))));
 studioApiRouter.patch("/projects/:id/style", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, stylePreset: String(request.body?.style_preset || ""), stylePrompt: String(request.body?.style_prompt || "") }), { originClientId: clientId(request) }))));
 studioApiRouter.post("/projects/:id/model_settings", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, modelSettings: { ...state.modelSettings, ...objectValue(request.body) } }), { originClientId: clientId(request) }))));
 studioApiRouter.get("/projects/:id/prompt_config", projectRoute(async (_request, response, id) => response.json((await getStudioBackedProject(id)).studio.promptConfig)));
 studioApiRouter.put("/projects/:id/prompt_config", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, promptConfig: { ...state.promptConfig, ...stringRecord(request.body) } }), { originClientId: clientId(request) }))));
-studioApiRouter.get("/prompt_defaults", route(async (_request, response) => response.json(PROMPT_DEFAULTS)));
+studioApiRouter.get("/prompt_defaults", route(async (_request, response) => response.json(await legacyPromptDefaults())));
 studioApiRouter.put("/projects/:id/audio_mix", projectRoute(async (request, response, id) => {
   const current = await getStudioBackedProject(id);
   const bgmUrl = request.body?.bgm_url !== undefined ? request.body.bgm_url : current.studio.assembly.bgmUrl;
@@ -201,6 +194,55 @@ function stringArray(value: unknown) { return Array.isArray(value) ? value.map(S
 function stringRecord(value: unknown) { return Object.fromEntries(Object.entries(objectValue(value)).filter(([, item]) => typeof item === "string")) as Record<string, string>; }
 function boundedCount(value: unknown) { const count = Number(value); return Math.max(1, Math.min(3, Number.isFinite(count) ? Math.floor(count) : 1)); }
 function decodePresetVoice(value: string) { const parts = value.split("."); if ((parts[0] === "design" || parts[0] === "clone") && parts[1]) { try { return Buffer.from(parts[1], "base64url").toString("utf8"); } catch {} } return value; }
+
+function promptRuntimeOptions(raw: any, operation: "storyboard_polish" | "video_polish" | "r2v_polish", frameId?: string) {
+  const references = promptResourceReferences(raw);
+  return {
+    operation,
+    ...(frameId ? { frameId } : {}),
+    feedback: String(raw?.feedback || "").slice(0, 100_000) || undefined,
+    prevCn: String(raw?.prev_cn || raw?.previous_cn || "").slice(0, 100_000) || undefined,
+    targetDurationSeconds: boundedDuration(raw?.duration || raw?.target_duration_seconds),
+    orderedResourceIds: references.map((reference) => reference.resourceId),
+    resourceRoles: references,
+    requestedModel: String(raw?.polish_model || raw?.model || "").slice(0, 100) || undefined,
+  };
+}
+
+function promptResourceReferences(raw: any) {
+  const references: Array<{ resourceId: string; role: string }> = [];
+  const add = (value: unknown, role: unknown) => {
+    const resourceId = resourceIdFromValue(value);
+    if (resourceId && !references.some((reference) => reference.resourceId === resourceId)) references.push({ resourceId, role: String(role || "reference").slice(0, 80) });
+  };
+  for (const id of stringArray(raw?.ordered_resource_ids || raw?.resource_ids || raw?.image_resource_ids)) add(id, "reference");
+  for (const url of stringArray(raw?.image_urls)) add(url, "visual-reference");
+  for (const slot of Array.isArray(raw?.slots) ? raw.slots : []) {
+    const value = objectValue(slot);
+    add(value.resource_id || value.resourceId || value.url || value.image_url || value.video_url || value.audio_url, value.role || value.type || value.name || "r2v-reference");
+  }
+  for (const item of Array.isArray(raw?.resource_roles) ? raw.resource_roles : []) {
+    const value = objectValue(item);
+    add(value.resource_id || value.resourceId, value.role);
+  }
+  return references.slice(0, 16);
+}
+
+function resourceIdFromValue(value: unknown) {
+  const text = String(value || "").trim();
+  const fromUrl = text.match(/\/files\/by-id\/([A-Za-z0-9_-]{1,80})/)?.[1];
+  const id = fromUrl || text;
+  return /^[A-Za-z0-9_-]{1,80}$/.test(id) ? id : undefined;
+}
+
+function boundedDuration(value: unknown) {
+  const duration = Number(value);
+  return Number.isFinite(duration) ? Math.max(3, Math.min(15, Math.round(duration))) : undefined;
+}
+
+async function legacyPromptDefaults() {
+  return Object.fromEntries(await Promise.all(Object.entries(STUDIO_PROMPT_TEMPLATE_MAP).map(async ([operation, templateKey]) => [operation, (await getPromptTemplate(templateKey)).systemPrompt])));
+}
 
 async function storeUpload(request: Request) {
   if (!request.file) throw new Error("没有收到上传文件");

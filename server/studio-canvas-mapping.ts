@@ -80,7 +80,7 @@ function projectGraph(projectId: string, state: StudioProjectState) {
   }));
   const entityAnalysisId = stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
   nodes.push(node(projectId, "script", projectId, "entity-analysis-config", "config", "剧本实体分析", 208, 640, 664, 390, {
-    groupId: groups.script.id, artifactType: "studio-entity-analysis-config", stage: "script", generationMode: "text", model: textModel(state),
+    groupId: groups.script.id, artifactType: "studio-entity-analysis-config", stage: "script", generationMode: "text", model: "google:gemini@3.1-pro",
     composerContent: entityExtractionPrompt(state), count: 1, status: "idle", layoutSection: "analysis", layoutOrder: 2,
   }));
   edges.push({ fromNodeId: scriptId, toNodeId: entityAnalysisId });
@@ -94,7 +94,7 @@ function projectGraph(projectId: string, state: StudioProjectState) {
   edges.push({ fromNodeId: scriptId, toNodeId: artId });
   const artAnalysisId = stableStudioNodeId(projectId, "art-direction", projectId, "analysis-config");
   nodes.push(node(projectId, "art-direction", projectId, "analysis-config", "config", "艺术风格分析", 1088, 680, 664, 390, {
-    groupId: groups.art.id, artifactType: "studio-art-analysis-config", stage: "art-direction", generationMode: "text", model: textModel(state),
+    groupId: groups.art.id, artifactType: "studio-art-analysis-config", stage: "art-direction", generationMode: "text", model: "google:gemini@3.1-pro",
     composerContent: artDirectionPrompt(state), count: 1, status: "idle", layoutSection: "analysis", layoutOrder: 2,
   }));
   edges.push({ fromNodeId: scriptId, toNodeId: artAnalysisId });
@@ -110,10 +110,20 @@ function projectGraph(projectId: string, state: StudioProjectState) {
   let frameY = 280;
   const storyboardAnalysisId = stableStudioNodeId(projectId, "frame", projectId, "analysis-config");
   nodes.push(node(projectId, "frame", projectId, "analysis-config", "config", "分镜结构分析", 2848, frameY, 724, 390, {
-    groupId: groups.storyboard.id, artifactType: "studio-storyboard-analysis-config", stage: "storyboard", generationMode: "text", model: textModel(state),
+    groupId: groups.storyboard.id, artifactType: "studio-storyboard-analysis-config", stage: "storyboard", generationMode: "text", model: "google:gemini@3.1-pro",
     composerContent: storyboardPrompt(state), count: 1, status: "idle", layoutSection: "analysis", layoutOrder: 0,
   }));
   edges.push({ fromNodeId: scriptId, toNodeId: storyboardAnalysisId }, { fromNodeId: artId, toNodeId: storyboardAnalysisId });
+  const globalPromptRevisionId = stableStudioNodeId(projectId, "frame", projectId, "prompt-revision-config");
+  const globalVisualContextId = stableStudioNodeId(projectId, "frame", projectId, "visual-context-config");
+  nodes.push(node(projectId, "frame", projectId, "visual-context-config", "config", "视频素材视觉上下文", 3232, frameY, 340, 390, {
+    groupId: groups.storyboard.id, artifactType: "studio-visual-context-config", stage: "storyboard", generationMode: "text", model: "glm-5v-turbo", composerContent: state.originalText || "等待参考素材", count: 1, status: "idle", layoutSection: "visual-context", layoutOrder: 1,
+  }));
+  edges.push({ fromNodeId: storyboardAnalysisId, toNodeId: globalVisualContextId });
+  nodes.push(node(projectId, "frame", projectId, "prompt-revision-config", "config", "视频 Prompt 生成", 3616, frameY, 340, 390, {
+    groupId: groups.storyboard.id, artifactType: "studio-video-prompt-config", stage: "storyboard", generationMode: "text", model: "doubao-seed-2-1-turbo-260628", composerContent: state.originalText || "等待 Prompt 输入", count: 1, status: "idle", layoutSection: "prompt-revision", layoutOrder: 1,
+  }));
+  edges.push({ fromNodeId: storyboardAnalysisId, toNodeId: globalPromptRevisionId }, { fromNodeId: globalVisualContextId, toNodeId: globalPromptRevisionId });
   frameY += 460;
   for (const frame of [...state.frames].sort((a, b) => a.order - b.order)) {
     addFrame(nodes, edges, projectId, groups.storyboard.id, artId, frame, frameY, state);
@@ -175,6 +185,16 @@ function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNod
   const imageConfigId = stableStudioNodeId(projectId, "frame", frame.id, "image-config");
   nodes.push(node(projectId, "frame", frame.id, "image-config", "config", `${frame.title} · 首帧`, 2848, y + 300, 340, 390, imageConfigMetadata(groupId, `${stylePrefix(state)}${frame.prompt}`, "frame", frame.order * 10 + 1, frame.id, state)));
   edges.push({ fromNodeId: promptId, toNodeId: imageConfigId });
+  const visualContextConfigId = stableStudioNodeId(projectId, "frame", frame.id, "visual-context-config");
+  nodes.push(node(projectId, "frame", frame.id, "visual-context-config", "config", `${frame.title} · 视觉上下文`, 3232, y, 340, 390, {
+    groupId, artifactType: "studio-visual-context-config", stage: "storyboard", generationMode: "text", model: "glm-5v-turbo", composerContent: frame.prompt || "提取镜头素材的客观视觉上下文", count: 1, status: "idle", shotId: frame.id, layoutSection: "visual-context", layoutOrder: frame.order * 10 + 1,
+  }));
+  edges.push({ fromNodeId: promptId, toNodeId: visualContextConfigId });
+  const revisionConfigId = stableStudioNodeId(projectId, "frame", frame.id, "prompt-revision-config");
+  nodes.push(node(projectId, "frame", frame.id, "prompt-revision-config", "config", `${frame.title} · Prompt 返修`, 3616, y, 340, 390, {
+    groupId, artifactType: "studio-shot-revision-config", stage: "storyboard", generationMode: "text", model: "glm-5.2", composerContent: frame.prompt || "等待返修输入", count: 1, status: "idle", shotId: frame.id, layoutSection: "prompt-revision", layoutOrder: frame.order * 10 + 2,
+  }));
+  edges.push({ fromNodeId: promptId, toNodeId: revisionConfigId });
   const imageVariants = frame.image_asset?.variants || [];
   let imageId: string | undefined;
   imageVariants.forEach((variant, index) => {
@@ -261,18 +281,14 @@ function selectedFrameTask(state: StudioProjectState, frameId: string): StudioVi
   return state.videoTasks.find((task) => task.id === frame?.selected_video_id || task.id === frame?.selectedTakeId) || state.videoTasks.filter((task) => task.frame_id === frameId && task.resource_id).at(-1);
 }
 function stylePrefix(state: StudioProjectState) { return state.stylePrompt ? `${state.stylePrompt}\n` : state.artDirection?.style_config?.positive_prompt ? `${state.artDirection.style_config.positive_prompt}\n` : ""; }
-function textModel(state: StudioProjectState) {
-  const requested = String(state.modelSettings.llm_model || state.modelSettings.text_model || "");
-  return [...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(requested) ? requested : models.volcengineLlm[0];
-}
 function entityExtractionPrompt(state: StudioProjectState) {
-  return `${state.promptConfig.entity_extraction || "分析剧本并提取角色、场景和关键道具。只返回 JSON，格式为 {characters:[{id,name,description}],scenes:[...],props:[...]}。"}\n\n剧本：\n${state.originalText}`;
+  return JSON.stringify({ operation: "entity_extraction", script: state.originalText }, null, 2);
 }
 function artDirectionPrompt(state: StudioProjectState) {
-  return `${state.promptConfig.style_analysis || "根据剧本推荐 3 个可执行的视觉风格。只返回 JSON，格式为 {recommendations:[{id,name,description,positive_prompt,negative_prompt}]}。"}\n\n剧本：\n${state.originalText}`;
+  return JSON.stringify({ operation: "style_analysis", script: state.originalText }, null, 2);
 }
 function storyboardPrompt(state: StudioProjectState) {
-  return `${state.promptConfig.storyboard_extraction || "将剧本拆成连续镜头。只返回 JSON，格式为 {frames:[{id,title,prompt,scene_id,duration,dialogue}]}。"}\n\n艺术指导：${stylePrefix(state)}\n剧本：\n${state.originalText}`;
+  return JSON.stringify({ operation: "storyboard_extraction", artDirection: state.artDirection || state.stylePrompt || state.stylePreset || null, script: state.originalText }, null, 2);
 }
 function frameDialogue(frame: StudioStoryboardFrame) {
   if (typeof frame.dialogue === "string") return frame.dialogue;

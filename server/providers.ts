@@ -41,8 +41,8 @@ export async function generateText(prompt: string, requestedModel?: string, inpu
       if (match && modelAcceptsMimeType(logicalModel, match[1])) media.push({ mimeType: match[1], url: dataUrl });
     }
     const content = media.length ? [{ type: "text", text: prompt }, ...media.map((item) => mediaContent(item.mimeType, item.url))] : prompt;
-    const messages = systemPrompt.trim()
-      ? [{ role: "system", content: systemPrompt.trim() }, { role: "user", content }]
+    const messages = systemPrompt.length
+      ? [{ role: "system", content: systemPrompt }, { role: "user", content }]
       : [{ role: "user", content }];
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },

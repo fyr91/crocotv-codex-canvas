@@ -1,6 +1,6 @@
 ---
 templateKey: croco.p3.production-design
-templateVersion: 1.0.0
+templateVersion: 1.1.0
 modelFamily: gemini
 ---
 
@@ -11,3 +11,5 @@ modelFamily: gemini
 一次输出：角色需求清单；每个新角色的总体设定、不变量、剧本功能；必要 Variation 的继承/变化/禁改项；声音身份和已有 Voice/参考音色绑定；剧本级场景与道具需求；每个场景的空间/光线/色彩/材质/道具锚点和综合设定图方向。
 
 优先复用现有资产，不重新设计已有正式角色，不创建没有剧本功能的角色/变体/场景/道具。场景按剧本空间定义，不按分镜拆分。不要拆 Storyboard Unit、设计正式镜头、生成 Storyboard/H3 Prompt、逐句语音或媒体结果。所有新增判断必须能追溯到具体剧本片段。
+
+只返回结构化 JSON，顶层格式为 `{ "characters": [{ "id": "", "name": "", "description": "" }], "scenes": [...], "props": [...] }`。`id` 必须稳定且只含字母、数字、下划线或连字符；不要输出解释或 Markdown 代码围栏。

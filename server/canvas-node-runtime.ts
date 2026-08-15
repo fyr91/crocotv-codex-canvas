@@ -288,7 +288,7 @@ function resolveInputs(project: CanvasProject, config: CanvasNode, mode: Generat
   const incoming = incomingIds.map((id) => project.nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node));
   const systemNodes = incoming.filter((node) => node.type === "text" && node.metadata?.promptRole === "system");
   const systemPromptNodeIds = systemNodes.map((node) => node.id);
-  const systemPrompt = systemNodes.map(nodeText).filter(Boolean).join("\n\n");
+  const systemPrompt = systemNodes.map(systemNodeText).filter(Boolean).join("\n\n");
   const userIncoming = incoming.filter((node) => !systemPromptNodeIds.includes(node.id));
   const rawComposer = String(config.metadata?.composerContent || "").trim();
   const rawPrompt = rawComposer || String(config.metadata?.prompt || config.metadata?.musicDescription || "").trim();
@@ -431,6 +431,7 @@ function resourceMetadata(resource: StoredResource) {
 function requiredConfig(project: CanvasProject, nodeId: string) { const node = project.nodes.find((item) => item.id === nodeId); if (!node) throw new Error(`节点不存在：${nodeId}`); if (node.type !== "config") throw new Error(`节点 ${nodeId} 不是生成模组`); return node; }
 function generationMode(node: CanvasNode): GenerationMode { const value = String(node.metadata?.generationMode || "image"); if (!["text", "image", "video", "audio", "music"].includes(value)) throw new Error(`不支持的生成模式：${value}`); return value as GenerationMode; }
 function nodeText(node: CanvasNode) { return node.type === "text" ? String(node.metadata?.content || node.metadata?.prompt || "").trim() : ""; }
+function systemNodeText(node: CanvasNode) { return node.type === "text" ? String(node.metadata?.content || node.metadata?.prompt || "") : ""; }
 function mediaKind(node: CanvasNode): "image" | "video" | "audio" | undefined { if (node.type === "image") return "image"; if (node.type === "video") return "video"; if (node.type === "audio" || node.type === "music") return "audio"; return undefined; }
 function normalizeModel(value: string) { const decoded = value.includes("::") ? value.slice(value.indexOf("::") + 2) : value; const aliases: Record<string, string> = { "volc-doubao-turbo": models.volcengineLlm[0], "volc-deepseek-flash": models.volcengineLlm[1], "deepseek-v4-flash-260425": models.volcengineLlm[1], "volc-deepseek-pro": models.volcengineLlm[2], "bigmodel-glm-52": models.bigmodelLlm[0], "bigmodel-glm-5v": models.bigmodelLlm[1], "runware-gemini-pro": models.runwareLlm[0], "runware-gemini-flash": models.runwareLlm[1], "runware-gemini-flash-lite": models.runwareLlm[2], "runware-lite": models.image[0], "runware-nano": models.image[1], "runware-gpt-image-02": models.image[2], "minimax-h3": "minimax-h3", "volc-speech": "volcengine:seed-tts-2.0-expressive", "suno-music": String(models.music) }; return aliases[decoded] || decoded; }
 function speechToneModel() { const configured = process.env.TTS_TONE_MODEL || "deepseek-v4-flash-ga-260731"; return configured === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : configured; }
