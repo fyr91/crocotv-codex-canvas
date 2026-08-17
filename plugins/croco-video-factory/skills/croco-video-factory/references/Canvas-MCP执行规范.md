@@ -57,6 +57,8 @@
 
 Croco Video Factory 的自动图像路由不使用 `google:4@1`，但 Canvas runtime 保留所有可用模型供用户直接操作。普通任务指定 GPT 时，先按独立 ImageGen 落图操作建立 Prompt Text → imported Image 连线；超时/失败或用户指定画布生成时，改走 GPT Image 02 Config 真实链。修改已有图片时保留原 Image，并把它作为新 Image 或 Config 的有序 Reference；不覆写原结果。
 
+Canvas 的模型目录随当前代码版本固定发布，不从 GPU 调度中心动态发现模型。用户直接操作 Canvas 时还可选择 `ernie-image-turbo` 文生图和 `ltx-2.5` 视频；LTX 仅接受文字、一张首帧或一张 Ingredients 参考素材表，不使用 H3 Prompt 优化器。符合条件的 H3 低分辨率结果可在结果节点上调用 FlashVSR 高清修复。GPU 调度中心的模型开关只决定固定适配器的请求当前是否可路由，关闭或无实例时必须把明确错误返回到 Config/Result，禁止自动换模型。
+
 ## 阶段到能力的最小映射
 
 | 阶段 | Canvas 原子能力组合 |
