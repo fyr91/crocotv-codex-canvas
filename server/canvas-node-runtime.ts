@@ -141,7 +141,9 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
   } else if (mode === "video" && model === "ltx-2.5") {
     if (inputs.videoIds.length || inputs.audioIds.length) throw new Error("LTX 2.5 当前只接受文字和一张图片参考");
     if (inputs.imageIds.length > 1) throw new Error("LTX 2.5 每次只接受一张首帧或 Ingredients 参考图");
-    if (String(config.metadata?.videoInputMode || "text") === "firstFrame" && inputs.imageIds.length !== 1) throw new Error("LTX 2.5 首帧生视频需要连接一张首帧图片");
+    const inputMode = ltxInputMode(config.metadata?.videoInputMode, inputs.imageIds.length > 0);
+    if (inputMode === "firstFrame" && inputs.imageIds.length !== 1) throw new Error("LTX 2.5 首帧生视频需要在提示词中引用一张首帧图片");
+    if (inputMode === "multimodal" && inputs.imageIds.length !== 1) throw new Error("LTX 2.5 Ingredients 需要在提示词中引用一张参考图");
   }
   const count = targetOutputNodeIds?.length || generationCount(config, mode, model);
   const outputType = mode === "audio" ? "audio" : mode;
@@ -539,7 +541,8 @@ function optionalBoundedNumber(value: unknown, minimum: number, maximum: number,
 function generationCount(node: CanvasNode, mode: GenerationMode, model: string) { if (mode === "audio") return 1; if (mode === "music") return model === "minimax-music-3" ? 1 : 2; const value = Number(mode === "video" ? node.metadata?.videoCount : node.metadata?.count); return Math.max(1, Math.min(3, Number.isFinite(value) ? Math.floor(value) : 1)); }
 function textThinkingMode(node: CanvasNode): TextThinkingMode | undefined { const value = String(node.metadata?.thinking || ""); return value === "enabled" || value === "disabled" || value === "auto" ? value : undefined; }
 function videoDuration(node: CanvasNode, model: string) { return Math.max(3, Math.min(model === "ltx-2.5" ? 20 : 15, Math.floor(Number(node.metadata?.seconds) || 6))); }
-function videoInputMode(node: CanvasNode, model: string, inputs: ResolvedInput) { if (model === "minimax-h3") return normalizeH3InputMode(node.metadata?.videoInputMode || node.metadata?.generation_mode); if (!inputs.imageIds.length) return "text"; return String(node.metadata?.videoInputMode || "") === "firstFrame" ? "firstFrame" : "multimodal"; }
+function videoInputMode(node: CanvasNode, model: string, inputs: ResolvedInput) { if (model === "minimax-h3") return normalizeH3InputMode(node.metadata?.videoInputMode || node.metadata?.generation_mode); return ltxInputMode(node.metadata?.videoInputMode, inputs.imageIds.length > 0); }
+export function ltxInputMode(value: unknown, hasImage: boolean) { const mode = String(value || ""); if (mode === "text" || mode === "firstFrame" || mode === "multimodal") return mode; return hasImage ? "multimodal" : "text"; }
 function imageDimension(node: CanvasNode, index: 0 | 1) { const match = String(node.metadata?.size || "").match(/^(\d+)x(\d+)$/); return match ? Number(match[index + 1]) : 1024; }
 function outputSize(type: string) { if (type === "image") return { width: 360, height: 320 }; if (type === "video") return { width: 400, height: 300 }; if (type === "audio") return { width: 360, height: 180 }; if (type === "music") return { width: 380, height: 220 }; return { width: 320, height: 240 }; }
 function outputPosition(project: CanvasProject, config: CanvasNode, index: number, width: number, height: number) { const existing = project.connections.filter((connection) => connection.fromNodeId === config.id).length; return { x: config.position.x + config.width + 96, y: config.position.y + (existing + index) * (height + 36) }; }

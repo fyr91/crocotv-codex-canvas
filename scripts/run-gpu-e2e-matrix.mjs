@@ -24,6 +24,14 @@ const stage2Ids = [
   "matrix-music-seed-max-safe",
 ];
 
+const stage2InputIds = [
+  "matrix-h3-i2v-first-frame",
+  "matrix-h3-r2v-first-last",
+  "matrix-h3-r2v-image-audio",
+  "matrix-ltx-i2v-first-frame",
+  "matrix-ltx-ingredients",
+];
+
 async function createMatrixProject() {
   const project = await request("/api/projects", {
     method: "POST",
@@ -69,23 +77,23 @@ async function prepareStage2(id) {
       generationMode: "video", model: "minimax-h3", composerContent: "A grape balloon rises against a pale morning sky, vertical composition, fixed camera.", seconds: 3, vquality: "portrait_preview", videoCount: 1, videoInputMode: "text", videoPromptEnhance: "false",
     }),
     config("matrix-h3-i2v-first-frame", "H3 · I2V first_frame", 500, 1080, {
-      generationMode: "video", model: "minimax-h3", composerContent: "The subject makes one small natural movement while the original composition and identity remain unchanged.", seconds: 3, vquality: "preview", videoCount: 1, videoInputMode: "firstFrame", videoPromptEnhance: "false",
+      generationMode: "video", model: "minimax-h3", composerContent: `Use @[node:${square.id}] as the first frame. The subject makes one small natural movement while the original composition and identity remain unchanged.`, seconds: 3, vquality: "preview", videoCount: 1, videoInputMode: "firstFrame", videoPromptEnhance: "false",
     }),
     connect(square.id, "matrix-h3-i2v-first-frame"),
     config("matrix-h3-r2v-first-last", "H3 · R2V ordered first/last", 920, 1080, {
-      generationMode: "video", model: "minimax-h3", composerContent: "Transition smoothly from <Picture 1> to <Picture 2>; preserve the subjects and avoid extra objects.", seconds: 3, vquality: "preview", videoCount: 1, videoInputMode: "firstLastFrame", videoPromptEnhance: "false", resourceRoles: [{ resourceId: square.metadata.storageKey, type: "image", role: "exactFirstFrame" }, { resourceId: portrait.metadata.storageKey, type: "image", role: "exactLastFrame" }],
+      generationMode: "video", model: "minimax-h3", composerContent: `Transition smoothly from @[node:${square.id}] to @[node:${portrait.id}]; preserve the subjects and avoid extra objects.`, seconds: 3, vquality: "preview", videoCount: 1, videoInputMode: "firstLastFrame", videoPromptEnhance: "false", resourceRoles: [{ resourceId: square.metadata.storageKey, type: "image", role: "exactFirstFrame" }, { resourceId: portrait.metadata.storageKey, type: "image", role: "exactLastFrame" }],
     }),
     connect(square.id, "matrix-h3-r2v-first-last"), connect(portrait.id, "matrix-h3-r2v-first-last"),
     config("matrix-h3-r2v-image-audio", "H3 · R2V image + audio", 1340, 1080, {
-      generationMode: "video", model: "minimax-h3", composerContent: "Use <Picture 1> as the visual identity and synchronize gentle motion to <Audio 1>.", seconds: 3, vquality: "standard_480p", videoCount: 1, videoInputMode: "multimodal", videoPromptEnhance: "false", resourceRoles: [{ resourceId: landscape.metadata.storageKey, type: "image", role: "referenceImage1" }, { resourceId: audio.metadata.storageKey, type: "audio", role: "audioReference1" }],
+      generationMode: "video", model: "minimax-h3", composerContent: `Use @[node:${landscape.id}] as the visual identity and synchronize gentle motion to @[node:${audio.id}].`, seconds: 3, vquality: "standard_480p", videoCount: 1, videoInputMode: "multimodal", videoPromptEnhance: "false", resourceRoles: [{ resourceId: landscape.metadata.storageKey, type: "image", role: "referenceImage1" }, { resourceId: audio.metadata.storageKey, type: "audio", role: "audioReference1" }],
     }),
     connect(landscape.id, "matrix-h3-r2v-image-audio"), connect(audio.id, "matrix-h3-r2v-image-audio"),
     config("matrix-ltx-i2v-first-frame", "LTX · I2V · strength 0.1", 80, 1540, {
-      generationMode: "video", model: "ltx-2.5", composerContent: "The grape moves slightly in a soft breeze while the first frame composition stays stable.", seconds: 3, size: "512x320", videoCount: 1, videoInputMode: "firstFrame", videoPromptEnhance: "false", videoSeed: 42, videoReferenceStrength: 0.1,
+      generationMode: "video", model: "ltx-2.5", composerContent: `Use @[node:${square.id}] as the first frame. The grape moves slightly in a soft breeze while the composition stays stable.`, seconds: 3, size: "512x320", videoCount: 1, videoInputMode: "firstFrame", videoPromptEnhance: "false", videoSeed: 42, videoReferenceStrength: 0.1,
     }),
     connect(square.id, "matrix-ltx-i2v-first-frame"),
     config("matrix-ltx-ingredients", "LTX · Ingredients · strength 1.5", 500, 1540, {
-      generationMode: "video", model: "ltx-2.5", composerContent: "Create a coherent short shot using the reference sheet as the exact visual ingredient.", seconds: 3, size: "576x320", videoCount: 1, videoInputMode: "multimodal", videoPromptEnhance: "true", videoSeed: 73, videoReferenceStrength: 1.5,
+      generationMode: "video", model: "ltx-2.5", composerContent: `Create a coherent short shot using @[node:${portrait.id}] as the exact visual ingredient.`, seconds: 3, size: "576x320", videoCount: 1, videoInputMode: "multimodal", videoPromptEnhance: "true", videoSeed: 73, videoReferenceStrength: 1.5,
     }),
     connect(portrait.id, "matrix-ltx-ingredients"),
     config("matrix-music-seed-max-safe", "Music3 · max safe seed · MP3", 920, 1540, {
@@ -175,6 +183,7 @@ if (command === "create") console.log(JSON.stringify(await createMatrixProject()
 else if (command === "run-stage1") console.log(JSON.stringify(await runStage(projectId, stage1Ids), null, 2));
 else if (command === "prepare-stage2") console.log(JSON.stringify(await prepareStage2(projectId), null, 2));
 else if (command === "run-stage2") console.log(JSON.stringify(await runStage(projectId, stage2Ids), null, 2));
+else if (command === "run-stage2-inputs") console.log(JSON.stringify(await runStage(projectId, stage2InputIds), null, 2));
 else if (command === "run-flash") console.log(JSON.stringify(await runFlash(projectId), null, 2));
 else if (command === "report") console.log(JSON.stringify(await report(projectId), null, 2));
-else throw new Error("Usage: run-gpu-e2e-matrix.mjs create|run-stage1|prepare-stage2|run-stage2|run-flash|report [project-id]");
+else throw new Error("Usage: run-gpu-e2e-matrix.mjs create|run-stage1|prepare-stage2|run-stage2|run-stage2-inputs|run-flash|report [project-id]");

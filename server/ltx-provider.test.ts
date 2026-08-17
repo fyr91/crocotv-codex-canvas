@@ -19,6 +19,13 @@ test("LTX 2.5 固定适配器区分文生视频、首帧与 Ingredients", () => 
   assert.equal(ingredients.inputRole, "reference_sheet");
 });
 
+test("LTX 2.5 不会把缺图的 Ingredients 静默降级成文生视频", () => {
+  assert.throws(
+    () => buildLtxGenerationRequest({ prompt: "missing reference", size: "512x320", duration: 3, inputMode: "multimodal", optimizePrompt: false, referenceStrength: 1, hasImage: false, seed: 42 }),
+    /Ingredients 缺少参考图/,
+  );
+});
+
 test("LTX 2.5 固定适配器阻止超出像素帧预算的请求", () => {
   assert.throws(() => buildLtxGenerationRequest({ prompt: "A valid prompt", size: "4096x2304", duration: 20, inputMode: "text", optimizePrompt: true, referenceStrength: 1, hasImage: false, seed: 42 }), /像素帧预算/);
 });

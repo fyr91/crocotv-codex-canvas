@@ -388,6 +388,8 @@ export function buildLtxGenerationRequest(input: Pick<VideoGenerationInput, "pro
   if (!Number.isInteger(duration) || duration < 3 || duration > 20) throw new Error("LTX 2.5 时长必须为 3–20 秒整数");
   const numFrames = duration * 24 + 1;
   if (width * height * numFrames > 1_200_000_000) throw new Error("LTX 2.5 分辨率和时长超过 GPU 像素帧预算");
+  if (input.inputMode === "firstFrame" && !input.hasImage) throw new Error("LTX 2.5 首帧生视频缺少首帧图片");
+  if (input.inputMode === "multimodal" && !input.hasImage) throw new Error("LTX 2.5 Ingredients 缺少参考图");
   const workflowId = !input.hasImage
     ? "ltx25_distilled_t2v_v1"
     : input.inputMode === "firstFrame"
