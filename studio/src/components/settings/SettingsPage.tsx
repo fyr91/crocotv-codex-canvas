@@ -33,6 +33,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   ARK_API_KEY: "火山方舟 Ark",
   BIGMODEL_API_KEY: "BigModel",
   RUNWARE_API_KEY: "Runware",
+  GPU_API_TOKEN: "成都 GPU 调度中心",
   H3_API_KEY: "MiniMax H3",
   SUNO_API_KEY: "Suno",
   CROCO_CHARACTERS_API_TOKEN: "Croco 角色服务",

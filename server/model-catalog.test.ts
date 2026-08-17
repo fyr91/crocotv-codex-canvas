@@ -17,4 +17,9 @@ test("模型目录公开统一名称与 H3 四种输入模式", () => {
   assert.equal("reference_videos" in catalog.models["minimax-h3"].inputs, false);
   assert.equal(catalog.models["minimax-h3"].inputs.first_frame.ordered, true);
   assert.equal(catalog.models["minimax-h3"].inputs.last_frame.ordered, true);
+  assert.deepEqual(catalog.model_lines["ltx-2.5"].modes, ["t2v", "i2v", "r2v"]);
+  assert.deepEqual(catalog.models["ernie-image-turbo"].capabilities, ["t2i"]);
+  assert.equal(catalog.model_lines["runware-image"].legacy_model_ids.includes("ernie-image-turbo"), false);
+  assert.deepEqual(catalog.model_lines["ernie-image-turbo"].legacy_model_ids, ["ernie-image-turbo"]);
+  assert.deepEqual(catalog.models.flashvsr.capabilities, ["video_enhance"]);
 });

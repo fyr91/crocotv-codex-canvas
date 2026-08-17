@@ -31,7 +31,7 @@ export async function requestImageQuestion(_config: AiConfig, messages: AiTextMe
     const jobId = crypto.randomUUID(); options?.onJobCreated?.(jobId);
     return (await localRequest<{ text: string }>("/api/generate/text", { prompt, model: modelOptionName(_config.textModel || _config.model), inputResourceIds }, options?.signal)).text;
 }
-export async function fetchImageModels() { return ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2"]; }
+export async function fetchImageModels() { return ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2", "ernie-image-turbo"]; }
 export async function fetchChannelModels(_channel: ModelChannel) { return fetchImageModels(); }
 async function localRequest<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> { const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "本地生成失败"); return payload; }
 function imageDimensions(size: string): [number, number] { const match = String(size || "").match(/^(\d+)x(\d+)$/i); return match ? [Number(match[1]), Number(match[2])] : [1024, 1024]; }

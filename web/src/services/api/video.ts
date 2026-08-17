@@ -12,7 +12,7 @@ export type VideoGenerationTaskState = { status: "pending" } | { status: "comple
 export async function requestVideoGeneration(config: AiConfig, prompt: string, references: ReferenceImage[] = [], videoReferences: ReferenceVideo[] = [], audioReferences: ReferenceAudio[] = [], options?: RequestOptions): Promise<VideoGenerationResult[]> {
     const selectedModel = config.videoModel || config.model;
     const provider = providerIdForModel(selectedModel) || "minimax_h3";
-    const providerLabel = provider === "happyhorse" ? "Happy Horse" : "MiniMax H3";
+    const providerLabel = provider === "ltx" ? "LTX 2.5" : provider === "happyhorse" ? "Happy Horse" : "MiniMax H3";
     const jobId = crypto.randomUUID(); options?.onJobCreated?.(jobId); options?.onStatusChange?.("running"); options?.onProgress?.(5, `提交 ${providerLabel}`);
     const response = await fetch("/api/generate/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         model: modelOptionName(selectedModel),
