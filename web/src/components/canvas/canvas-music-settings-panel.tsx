@@ -61,7 +61,12 @@ export function CanvasMusicSettingsPanel({ music, model, references, compact = f
                             {music.instrumental ? null : <Field label="演唱性别"><Select<"m" | "f"> size="small" className="w-full" allowClear value={music.vocalGender} placeholder="不指定" options={[{ label: "男声", value: "m" }, { label: "女声", value: "f" }]} onChange={(musicVocalGender) => onChange({ musicVocalGender })} /></Field>}
                             <WeightField label="风格遵循度" value={music.styleWeight} onChange={(musicStyleWeight) => onChange({ musicStyleWeight })} />
                             <WeightField label="创意度" value={music.weirdnessConstraint} onChange={(musicWeirdnessConstraint) => onChange({ musicWeirdnessConstraint })} />
-                            {model === "minimax-music-3" ? <Field label="生成时长（秒）"><InputNumber size="small" className="w-full" min={1} max={360} step={1} value={music.maxDuration ?? 120} onChange={(value) => onChange({ musicMaxDuration: Number(value) || 120 })} /></Field> : null}
+                            {model === "minimax-music-3" ? <>
+                                <Field label="生成时长（秒）"><InputNumber size="small" className="w-full" min={0.04} max={360} step={0.01} value={music.maxDuration ?? 120} onChange={(value) => onChange({ musicMaxDuration: value == null ? 120 : Number(value) })} /></Field>
+                                <Field label="Seed"><InputNumber size="small" className="w-full" min={0} step={1} precision={0} value={music.seed ?? 0} onChange={(value) => onChange({ musicSeed: value == null ? 0 : Number(value) })} /></Field>
+                                <Field label="输出格式"><Select<"mp3" | "wav"> size="small" className="w-full" value={music.outputFormat || "mp3"} options={[{ label: "MP3", value: "mp3" }, { label: "WAV", value: "wav" }]} onChange={(musicOutputFormat) => onChange({ musicOutputFormat })} /></Field>
+                                <div className="flex items-center justify-between rounded-lg border px-2.5 py-2" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}><div><div className="text-xs font-medium">分块解码</div><div className="text-[10px] opacity-50">长音频降低显存峰值</div></div><Switch size="small" checked={Boolean(music.tiledDecode)} onChange={(musicTiledDecode) => onChange({ musicTiledDecode })} /></div>
+                            </> : null}
                         </div>
                     ),
                 }]}

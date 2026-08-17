@@ -239,6 +239,7 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
         model,
         width: imageDimension(config, 0),
         height: imageDimension(config, 1),
+        seed: optionalNonnegativeInteger(config.metadata?.imageSeed ?? config.metadata?.seed, "图片 Seed"),
         referenceResourceIds: inputs.imageIds,
         signal,
       })));
@@ -258,6 +259,8 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
         imageResourceIds: inputs.imageIds,
         videoResourceIds: inputs.videoIds,
         audioResourceIds: inputs.audioIds,
+        referenceStrength: optionalBoundedNumber(config.metadata?.videoReferenceStrength ?? config.metadata?.referenceStrength, 0.1, 1.5, "LTX 参考强度"),
+        seed: optionalNonnegativeInteger(config.metadata?.videoSeed ?? config.metadata?.seed, "视频 Seed"),
         signal,
         onProgress: (progress) => signal?.aborted ? undefined : publishVideoProgress(projectId, config.id, outputIds, progress, originClientId, remoteOperation, operationId),
       });
@@ -293,6 +296,9 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
           styleWeight: config.metadata?.musicStyleWeight,
           weirdnessConstraint: config.metadata?.musicWeirdnessConstraint,
           maxDuration: config.metadata?.musicMaxDuration,
+          seed: config.metadata?.musicSeed,
+          tiledDecode: config.metadata?.musicTiledDecode,
+          outputFormat: config.metadata?.musicOutputFormat,
         },
       });
       signal?.throwIfAborted();
@@ -528,6 +534,8 @@ function normalizeModel(value: string) { const decoded = value.includes("::") ? 
 function speechToneModel() { const configured = process.env.TTS_TONE_MODEL || "deepseek-v4-flash-ga-260731"; return configured === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : configured; }
 function validateModel(mode: GenerationMode, model: string) { if (!model) throw new Error("生成模组必须指定模型"); if (mode === "text" && ![...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(model)) throw new Error(`模型 ${model} 不是可用的文字模型`); if (mode === "image" && !models.image.includes(model)) throw new Error(`模型 ${model} 不是可用的图片模型`); if (mode === "video" && !models.video.includes(model)) throw new Error(`模型 ${model} 不是可用的视频模型`); if (mode === "music" && !models.music.includes(model)) throw new Error(`模型 ${model} 不是可用的音乐模型`); }
 function textResourceIdsForModel(model: string, inputs: ResolvedInput) { if (models.runwareLlm.includes(model)) return [...inputs.imageIds, ...inputs.videoIds, ...inputs.audioIds]; if (model === "glm-5v-turbo") return [...inputs.imageIds, ...inputs.videoIds]; if (model === "doubao-seed-2-1-turbo-260628") return inputs.imageIds; return []; }
+function optionalNonnegativeInteger(value: unknown, label: string) { if (value == null || value === "") return undefined; const number = Number(value); if (!Number.isSafeInteger(number) || number < 0) throw new Error(`${label} 必须为非负整数`); return number; }
+function optionalBoundedNumber(value: unknown, minimum: number, maximum: number, label: string) { if (value == null || value === "") return undefined; const number = Number(value); if (!Number.isFinite(number) || number < minimum || number > maximum) throw new Error(`${label} 必须在 ${minimum}–${maximum} 之间`); return number; }
 function generationCount(node: CanvasNode, mode: GenerationMode, model: string) { if (mode === "audio") return 1; if (mode === "music") return model === "minimax-music-3" ? 1 : 2; const value = Number(mode === "video" ? node.metadata?.videoCount : node.metadata?.count); return Math.max(1, Math.min(3, Number.isFinite(value) ? Math.floor(value) : 1)); }
 function textThinkingMode(node: CanvasNode): TextThinkingMode | undefined { const value = String(node.metadata?.thinking || ""); return value === "enabled" || value === "disabled" || value === "auto" ? value : undefined; }
 function videoDuration(node: CanvasNode, model: string) { return Math.max(3, Math.min(model === "ltx-2.5" ? 20 : 15, Math.floor(Number(node.metadata?.seconds) || 6))); }

@@ -4229,6 +4229,9 @@ function buildMusicGenerationMetadata(config: AiConfig, music: MusicGenerationCo
         musicStyleWeight: music.styleWeight,
         musicWeirdnessConstraint: music.weirdnessConstraint,
         musicMaxDuration: music.maxDuration,
+        musicSeed: music.seed,
+        musicTiledDecode: music.tiledDecode,
+        musicOutputFormat: music.outputFormat,
         musicBatchId,
         musicOutputIndex,
     };

@@ -181,12 +181,22 @@ async function generateMiniMaxMusic3(input: { prompt: string; params?: Record<st
     fileName: stored.fileName,
     createdAt: new Date().toISOString(),
     source: "minimax-music3",
-    metadata: { model: "minimax-music-3", jobId: created.job_id, duration: parameters.max_duration, caption: parameters.caption, instrumental: !parameters.lyrics, seed: parameters.seed },
+    metadata: {
+      model: "minimax-music-3",
+      jobId: created.job_id,
+      duration: parameters.max_duration,
+      caption: parameters.caption,
+      lyrics: parameters.lyrics,
+      instrumental: !parameters.lyrics,
+      seed: parameters.seed,
+      tiledDecode: parameters.tiled_decode,
+      outputFormat: parameters.output_format,
+    },
   });
   return [resource];
 }
 
-export async function generateImage(input: { prompt: string; model: string; width?: number; height?: number; referenceResourceIds?: string[]; signal?: AbortSignal }) {
+export async function generateImage(input: { prompt: string; model: string; width?: number; height?: number; seed?: number; referenceResourceIds?: string[]; signal?: AbortSignal }) {
   if (input.model === "ernie-image-turbo") return generateErnieImage(input);
   if (!models.image.includes(input.model)) throw new Error("只支持已配置的图片模型");
   const taskUUID = randomUUID();
@@ -221,16 +231,18 @@ export async function generateImage(input: { prompt: string; model: string; widt
 
 const ERNIE_IMAGE_SIZES = new Set(["1024x1024", "848x1264", "1264x848", "768x1376", "1376x768", "896x1200", "1200x896"]);
 
-async function generateErnieImage(input: { prompt: string; model: string; width?: number; height?: number; referenceResourceIds?: string[]; signal?: AbortSignal }) {
+async function generateErnieImage(input: { prompt: string; model: string; width?: number; height?: number; seed?: number; referenceResourceIds?: string[]; signal?: AbortSignal }) {
   if (input.referenceResourceIds?.length) throw new Error("ERNIE Image Turbo 当前只支持文生图，不接受参考图片");
   const width = Math.floor(Number(input.width) || 1024);
   const height = Math.floor(Number(input.height) || 1024);
   if (!ERNIE_IMAGE_SIZES.has(`${width}x${height}`)) throw new Error(`ERNIE Image Turbo 不支持尺寸 ${width}x${height}`);
+  if (input.seed != null && (!Number.isSafeInteger(input.seed) || input.seed < 0)) throw new Error("ERNIE Image Turbo Seed 必须为非负整数");
+  const parameters = { prompt: input.prompt, width, height, ...(input.seed == null ? {} : { seed: input.seed }) };
   const created = await submitUnifiedGpuJob({
     modelId: "ernie-image-turbo",
     operation: "image.generate",
     contractVersion: "1",
-    parameters: { prompt: input.prompt, width, height },
+    parameters,
     signal: input.signal,
   });
   const job = await waitForUnifiedGpuJob({ job: created, signal: input.signal });
@@ -248,7 +260,7 @@ async function generateErnieImage(input: { prompt: string; model: string; width?
     fileName: stored.fileName,
     createdAt: new Date().toISOString(),
     source: "ernie",
-    metadata: { model: input.model, jobId: job.job_id, width, height },
+    metadata: { model: input.model, jobId: job.job_id, width, height, seed: job.parameters?.seed ?? input.seed },
   });
 }
 
@@ -292,12 +304,12 @@ export async function generateH3Video(input: Omit<VideoGenerationInput, "model">
   if (input.videoResourceIds?.length) throw new Error("当前 H3 Runtime 不支持参考视频；请仅连接图片或音频参考");
   const images = await Promise.all((input.imageResourceIds || []).slice(0, 9).map((id) => uploadGpuResource(id, "images", input.signal)));
   const audios = await Promise.all((input.audioResourceIds || []).slice(0, 3).map((id) => uploadGpuResource(id, "audio", input.signal)));
-  const qualities = ["preview", "base_768p", "standard_480p", "standard_768p", "portrait_preview", "portrait_768p", "standard_portrait_480p", "standard_portrait_768p"];
+  const qualities = ["preview", "base_0_7mp", "base_768p", "standard_480p", "standard_0_7mp", "standard_768p", "portrait_preview", "portrait_0_7mp", "portrait_768p", "standard_portrait_480p", "standard_portrait_0_7mp", "standard_portrait_768p"];
   const quality = qualities.includes(String(input.quality)) ? String(input.quality) : "preview";
   const count = Math.max(1, Math.min(3, Number(input.count) || 1));
   return Promise.all(Array.from({ length: count }, async (_, outputIndex) => {
     const clientJobId = randomUUID();
-    const request = buildH3JobPayload({ externalJobId: clientJobId, count: 1, prompt: input.prompt, quality, duration: input.duration, images, videos: [], audios });
+    const request = buildH3JobPayload({ externalJobId: clientJobId, count: 1, prompt: input.prompt, quality, duration: input.duration, inputMode: input.inputMode, images, videos: [], audios });
     const created = await submitUnifiedGpuJob({
       modelId: "minimax-h3",
       operation: "video.generate",
@@ -517,17 +529,23 @@ async function resourceDataUri(id: string) {
   return `data:${resource.mimeType};base64,${(await readFile(safeResourcePath(resource.fileName))).toString("base64")}`;
 }
 
-export function buildH3JobPayload(input: { externalJobId: string; count: number; prompt: string; quality: string; duration: number; images: string[]; videos: string[]; audios: string[] }) {
+export function buildH3JobPayload(input: { externalJobId: string; count: number; prompt: string; quality: string; duration: number; inputMode?: string; images: string[]; videos: string[]; audios: string[] }) {
   if (input.videos.length) throw new Error("当前 H3 Runtime 不支持参考视频；请仅连接图片或音频参考");
-  const mode = input.images.length || input.audios.length ? "r2v" : "t2v";
+  const inputMode = String(input.inputMode || "text");
+  if (inputMode === "text" && (input.images.length || input.audios.length)) throw new Error("H3 文生视频模式不接受参考图片或音频");
+  if (inputMode === "firstFrame" && (input.images.length !== 1 || input.audios.length)) throw new Error("H3 首帧生视频需要且只接受一张首帧图片");
+  if (inputMode === "firstLastFrame" && input.images.length !== 2) throw new Error("H3 首尾帧生视频需要按顺序连接两张图片");
+  if (inputMode === "multimodal" && !input.images.length && !input.audios.length) throw new Error("H3 多模态参考至少需要一张图片或一段音频");
+  const mode = inputMode === "firstFrame" ? "i2v" : inputMode === "text" ? "t2v" : "r2v";
   return {
     parameters: {
       mode,
       prompt: input.prompt,
+      quality: input.quality,
       duration_seconds: input.duration,
     },
     inputs: [
-      ...input.images.map((asset_id) => ({ role: "reference_image", asset_id })),
+      ...input.images.map((asset_id) => ({ role: mode === "i2v" ? "first_frame" : "reference_image", asset_id })),
       ...input.audios.map((asset_id) => ({ role: "reference_audio", asset_id })),
     ],
   };

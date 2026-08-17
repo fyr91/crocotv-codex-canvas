@@ -11,6 +11,9 @@ export type MusicGenerationConfig = {
     styleWeight: number;
     weirdnessConstraint: number;
     maxDuration?: number;
+    seed?: number;
+    tiledDecode?: boolean;
+    outputFormat?: "mp3" | "wav";
 };
 
 export const MUSIC_STYLE_GROUPS = [
@@ -31,6 +34,9 @@ export function musicConfigFromMetadata(metadata?: CanvasNodeMetadata): MusicGen
         styleWeight: metadata?.musicStyleWeight ?? 0.65,
         weirdnessConstraint: metadata?.musicWeirdnessConstraint ?? 0.65,
         maxDuration: metadata?.musicMaxDuration ?? 120,
+        seed: metadata?.musicSeed ?? 0,
+        tiledDecode: Boolean(metadata?.musicTiledDecode),
+        outputFormat: metadata?.musicOutputFormat || "mp3",
     };
 }
 
