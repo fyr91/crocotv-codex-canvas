@@ -225,7 +225,11 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
 
   try {
     if (mode === "text") {
-      const settled = await Promise.allSettled(outputIds.map(() => generateText(inputs.prompt, model, textResourceIdsForModel(model, inputs), [], inputs.systemPrompt, { thinking: textThinkingMode(config) })));
+      const settled = await Promise.allSettled(outputIds.map(() => generateText(inputs.prompt, model, textResourceIdsForModel(model, inputs), [], inputs.systemPrompt, {
+        thinking: textThinkingMode(config),
+        outputSchema: textOutputSchema(config),
+        outputSchemaName: textOutputSchemaName(config),
+      })));
       signal?.throwIfAborted();
       const failure = await finishTextOutputs(projectId, config.id, outputIds, settled, originClientId);
       if (failure) return { configNodeId, outputNodeIds: outputIds, status: "error", error: failure };
@@ -497,6 +501,8 @@ function validateModel(mode: GenerationMode, model: string) { if (!model) throw 
 function textResourceIdsForModel(model: string, inputs: ResolvedInput) { if (models.runwareLlm.includes(model)) return [...inputs.imageIds, ...inputs.videoIds, ...inputs.audioIds]; if (model === "glm-5v-turbo") return [...inputs.imageIds, ...inputs.videoIds]; if (model === "doubao-seed-2.1-turbo") return inputs.imageIds; return []; }
 function generationCount(node: CanvasNode, mode: GenerationMode) { if (mode === "audio") return 1; if (mode === "music") return 2; const value = Number(mode === "video" ? node.metadata?.videoCount : node.metadata?.count); return Math.max(1, Math.min(3, Number.isFinite(value) ? Math.floor(value) : 1)); }
 function textThinkingMode(node: CanvasNode): TextThinkingMode | undefined { const value = String(node.metadata?.thinking || ""); return value === "enabled" || value === "disabled" || value === "auto" ? value : undefined; }
+function textOutputSchema(node: CanvasNode): Record<string, unknown> | undefined { const value = node.metadata?.outputSchema; return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }
+function textOutputSchemaName(node: CanvasNode): string | undefined { const value = String(node.metadata?.outputSchemaName || "").trim(); return value || undefined; }
 function videoDuration(node: CanvasNode) { return Math.max(3, Math.min(15, Math.floor(Number(node.metadata?.seconds) || 6))); }
 function imageDimension(node: CanvasNode, index: 0 | 1) { const match = String(node.metadata?.size || "").match(/^(\d+)x(\d+)$/); return match ? Number(match[index + 1]) : 1024; }
 function outputSize(type: string) { if (type === "image") return { width: 360, height: 320 }; if (type === "video") return { width: 400, height: 300 }; if (type === "audio") return { width: 360, height: 180 }; if (type === "music") return { width: 380, height: 220 }; return { width: 320, height: 240 }; }

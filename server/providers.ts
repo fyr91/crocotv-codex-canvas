@@ -11,7 +11,13 @@ export { models };
 
 export type TextThinkingMode = "enabled" | "disabled" | "auto";
 
-export async function generateText(prompt: string, requestedModel?: string, inputResourceIds: string[] = [], inputDataUrls: string[] = [], systemPrompt = "", options: { thinking?: TextThinkingMode } = {}) {
+export type TextGenerationOptions = {
+  thinking?: TextThinkingMode;
+  outputSchema?: Record<string, unknown>;
+  outputSchemaName?: string;
+};
+
+export async function generateText(prompt: string, requestedModel?: string, inputResourceIds: string[] = [], inputDataUrls: string[] = [], systemPrompt = "", options: TextGenerationOptions = {}) {
   const normalizedRequestedModel = normalizeTextModel(requestedModel);
   const availableModels = [...models.codingPlanLlm, ...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm];
   const logicalModel = normalizedRequestedModel && availableModels.includes(normalizedRequestedModel) ? normalizedRequestedModel : "deepseek-v4-flash";
@@ -35,7 +41,7 @@ export async function generateText(prompt: string, requestedModel?: string, inpu
       const match = dataUrl.match(/^data:(image\/(?:png|jpeg|webp));base64,/);
       if (match && modelAcceptsMimeType(logicalModel, match[1])) media.push({ mimeType: match[1], url: dataUrl });
     }
-    if (channel === "coding-plan") return requestCodingPlanText({ logicalModel, model, prompt, systemPrompt, media, thinking: options.thinking });
+    if (channel === "coding-plan") return requestCodingPlanText({ logicalModel, model, prompt, systemPrompt, media, ...options });
     const apiKey = required(channel === "runware" ? "RUNWARE_API_KEY" : channel === "bigmodel" ? "BIGMODEL_API_KEY" : "ARK_API_KEY");
     const baseUrl = (channel === "runware" ? process.env.RUNWARE_BASE_URL || "https://api.runware.ai/v1" : channel === "bigmodel" ? process.env.BIGMODEL_BASE_URL || "https://open.bigmodel.cn/api/paas/v4" : process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
     const content = media.length ? [{ type: "text", text: prompt }, ...media.map((item) => mediaContent(item.mimeType, item.url))] : prompt;
@@ -56,13 +62,14 @@ export async function generateText(prompt: string, requestedModel?: string, inpu
   }
 }
 
-async function requestCodingPlanText(input: { logicalModel: string; model: string; prompt: string; systemPrompt: string; media: Array<{ mimeType: string; url: string }>; thinking?: TextThinkingMode }) {
+async function requestCodingPlanText(input: { logicalModel: string; model: string; prompt: string; systemPrompt: string; media: Array<{ mimeType: string; url: string }> } & TextGenerationOptions) {
   const apiKey = required("CODING_PLAN_API_KEY");
   const baseUrl = String(process.env.CODING_PLAN_BASE_URL || "https://ark.cn-beijing.volces.com/api/plan").replace(/\/$/, "");
   const endpoint = baseUrl.endsWith("/v1/messages") ? baseUrl : `${baseUrl}/v1/messages`;
   const content = input.media.length
     ? [{ type: "text", text: input.prompt }, ...input.media.map((item) => anthropicMediaContent(item.mimeType, item.url))]
     : input.prompt;
+  const outputSchemaName = structuredOutputName(input.outputSchemaName);
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
@@ -72,17 +79,37 @@ async function requestCodingPlanText(input: { logicalModel: string; model: strin
       ...(input.systemPrompt.length ? { system: input.systemPrompt } : {}),
       messages: [{ role: "user", content }],
       ...(input.logicalModel === "deepseek-v4-flash" ? { thinking: { type: input.thinking || "enabled" } } : {}),
+      ...(input.outputSchema ? {
+        tools: [{
+          name: outputSchemaName,
+          description: "Return the final structured result. Do not emit prose.",
+          input_schema: input.outputSchema,
+        }],
+        tool_choice: { type: "tool", name: outputSchemaName },
+      } : {}),
       stream: false,
     }),
     signal: AbortSignal.timeout(420_000),
   });
   if (!response.ok) throw new Error(await responseError(response, `火山 Coding Plan 请求失败（${response.status}）`));
   const payload = await response.json() as any;
+  if (input.outputSchema) {
+    const toolUse = Array.isArray(payload?.content)
+      ? payload.content.find((block: any) => block?.type === "tool_use" && block.name === outputSchemaName && block.input && typeof block.input === "object" && !Array.isArray(block.input))
+      : undefined;
+    if (!toolUse) throw new Error("火山 Coding Plan 没有返回符合 Schema 的结构化结果");
+    return JSON.stringify(toolUse.input);
+  }
   const text = Array.isArray(payload?.content)
     ? payload.content.filter((block: any) => block?.type === "text" && typeof block.text === "string").map((block: any) => block.text).join("")
     : payload?.choices?.[0]?.message?.content;
   if (typeof text !== "string" || !text.trim()) throw new Error("火山 Coding Plan 没有返回文本");
   return text;
+}
+
+function structuredOutputName(value?: string) {
+  const normalized = String(value || "structured_output").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64);
+  return normalized || "structured_output";
 }
 
 async function releaseModelAssetLeases(leases: ModelAssetLease[]) {

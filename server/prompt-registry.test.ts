@@ -32,6 +32,16 @@ test("读取 Prompt 时保留源文件完整字节并校验哈希", async () => 
   assert.ok(template.systemPrompt.endsWith("\n"));
 });
 
+test("艺术方向模板固定使用 Doubao 并声明最小三选项 Schema", async () => {
+  const template = await registry.getPromptTemplate("croco.p3.art-direction-options");
+  assert.deepEqual(template.modelPolicy, {
+    defaultModel: "doubao-seed-2.1-turbo",
+    modelFamily: "coding_plan",
+    allowOverride: false,
+  });
+  assert.deepEqual(template.outputSchema, artDirectionOutputSchema());
+});
+
 test("未知 Prompt 返回可识别的 404 错误", async () => {
   await assert.rejects(() => registry.getPromptTemplate("croco.p9.missing"), (error: any) => error?.statusCode === 404);
 });
@@ -53,3 +63,28 @@ test("全局 Prompt 版本只追加且可在历史版本之间切换激活", asy
   assert.deepEqual(new Set(all.map((item) => item.templateVersion)), new Set([original.templateVersion, custom.templateVersion]));
   assert.equal(all.find((item) => item.active)?.templateVersion, original.templateVersion);
 });
+
+function artDirectionOutputSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["options"],
+    properties: {
+      options: {
+        type: "array",
+        minItems: 3,
+        maxItems: 3,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["name", "positive_prompt", "negative_prompt"],
+          properties: {
+            name: { type: "string", minLength: 1 },
+            positive_prompt: { type: "string", minLength: 1 },
+            negative_prompt: { type: "string", minLength: 1 },
+          },
+        },
+      },
+    },
+  };
+}

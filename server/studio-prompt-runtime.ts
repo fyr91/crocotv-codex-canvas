@@ -124,6 +124,10 @@ export async function executeStudioPrompt(input: StudioGenerationRequest): Promi
           templateKey: resolved.templateKey,
           templateVersion: resolved.templateVersion,
           systemPromptSha256: resolved.systemPromptSha256,
+          ...(resolved.outputSchema ? {
+            outputSchema: resolved.outputSchema,
+            outputSchemaName: "art_direction_options",
+          } : {}),
           studioPromptOperation: input.operation,
           status: "idle",
         },
@@ -183,6 +187,7 @@ async function resolveStudioPrompt(state: Awaited<ReturnType<typeof getStudioBac
     systemPrompt: prompt.systemPrompt,
     systemPromptSha256: "systemPromptSha256" in prompt ? prompt.systemPromptSha256 : prompt.contentSha256,
     model: builtin.modelPolicy.allowOverride && textModels().includes(projectRequestedModel) ? projectRequestedModel : builtin.modelPolicy.defaultModel,
+    ...(operation === "style_analysis" && builtin.outputSchema ? { outputSchema: structuredClone(builtin.outputSchema) } : {}),
   };
 }
 
