@@ -20,6 +20,7 @@ export type UnifiedGpuJob = {
   progress?: number | null;
   stage?: string | null;
   error?: string | null;
+  parameters?: Record<string, unknown>;
 };
 
 type UnifiedGpuOutput = {
@@ -53,7 +54,7 @@ export async function uploadGpuResource(resourceId: string, kind: "images" | "au
   if (!resource) throw new Error(`GPU 参考资源不存在：${resourceId}`);
   const form = new FormData();
   form.append("file", new Blob([await readFile(safeResourcePath(resource.fileName))], { type: resource.mimeType }), path.basename(resource.fileName));
-  const response = await gpuFetch(`/api/v1/h3/assets/${kind}`, { method: "POST", body: form }, signal, 120_000);
+  const response = await gpuFetch(`/api/v2/assets/${kind}`, { method: "POST", body: form }, signal, 120_000);
   if (!response.ok) throw await gpuApiError(response, "GPU 素材上传失败");
   const payload = await response.json() as { asset_id?: string };
   if (!payload.asset_id) throw new Error("GPU 调度中心没有返回素材 ID");
@@ -61,7 +62,7 @@ export async function uploadGpuResource(resourceId: string, kind: "images" | "au
 }
 
 export async function submitUnifiedGpuJob(input: {
-  modelId: "ernie-image-turbo" | "ltx-2.5" | "flashvsr";
+  modelId: "minimax-h3" | "ernie-image-turbo" | "ltx-2.5" | "flashvsr";
   operation: "image.generate" | "video.generate" | "video.enhance";
   contractVersion: "1" | "2";
   parameters: Record<string, unknown>;
@@ -88,6 +89,7 @@ export async function submitUnifiedGpuJob(input: {
   if (!response.ok) throw await gpuApiError(response, `${modelDisplayName(input.modelId)} 提交失败`, input.modelId);
   const job = await response.json() as UnifiedGpuJob;
   if (!job.job_id) throw new Error(`${modelDisplayName(input.modelId)} 没有返回任务 ID`);
+  gpuEvent("submitted", { job_id: job.job_id, model_id: input.modelId, operation: input.operation, status: job.status });
   return job;
 }
 
@@ -118,8 +120,10 @@ export async function waitForUnifiedGpuJob(input: {
     job = await getUnifiedGpuJob(job.job_id, input.signal);
   }
   if (job.status !== "succeeded") {
+    gpuEvent("terminal", { job_id: job.job_id, model_id: job.model_id, status: job.status });
     throw new Error(job.error || `${modelDisplayName(job.model_id)} 任务状态：${job.status}`);
   }
+  gpuEvent("terminal", { job_id: job.job_id, model_id: job.model_id, status: job.status });
   await input.onProgress?.({ jobId: job.job_id, outputIndex, stage: "completed", progress: 100, label: `${modelDisplayName(job.model_id)} 正在保存结果` });
   return job;
 }
@@ -146,8 +150,7 @@ export async function cancelUnifiedGpuJob(jobId: string) {
 }
 
 export async function cancelH3GpuJob(jobId: string) {
-  const response = await gpuFetch(`/api/v1/h3/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" }, undefined, 30_000);
-  if (!response.ok && response.status !== 404 && response.status !== 409) throw await gpuApiError(response, "H3 任务取消失败", "minimax-h3");
+  return cancelUnifiedGpuJob(jobId);
 }
 
 export function gpuProgressState(job: Pick<UnifiedGpuJob, "model_id" | "status" | "stage" | "progress">): Omit<GpuJobProgress, "jobId" | "outputIndex"> {
@@ -212,4 +215,8 @@ function wait(ms: number, signal?: AbortSignal) {
     }, ms);
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+function gpuEvent(event: string, fields: Record<string, unknown>) {
+  console.info(JSON.stringify({ scope: "gpu-v2", event, ...fields }));
 }

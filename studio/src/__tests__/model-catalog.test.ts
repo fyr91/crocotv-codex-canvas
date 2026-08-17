@@ -32,11 +32,12 @@ describe('Croco model catalog selectors', () => {
             'google:nano-banana@2-lite',
             'google:4@1',
             'openai:gpt-image@2',
+            'ernie-image-turbo',
         ];
         expect(GLOBAL_IMAGE_MODELS.map((model) => model.id)).toEqual(imageIds);
         expect(GLOBAL_T2I_MODELS.map((model) => model.id)).toEqual(imageIds);
-        expect(GLOBAL_I2I_MODELS.map((model) => model.id)).toEqual(imageIds);
-        expect(GLOBAL_I2V_MODELS.map((model) => model.id)).toEqual(['minimax-h3']);
+        expect(GLOBAL_I2I_MODELS.map((model) => model.id)).toEqual(imageIds.slice(0, 3));
+        expect(GLOBAL_I2V_MODELS.map((model) => model.id)).toEqual(['minimax-h3', 'ltx-2.5']);
     });
 
     it('does not expose upstream LumenX provider models', () => {

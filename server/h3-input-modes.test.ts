@@ -6,15 +6,14 @@ const base = { externalJobId: "job", count: 1, prompt: "prompt", quality: "previ
 
 test("H3 根据真实资源选择 T2V 与 R2V", () => {
   const t2v = buildH3JobPayload({ ...base, images: [], videos: [], audios: [] });
-  assert.equal(t2v.request.mode, "t2v");
-  assert.equal("reference_image_asset_ids" in t2v.request, false);
-  assert.equal("reference_audio_asset_ids" in t2v.request, false);
-  assert.equal("reference_video_asset_ids" in t2v.request, false);
+  assert.equal(t2v.parameters.mode, "t2v");
+  assert.deepEqual(t2v.inputs, []);
   const r2v = buildH3JobPayload({ ...base, images: ["image"], videos: [], audios: ["audio"] });
-  assert.equal(r2v.request.mode, "r2v");
-  assert.deepEqual(r2v.request.reference_image_asset_ids, ["image"]);
-  assert.deepEqual(r2v.request.reference_audio_asset_ids, ["audio"]);
-  assert.equal("reference_video_asset_ids" in r2v.request, false);
+  assert.equal(r2v.parameters.mode, "r2v");
+  assert.deepEqual(r2v.inputs, [
+    { role: "reference_image", asset_id: "image" },
+    { role: "reference_audio", asset_id: "audio" },
+  ]);
 });
 
 test("H3 在本地拒绝线上 Runtime 尚未支持的视频参考", () => {

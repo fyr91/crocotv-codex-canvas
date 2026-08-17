@@ -6,12 +6,9 @@ import { getSunoCallbackUrl } from "./suno-callback";
 import { createModelAssetLease, type ModelAssetLease } from "./model-asset-url";
 import { providerModels as models } from "./model-catalog";
 import {
-  cancelH3GpuJob,
   cancelUnifiedGpuJob,
   downloadUnifiedGpuOutput,
   getUnifiedGpuJob,
-  gpuApiBaseUrl,
-  gpuApiToken,
   listUnifiedGpuOutputs,
   submitUnifiedGpuJob,
   uploadGpuResource,
@@ -231,45 +228,40 @@ export function h3JobProgressState(status: unknown): { pending: boolean; stage: 
 }
 
 export async function generateH3Video(input: Omit<VideoGenerationInput, "model"> & { model?: string }) {
-  const config = { baseUrl: gpuApiBaseUrl(), apiKey: gpuApiToken() };
   if (!Number.isInteger(input.duration) || input.duration < 3 || input.duration > 15) throw new Error("H3 时长必须为 3–15 秒整数");
   if (input.videoResourceIds?.length) throw new Error("当前 H3 Runtime 不支持参考视频；请仅连接图片或音频参考");
   const images = await Promise.all((input.imageResourceIds || []).slice(0, 9).map((id) => uploadGpuResource(id, "images", input.signal)));
   const audios = await Promise.all((input.audioResourceIds || []).slice(0, 3).map((id) => uploadGpuResource(id, "audio", input.signal)));
-  const externalJobId = randomUUID();
   const qualities = ["preview", "base_768p", "standard_480p", "standard_768p", "portrait_preview", "portrait_768p", "standard_portrait_480p", "standard_portrait_768p"];
   const quality = qualities.includes(String(input.quality)) ? String(input.quality) : "preview";
   const count = Math.max(1, Math.min(3, Number(input.count) || 1));
-  const payload = buildH3JobPayload({ externalJobId, count, prompt: input.prompt, quality, duration: input.duration, images, videos: [], audios });
-  const response = await h3Json(config, "/api/v1/h3/jobs/batch", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": externalJobId }, body: JSON.stringify(payload), signal: input.signal });
-  const jobIds = (response.items || []).map((item: any) => String(item.job_id || "")).filter(Boolean);
-  if (!jobIds.length) throw new Error("H3 没有返回 Job ID");
-  await Promise.allSettled(jobIds.map((jobId: string, outputIndex: number) => input.onProgress?.({ stage: "submitted", jobId, outputIndex, progress: 0, label: "MiniMax H3 任务已提交" })));
-  return Promise.all(jobIds.map(async (jobId: string, outputIndex: number) => {
-    let job: any;
-    let previousProgressSignature = "";
+  return Promise.all(Array.from({ length: count }, async (_, outputIndex) => {
+    const clientJobId = randomUUID();
+    const request = buildH3JobPayload({ externalJobId: clientJobId, count: 1, prompt: input.prompt, quality, duration: input.duration, images, videos: [], audios });
+    const created = await submitUnifiedGpuJob({
+      modelId: "minimax-h3",
+      operation: "video.generate",
+      contractVersion: "1",
+      clientJobId,
+      parameters: request.parameters,
+      inputs: request.inputs,
+      signal: input.signal,
+    });
+    await input.onProgress?.({ stage: "submitted", jobId: created.job_id, outputIndex, progress: 0, label: "MiniMax H3 任务已提交" });
     try {
-      do {
-        await wait(5000, input.signal);
-        job = await h3Json(config, `/api/v1/h3/jobs/${encodeURIComponent(jobId)}`, { signal: input.signal });
-        const state = h3JobProgressState(job.status);
-        const stage = state.stage;
-        const progress = Number.isFinite(Number(job.progress)) ? Math.max(0, Math.min(100, Number(job.progress))) : undefined;
-        const signature = `${stage}:${progress ?? ""}`;
-        if (signature !== previousProgressSignature) {
-          previousProgressSignature = signature;
-          await input.onProgress?.({ stage, jobId, outputIndex, ...(progress != null ? { progress } : {}), label: state.label });
-        }
-      } while (h3JobProgressState(job.status).pending);
+      await waitForUnifiedGpuJob({ job: created, outputIndex, signal: input.signal, onProgress: input.onProgress });
     } catch (error) {
-      if (input.signal?.aborted) await cancelH3GpuJob(jobId).catch(() => undefined);
+      if (input.signal?.aborted) await cancelUnifiedGpuJob(created.job_id).catch(() => undefined);
       throw error;
     }
-    if (job.status !== "succeeded") throw new Error(job.error || `H3 任务状态：${job.status}`);
-    const videoResponse = await fetch(`${config.baseUrl}/api/v1/h3/jobs/${encodeURIComponent(jobId)}/content`, { headers: auth(config), signal: input.signal });
-    if (!videoResponse.ok) throw new Error(`H3 视频下载失败（${videoResponse.status}）`);
-    const stored = await writeGenerated("h3", "mp4", new Uint8Array(await videoResponse.arrayBuffer()));
-    return addResource({ id: stored.id, name: `H3-${new Date().toLocaleString("zh-CN")}-${outputIndex + 1}.mp4`, type: "video", mimeType: "video/mp4", size: await fileSize(stored.target), fileName: stored.fileName, createdAt: new Date().toISOString(), source: "h3", metadata: { model: "minimax-h3", jobId, outputIndex, quality, duration: input.duration, width: job.width, height: job.height, seed: job.seed } });
+    const outputs = await listUnifiedGpuOutputs(created.job_id, input.signal);
+    const output = outputs.find((item) => item.output_type === "video" && item.delivery_state === "ready");
+    if (!output) throw new Error("MiniMax H3 任务成功，但没有返回视频");
+    const video = await downloadUnifiedGpuOutput(created.job_id, output.output_id, input.signal);
+    const stored = await writeGenerated("h3", extensionForMime(video.mimeType, "mp4"), video.bytes);
+    const completed = await getUnifiedGpuJob(created.job_id, input.signal);
+    const parameters = completed.parameters || {};
+    return addResource({ id: stored.id, name: `H3-${new Date().toLocaleString("zh-CN")}-${outputIndex + 1}.mp4`, type: "video", mimeType: video.mimeType, size: await fileSize(stored.target), fileName: stored.fileName, createdAt: new Date().toISOString(), source: "h3", metadata: { model: "minimax-h3", jobId: created.job_id, outputIndex, quality, duration: input.duration, width: parameters.width, height: parameters.height, seed: parameters.seed } });
   }));
 }
 
@@ -469,31 +461,19 @@ export function buildH3JobPayload(input: { externalJobId: string; count: number;
   if (input.videos.length) throw new Error("当前 H3 Runtime 不支持参考视频；请仅连接图片或音频参考");
   const mode = input.images.length || input.audios.length ? "r2v" : "t2v";
   return {
-    external_job_id: input.externalJobId,
-    count: input.count,
-    request: {
+    parameters: {
       mode,
       prompt: input.prompt,
       quality: input.quality,
       duration_seconds: input.duration,
       steps: 20,
-      ...(mode === "r2v" && input.images.length ? { reference_image_asset_ids: input.images } : {}),
-      ...(mode === "r2v" && input.audios.length ? { reference_audio_asset_ids: input.audios } : {}),
       ref_image_size: "match",
     },
+    inputs: [
+      ...input.images.map((asset_id) => ({ role: "reference_image", asset_id })),
+      ...input.audios.map((asset_id) => ({ role: "reference_audio", asset_id })),
+    ],
   };
-}
-
-async function h3Json(config: { baseUrl: string; apiKey: string }, endpoint: string, init: RequestInit = {}) {
-  const response = await fetch(`${config.baseUrl}${endpoint}`, { ...init, headers: { ...auth(config), ...init.headers } });
-  if (!response.ok) throw await h3ResponseError(response, "H3 服务请求失败");
-  return response.json() as Promise<any>;
-}
-
-async function h3ResponseError(response: Response, label: string) {
-  const payload = await response.json().catch(() => undefined);
-  const detail = formatH3ErrorDetail(payload);
-  return new Error(`${label}（${response.status}）${detail ? `：${detail}` : ""}`);
 }
 
 export function formatH3ErrorDetail(payload: unknown) {
@@ -513,7 +493,6 @@ export function formatH3ErrorDetail(payload: unknown) {
   return safe ? safe.slice(0, 500) : undefined;
 }
 
-function auth(config: { apiKey: string }) { return { Authorization: `Bearer ${config.apiKey}` }; }
 function required(name: string) { const value = String(process.env[name] || "").trim(); if (!value) throw new Error(`请在 .env 中填写 ${name}`); return value; }
 function wait(ms: number, signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {

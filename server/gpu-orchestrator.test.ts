@@ -48,7 +48,7 @@ test("统一 GPU 状态映射为 Canvas 可展示的排队与运行进度", () =
   assert.deepEqual(gpuProgressState({ model_id: "flashvsr", status: "running", stage: "enhancing", progress: 42 }), { stage: "running", progress: 42, label: "FlashVSR 生成中" });
 });
 
-test("H3 取消仍使用兼容的 v1 任务端点", async () => {
+test("H3 取消使用统一的 v2 任务端点", async () => {
   const originalFetch = globalThis.fetch;
   const originalBaseUrl = process.env.GPU_API_BASE_URL;
   const originalToken = process.env.GPU_API_TOKEN;
@@ -61,7 +61,7 @@ test("H3 取消仍使用兼容的 v1 任务端点", async () => {
   }) as typeof fetch;
   try {
     await cancelH3GpuJob("h3-job-1");
-    assert.equal(requestUrl, "https://gpu.example.test/api/v1/h3/jobs/h3-job-1/cancel");
+    assert.equal(requestUrl, "https://gpu.example.test/api/v2/jobs/h3-job-1/cancel");
   } finally {
     globalThis.fetch = originalFetch;
     if (originalBaseUrl === undefined) delete process.env.GPU_API_BASE_URL; else process.env.GPU_API_BASE_URL = originalBaseUrl;
