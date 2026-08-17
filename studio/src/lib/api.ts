@@ -1113,6 +1113,16 @@ export const api = {
         return response.json();
     },
 
+    bindCharacterResources: async (scriptId: string, charId: string, binding: {
+        system_character_id?: string;
+        reference_image_resource_id?: string;
+        voice_id?: string;
+        voice_reference_resource_id?: string;
+    }) => {
+        const response = await axios.post(`${API_URL}/projects/${scriptId}/characters/${charId}/binding`, binding);
+        return response.data;
+    },
+
     generateAudio: async (scriptId: string) => {
         const response = await fetch(`${API_URL}/projects/${scriptId}/generate_audio`, {
             method: "POST",
@@ -1632,6 +1642,9 @@ export const crudApi = {
         age?: string;
         gender?: string;
         clothing?: string;
+        persona?: string;
+        voice_id?: string;
+        image_url?: string;
     }) => {
         const res = await axios.post(`${API_URL}/projects/${scriptId}/characters`, data);
         return res.data;
@@ -1648,6 +1661,7 @@ export const crudApi = {
         description?: string;
         time_of_day?: string;
         lighting_mood?: string;
+        image_url?: string;
     }) => {
         const res = await axios.post(`${API_URL}/projects/${scriptId}/scenes`, data);
         return res.data;
@@ -1662,6 +1676,7 @@ export const crudApi = {
     createProp: async (scriptId: string, data: {
         name: string;
         description?: string;
+        image_url?: string;
     }) => {
         const res = await axios.post(`${API_URL}/projects/${scriptId}/props`, data);
         return res.data;

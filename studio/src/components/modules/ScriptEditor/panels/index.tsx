@@ -3,12 +3,10 @@
 import { useEffect, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Camera, Workflow, MapPin, Package, StickyNote, Sparkles, Lock, Unlock } from 'lucide-react';
+import { Users, MapPin, Package, StickyNote, Sparkles, Lock, Unlock } from 'lucide-react';
 import type { Editor } from '@tiptap/react';
 import { useEditorStore } from '@/store/editorStore';
 import CharacterPanel from './CharacterPanel';
-import ShotPanel from './ShotPanel';
-import PipelinePanel from './PipelinePanel';
 import LocationPanel from './LocationPanel';
 import PropsPanel from './PropsPanel';
 import NotesPanel from './NotesPanel';
@@ -17,11 +15,9 @@ import L3CompletionPanel from './L3CompletionPanel';
 export interface RightPanelContainerProps {
   editor: Editor | null;
   mode?: 'full' | 'embedded' | 'focus';
-  projectId?: string;
-  onEnterPipeline?: () => void;
 }
 
-type PanelTab = 'characters' | 'shots' | 'pipeline' | 'locations' | 'props' | 'notes' | 'ai';
+type PanelTab = 'characters' | 'locations' | 'props' | 'notes' | 'ai';
 
 interface TabDef {
   id: PanelTab;
@@ -33,8 +29,6 @@ interface TabDef {
 export default function RightPanelContainer({
   editor,
   mode = 'full',
-  projectId,
-  onEnterPipeline,
 }: RightPanelContainerProps) {
   const t = useTranslations('scriptEditor');
   const activePanel = useEditorStore((s) => s.activeRightPanel);
@@ -44,8 +38,6 @@ export default function RightPanelContainer({
 
   const ALL_TABS: TabDef[] = [
     { id: 'characters', label: t('panels.characters'), icon: <Users size={14} />, group: 'primary' },
-    { id: 'shots', label: t('panels.shots'), icon: <Camera size={14} />, group: 'primary' },
-    { id: 'pipeline', label: t('panels.pipeline'), icon: <Workflow size={14} />, group: 'primary' },
     { id: 'locations', label: t('panels.locations'), icon: <MapPin size={14} />, group: 'secondary' },
     { id: 'props', label: t('panels.props'), icon: <Package size={14} />, group: 'secondary' },
     { id: 'notes', label: t('panels.notes'), icon: <StickyNote size={14} />, group: 'secondary' },
@@ -54,8 +46,6 @@ export default function RightPanelContainer({
 
   const TABS_EMBEDDED: TabDef[] = [
     { id: 'characters', label: t('panels.characters'), icon: <Users size={14} />, group: 'primary' },
-    { id: 'shots', label: t('panels.shots'), icon: <Camera size={14} />, group: 'primary' },
-    { id: 'pipeline', label: t('panels.pipeline'), icon: <Workflow size={14} />, group: 'primary' },
     { id: 'locations', label: t('panels.locations'), icon: <MapPin size={14} />, group: 'secondary' },
     { id: 'props', label: t('panels.props'), icon: <Package size={14} />, group: 'secondary' },
   ];
@@ -94,10 +84,6 @@ export default function RightPanelContainer({
         const node = $from.node(depth);
         if (node.type.name === 'characterCue') {
           setActivePanel('characters');
-          return;
-        }
-        if (node.type.name === 'shotBlock') {
-          setActivePanel('shots');
           return;
         }
       }
@@ -194,15 +180,6 @@ export default function RightPanelContainer({
           >
             {currentTab === 'characters' && (
               <CharacterPanel editor={editor} />
-            )}
-            {currentTab === 'shots' && (
-              <ShotPanel editor={editor} />
-            )}
-            {currentTab === 'pipeline' && (
-              <PipelinePanel
-                projectId={projectId}
-                onEnterPipeline={onEnterPipeline}
-              />
             )}
             {currentTab === 'locations' && (
               <LocationPanel editor={editor} />

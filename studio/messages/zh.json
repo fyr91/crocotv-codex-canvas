@@ -166,10 +166,12 @@
     "checkChars": "已抽取实体（角色等）",
     "checkCharsHint": "需要先在剧本步骤点「提取实体」。AI 借助角色/场景信息生成更准确的分镜。",
     "goFixInScript": "去剧本步骤补充",
-    "willReplaceWarning": "继续将清空现有的 {count} 个分镜并用 AI 生成的版本替换。无法撤销。",
+    "willReplaceWarning": "继续将更新现有的 {count} 个分镜。",
+    "incrementalUpdateHint": "当前有 {count} 个分镜。AI 会优先保留未受影响的镜头及其稳定 ID，只调整与新剧本冲突的部分。",
     "freshHint": "首次生成 — AI 会根据剧本切镜头、配场景、归角色。",
     "generate": "智能分镜",
-    "replaceAndGenerate": "重新生成",
+    "replaceAndGenerate": "更新分镜",
+    "updateAndGenerate": "更新分镜",
     "generating": "生成中...",
     "cancel": "取消"
   },
@@ -355,7 +357,15 @@
     "statusPending": "待生成",
     "statusNew": "本集新增",
     "emptyTitle": "本集素材为空",
-    "emptyBody": "请先在剧本步骤导入剧本并提取实体，本集出场的角色、场景与道具会自动汇总到这里。",
+    "emptyBody": "如果剧本已经完成，可直接在这里提取实体并确认；角色、场景与道具会追加到当前项目。",
+    "extractEntities": "从剧本提取",
+    "updateEntities": "更新实体",
+    "manualAdd": "手动添加",
+    "extracting": "正在提取实体",
+    "extractReady": "实体提取完成",
+    "extractReadyBody": "发现 {count} 个待确认的新实体",
+    "extractFailed": "实体提取失败",
+    "extractNoScript": "当前项目还没有可提取的剧本",
     "viewHistory": "查看出场历史",
     "totalAppearances": "{count} 次出场，分布在 {episodes} 集",
     "noAppearancesYet": "暂未出场",
@@ -400,6 +410,7 @@
     "cancel": "取消",
     "nameRequired": "请输入名称",
     "seriesRequired": "本集尚未关联到系列，无法管理共享素材",
+    "projectRequired": "当前项目尚未加载",
     "voiceBindNone": "未绑定音色",
     "voiceBindAdd": "为该角色绑定音色",
     "voiceBindChange": "更换音色",
@@ -407,6 +418,22 @@
     "generateProp": "生成道具",
     "charactersLabel": "角色",
     "voiceBoundLabel": "语音"
+    ,"bindCharacterAssets": "绑定角色素材"
+    ,"bindingTitle": "绑定「{name}」的角色素材"
+    ,"bindingHint": "从同步角色库选择一个角色，并分别绑定一张主要参考图、一个音色 ID 和一个可选参考声音。"
+    ,"bindingLoadFailed": "角色素材加载失败"
+    ,"bindingSaveFailed": "角色素材绑定失败"
+    ,"bindingSaved": "角色素材已绑定"
+    ,"bindingRemoved": "角色素材已解绑"
+    ,"systemCharacter": "同步角色"
+    ,"notBound": "不绑定系统角色"
+    ,"primaryImage": "主要参考图"
+    ,"notSelected": "不选择"
+    ,"voiceId": "音色 ID"
+    ,"referenceVoice": "参考声音"
+    ,"unbindCharacter": "解除绑定"
+    ,"saveBinding": "保存绑定"
+    ,"close": "关闭"
   },
   "common": {
     "save": "保存",
@@ -940,7 +967,7 @@
     "stepScript": "脚本",
     "stepArtDirection": "艺术指导",
     "stepAssets": "素材",
-    "stepCast": "角色",
+    "stepCast": "角色与素材",
     "stepStoryboard": "分镜",
     "stepMotion": "视频生成",
     "stepAssembly": "合成",
@@ -1202,9 +1229,19 @@
     "analysisDone": "实体提取完成",
     "analysisDoneBody": "发现 {c} 个角色、{s} 个场景、{p} 个道具。",
     "extractConfirmTitle": "确认实体提取结果",
-    "extractConfirmSubtitle": "请确认提取的实体是否正确，应用后将替换当前素材。",
+    "extractConfirmSubtitle": "请确认待新增的实体。应用后只会追加，不会覆盖已有素材。",
     "extractApply": "应用到素材",
     "extractDiscard": "放弃",
+    "openCharacterBinding": "选择角色素材",
+    "characterBindingTitle": "绑定「{name}」的角色素材",
+    "characterBindingHint": "每种资源最多选择一项，项目只保存引用。",
+    "unbindCharacter": "解除绑定",
+    "systemCharacter": "同步角色",
+    "notBound": "不绑定系统角色",
+    "primaryImage": "主要参考图",
+    "notSelected": "不选择",
+    "voiceId": "音色 ID",
+    "referenceVoice": "参考声音",
     "extractionDiscarded": "已放弃提取结果。",
     "entityKind_characters": "角色",
     "entityKind_scenes": "场景",
@@ -1735,6 +1772,9 @@
     "addShot": "添加镜头",
     "genShots": "生成分镜",
     "genInFlight": "正在生成...",
+    "scriptChangedTitle": "剧本内容已修改",
+    "scriptChangedBody": "当前分镜仍保持不变。需要时由你触发更新，AI 会尽量只调整受影响的镜头。",
+    "updateStoryboard": "更新分镜",
     "emptyTitle": "还没有分镜",
     "emptyBody": "可以从剧本一键生成分镜（推荐），也可以手动添加镜头从零开始。",
     "emptyCTA": "从剧本生成分镜",

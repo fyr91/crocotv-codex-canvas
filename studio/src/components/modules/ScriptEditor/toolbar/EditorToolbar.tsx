@@ -7,7 +7,6 @@ import {
   Redo2,
   Download,
   Pencil,
-  LayoutGrid,
   BookOpen,
   Maximize2,
 } from 'lucide-react';
@@ -25,7 +24,6 @@ export default function EditorToolbar({ editor, viewMode = 'edit', onViewModeCha
 
   const VIEW_OPTIONS: { value: ViewMode; label: string; icon: typeof Pencil }[] = [
     { value: 'edit', label: t('views.edit'), icon: Pencil },
-    { value: 'storyboard', label: t('views.storyboard'), icon: LayoutGrid },
     { value: 'read', label: t('views.read'), icon: BookOpen },
     { value: 'focus', label: t('views.focus'), icon: Maximize2 },
   ];

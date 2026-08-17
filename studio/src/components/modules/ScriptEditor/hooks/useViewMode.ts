@@ -17,7 +17,6 @@ export interface ViewModeState {
  * 视图模式切换 Hook
  *
  * - edit:       正常编辑（showToolbar + showSidebars + editable）
- * - storyboard: ShotBlock 网格视图（showToolbar + 隐藏侧栏内容换为网格）
  * - read:       只读（隐藏工具栏，编辑区不可编辑，优雅阅读排版）
  * - focus:      全屏专注（隐藏所有侧栏 + 工具栏，编辑区居中加宽）
  */
@@ -32,10 +31,10 @@ export function useViewMode(): ViewModeState {
     [setViewMode]
   );
 
-  const isReadOnly = useMemo(() => viewMode === 'read' || viewMode === 'storyboard', [viewMode]);
+  const isReadOnly = useMemo(() => viewMode === 'read', [viewMode]);
 
   const showToolbar = useMemo(
-    () => viewMode === 'edit' || viewMode === 'storyboard',
+    () => viewMode === 'edit',
     [viewMode]
   );
 

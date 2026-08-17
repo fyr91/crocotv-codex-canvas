@@ -19,6 +19,7 @@ import StoryboardComposer from "@/components/modules/StoryboardComposer";
 import ModelSettingsModal from "@/components/common/ModelSettingsModal";
 import PromptConfigModal from "@/components/project/PromptConfigModal";
 import StoryboardR2V from "@/components/modules/StoryboardR2V";
+import ScriptEntityExtractionConfirm from "@/components/modules/ScriptEditor/components/ScriptEntityExtractionConfirm";
 import dynamic from "next/dynamic";
 
 const CreativeCanvas = dynamic(() => import("@/components/canvas/CreativeCanvas"), { ssr: false });
@@ -236,6 +237,7 @@ export default function ProjectClient({ id, breadcrumbSegments }: { id: string; 
                 isOpen={promptConfigOpen}
                 onClose={() => setPromptConfigOpen(false)}
             />
+            <ScriptEntityExtractionConfirm />
 
             {/* Main Content Area — no z-index to avoid trapping fixed modals in a stacking context */}
             <div className="flex-1 flex overflow-hidden relative">

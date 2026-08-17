@@ -6,8 +6,8 @@
  *   · Pre-flight runs in the dialog itself (no silent disabled button —
  *     user can always open the dialog and see WHY it's blocked + quick
  *     jump back to the Script step).
- *   · Confirm path replaces existing shots wholesale (clear-and-regenerate
- *     semantics, mirrors how a fresh 提取实体 → 生成分镜 onboarding feels).
+ *   · Existing shots are supplied to the same generation call so the model
+ *     can preserve stable IDs and propose the smallest useful update.
  *   · Long-running call surfaces as a project-aware toast (not blocking
  *     overlay) so users can switch projects and learn when the other one
  *     finishes via the global ToastContainer.
@@ -158,12 +158,12 @@ export default function StoryboardGenerateDialog({
                                 )}
                             </section>
 
-                            {/* Destructive warning when shots already exist */}
+                            {/* Incremental update explanation when shots already exist */}
                             {allPass && existingShotCount > 0 && (
                                 <div className="flex items-start gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2">
                                     <AlertTriangle size={13} className="text-accent mt-0.5 shrink-0" />
                                     <p className="text-sm text-accent">
-                                        {t("willReplaceWarning", { count: existingShotCount })}
+                                        {t("incrementalUpdateHint", { count: existingShotCount })}
                                     </p>
                                 </div>
                             )}
@@ -194,7 +194,7 @@ export default function StoryboardGenerateDialog({
                                 onClick={handleConfirm}
                             >
                                 {existingShotCount > 0
-                                    ? t("replaceAndGenerate")
+                                    ? t("updateAndGenerate")
                                     : t("generate")}
                             </WorkflowActionButton>
                         </footer>

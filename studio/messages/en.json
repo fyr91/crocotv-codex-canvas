@@ -166,10 +166,12 @@
     "checkChars": "Entities have been extracted",
     "checkCharsHint": "Click 提取实体 in the Script step first — AI uses character / scene info for better shot decomposition.",
     "goFixInScript": "Go fix in Script step",
-    "willReplaceWarning": "Continuing will wipe the existing {count} shots and replace them with AI-generated ones. Cannot be undone.",
+    "willReplaceWarning": "Continuing will update the existing {count} shots.",
+    "incrementalUpdateHint": "There are {count} existing shots. AI will preserve unaffected shots and stable IDs, changing only what conflicts with the revised script.",
     "freshHint": "First-time generation — AI will split shots, place scenes, and assign characters.",
     "generate": "Smart Storyboard",
-    "replaceAndGenerate": "Regenerate",
+    "replaceAndGenerate": "Update storyboard",
+    "updateAndGenerate": "Update storyboard",
     "generating": "Generating...",
     "cancel": "Cancel"
   },
@@ -355,7 +357,15 @@
     "statusPending": "Pending",
     "statusNew": "New",
     "emptyTitle": "No cast yet",
-    "emptyBody": "Import a script in Step 1 and extract entities — characters, scenes, and props referenced in this episode will be aggregated here.",
+    "emptyBody": "If the script is ready, extract and confirm entities here. Characters, scenes, and props are appended to this project.",
+    "extractEntities": "Extract from script",
+    "updateEntities": "Update entities",
+    "manualAdd": "Add manually",
+    "extracting": "Extracting entities",
+    "extractReady": "Entity extraction ready",
+    "extractReadyBody": "Found {count} new entities to review",
+    "extractFailed": "Entity extraction failed",
+    "extractNoScript": "This project does not have a script to extract yet",
     "viewHistory": "View appearance history",
     "totalAppearances": "{count} appearances across {episodes} episode(s)",
     "noAppearancesYet": "No appearances yet",
@@ -400,6 +410,7 @@
     "cancel": "Cancel",
     "nameRequired": "Please enter a name",
     "seriesRequired": "Episode not linked to a series — cannot manage shared assets",
+    "projectRequired": "The current project is not loaded",
     "voiceBindNone": "No voice bound",
     "voiceBindAdd": "Bind a voice for this character",
     "voiceBindChange": "Change voice",
@@ -407,6 +418,22 @@
     "generateProp": "Generate Prop",
     "charactersLabel": "Cast",
     "voiceBoundLabel": "Voice"
+    ,"bindCharacterAssets": "Bind character assets"
+    ,"bindingTitle": "Bind assets for “{name}”"
+    ,"bindingHint": "Choose one synced character, then bind one primary image, one Voice ID, and one optional reference voice."
+    ,"bindingLoadFailed": "Failed to load character assets"
+    ,"bindingSaveFailed": "Failed to bind character assets"
+    ,"bindingSaved": "Character assets bound"
+    ,"bindingRemoved": "Character assets unbound"
+    ,"systemCharacter": "Synced character"
+    ,"notBound": "No system character"
+    ,"primaryImage": "Primary image"
+    ,"notSelected": "Not selected"
+    ,"voiceId": "Voice ID"
+    ,"referenceVoice": "Reference voice"
+    ,"unbindCharacter": "Unbind"
+    ,"saveBinding": "Save binding"
+    ,"close": "Close"
   },
   "common": {
     "save": "Save",
@@ -940,7 +967,7 @@
     "stepScript": "Script",
     "stepArtDirection": "Art Direction",
     "stepAssets": "Assets",
-    "stepCast": "Cast",
+    "stepCast": "Cast & Assets",
     "stepStoryboard": "Storyboard",
     "stepMotion": "Motion",
     "stepAssembly": "Assembly",
@@ -1202,9 +1229,19 @@
     "analysisDone": "Entity extraction done",
     "analysisDoneBody": "Found {c} characters, {s} scenes, {p} props.",
     "extractConfirmTitle": "Confirm Entity Extraction",
-    "extractConfirmSubtitle": "Review extracted entities before applying to Cast. This will replace current entities.",
+    "extractConfirmSubtitle": "Review entities to add. Applying only appends and never overwrites existing assets.",
     "extractApply": "Apply to Cast",
     "extractDiscard": "Discard",
+    "openCharacterBinding": "Choose character assets",
+    "characterBindingTitle": "Bind assets for “{name}”",
+    "characterBindingHint": "Choose at most one resource of each type. The project stores references only.",
+    "unbindCharacter": "Unbind",
+    "systemCharacter": "Synced character",
+    "notBound": "No system character",
+    "primaryImage": "Primary image",
+    "notSelected": "Not selected",
+    "voiceId": "Voice ID",
+    "referenceVoice": "Reference voice",
     "extractionDiscarded": "Extraction result discarded.",
     "entityKind_characters": "Characters",
     "entityKind_scenes": "Scenes",
@@ -1732,6 +1769,9 @@
   "storyboardR2V": {
     "genShots": "Generate shots",
     "genInFlight": "Generating...",
+    "scriptChangedTitle": "The script has changed",
+    "scriptChangedBody": "The current storyboard stays untouched until you request an update. AI will minimize changes to existing shots.",
+    "updateStoryboard": "Update storyboard",
     "emptyTitle": "No shots yet",
     "emptyBody": "Generate shots from the script in one click (recommended), or add manually to start from scratch.",
     "emptyCTA": "Generate shots from script",

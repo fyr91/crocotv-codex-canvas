@@ -28,7 +28,9 @@ export interface DerivedCharacter {
   firstAppearance: number; // 首次出场场景编号
 }
 
-export type ViewMode = 'edit' | 'storyboard' | 'read' | 'focus';
+export type ScriptFormat = 'hollywood' | 'chinese_film' | 'chinese_short' | 'japanese_anime';
+export type TextRendering = 'latin' | 'cjk_zh' | 'cjk_ja';
+export type ViewMode = 'edit' | 'read' | 'focus';
 export type EditorMode = 'full' | 'embedded' | 'focus';
 
 interface EditorState {
@@ -43,7 +45,7 @@ interface EditorState {
   editorMode: EditorMode;
   leftSidebarCollapsed: boolean;
   rightSidebarCollapsed: boolean;
-  activeRightPanel: 'characters' | 'locations' | 'props' | 'shots' | 'pipeline' | 'notes' | 'ai';
+  activeRightPanel: 'characters' | 'locations' | 'props' | 'notes' | 'ai';
   rightPanelLocked: boolean;
 
   // 派生数据

@@ -491,9 +491,10 @@ export default function StoryboardR2V() {
             toast.warning(t("genToastNoScript"));
             return;
         }
+        const isIncrementalUpdate = (currentProject.frames?.length ?? 0) > 0;
         setGenerating(true);
         setBannerState("phase1");
-        setShots([]);
+        if (!isIncrementalUpdate) setShots([]);
         try {
             // Phase 1: generate coarse frames
             const updated = await api.analyzeToStoryboard(projectId, scriptText);
@@ -506,7 +507,7 @@ export default function StoryboardR2V() {
             }
 
             // Phase 2: batch refine (SSE)
-            if (newFrameCount > 0) {
+            if (newFrameCount > 0 && !isIncrementalUpdate) {
                 setBannerState("phase2");
                 setRefineProgress({ current: 0, total: newFrameCount });
                 await api.refineBatchFrames(projectId, (event: RefineSSEEvent) => {
@@ -1786,6 +1787,18 @@ export default function StoryboardR2V() {
                     </>
                 )}
             />
+            {currentProject?.storyboard_stale ? (
+                <div className="mx-4 mt-3 flex shrink-0 items-center justify-between gap-4 rounded-lg border border-accent/35 bg-accent/10 px-4 py-3 sm:mx-6">
+                    <div>
+                        <p className="text-sm font-medium text-foreground">{t("scriptChangedTitle")}</p>
+                        <p className="mt-0.5 text-sm text-text-secondary">{t("scriptChangedBody")}</p>
+                    </div>
+                    <button type="button" onClick={() => setGenDialogOpen(true)} disabled={generating} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-accent hover:bg-primary-hover disabled:opacity-50">
+                        {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                        {t("updateStoryboard")}
+                    </button>
+                </div>
+            ) : null}
             {/* Top Toolbar — mock-aligned: count on the left, expand/collapse pills on the right */}
             <div className="flex flex-wrap items-center gap-3 px-4 py-3 shrink-0 sm:px-6">
                 <div className="flex items-center gap-3">
@@ -2268,7 +2281,7 @@ export default function StoryboardR2V() {
             isOpen={genDialogOpen}
             onClose={() => setGenDialogOpen(false)}
             project={currentProject as any}
-            existingShotCount={shots.length}
+            existingShotCount={currentProject?.frames?.length ?? 0}
             onConfirm={handleSmartGenerate}
             onJumpToScript={() => {
                 setGenDialogOpen(false);

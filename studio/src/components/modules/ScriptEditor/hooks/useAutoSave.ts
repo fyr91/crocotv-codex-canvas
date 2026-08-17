@@ -48,6 +48,8 @@ export function useAutoSave(editor: Editor | null, projectId: string | null) {
         if (currentProject?.id === projectId) {
           useProjectStore.getState().updateProject(projectId, {
             originalText: response.original_text ?? plainText,
+            entity_extraction_stale: response.entity_extraction_stale,
+            storyboard_stale: response.storyboard_stale,
           });
         }
         setDirty(false);

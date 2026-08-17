@@ -1,28 +1,15 @@
 "use client";
 /**
- * Cast — R2V workflow Step 3「本集素材」（per-episode asset view）。
- *
- * Design v2 决策（docs/design/r2v-workflow-v2.md Q8 / Q9）:
- *   · Cast = per-episode lens (read-only) of frame-referenced assets
- *   · Series-level CRUD lives in SeriesDetailPage (Characters/Scenes/Props tabs)
- *   · ConsistencyVault is preserved for i2v_legacy workflow only
- *   · Three sections stacked: characters / scenes / props
- *   · Each card: thumb + name + appearance count + status badge
- *     (✓ ready / ⚠ pending / 🆕 new-this-episode)
- *
- * Phase 1 scope (this file):
- *   · Read-only aggregation of frames[].character_ids / scene_id / prop_ids
- *   · Three section grid render
- *   · Status badges based on reference image presence
- *   · NO reconcile flow yet (Phase 4)
- *   · NO `+ new asset` / generation modal yet (Phase 5)
- *   · NO inspector right rail yet (Q9 decision: 3-section flat, no inspector)
+ * Cast — R2V workflow Step 3「角色与素材」。
+ * It combines episode-local extracted entities with storyboard appearance
+ * counts. Users can extract incrementally, create local entities, and bind a
+ * project character by reference to synchronized character resources.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Users, MapPin, Box, AlertTriangle, Sparkles, Plus, Upload, X, Loader2, Play, Pause, Volume2, Wand2, Layers, Maximize2 } from "lucide-react";
+import { Users, MapPin, Box, AlertTriangle, Sparkles, Plus, Upload, X, Loader2, Play, Pause, Volume2, Wand2, Layers, Maximize2, Link2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useProjectStore } from "@/store/projectStore";
-import { api } from "@/lib/api";
+import { api, crudApi } from "@/lib/api";
 import { getAssetUrl } from "@/lib/utils";
 import { useLightbox } from "@/components/shared/preview/LightboxProvider";
 import StepPageHeader, { StepPill } from "@/components/shared/StepPageHeader";
@@ -30,6 +17,9 @@ import PreviewImage from "@/components/shared/preview/PreviewImage";
 import WorkflowActionButton from "@/components/shared/WorkflowActionButton";
 import VoicePickerModal from "./cast/VoicePickerModal";
 import CastWorkbenchModal, { activePolls } from "./cast/CastWorkbenchModal";
+import { toast } from "@/store/toastStore";
+import { apiErrorMessage } from "@/lib/apiError";
+import CharacterResourceBindingModal from "./cast/CharacterResourceBindingModal";
 
 type AssetKind = "character" | "scene" | "prop";
 
@@ -76,6 +66,8 @@ export default function Cast() {
     const tStep = useTranslations("stepHeader");
     const t = useTranslations("cast");
     const currentProject = useProjectStore((state) => state.currentProject);
+    const requestExtraction = useProjectStore((state) => state.requestExtraction);
+    const isAnalyzing = useProjectStore((state) => state.isAnalyzing);
 
     // R2V v2 Phase 5 — add new asset modal (placeholder for full
     // generation flow which lands in a follow-up patch). For now this
@@ -84,6 +76,7 @@ export default function Cast() {
     // PR-3* · Cast redesign — tab filter + workbench launcher.
     const [activeTab, setActiveTab] = useState<"all" | "character" | "scene" | "prop">("all");
     const [workbench, setWorkbench] = useState<{ kind: "character" | "scene" | "prop"; entityId: string } | null>(null);
+    const [bindingCharacterId, setBindingCharacterId] = useState<string | null>(null);
 
     const removeGeneratingTask = useProjectStore((s) => s.removeGeneratingTask);
     const generatingTasks = useProjectStore((s) => s.generatingTasks);
@@ -166,6 +159,25 @@ export default function Cast() {
     }, [currentProject?.frames, currentProject?.characters, currentProject?.scenes, currentProject?.props]);
 
     const totalCast = characters.length + scenes.length + props.length;
+    const handleExtractEntities = async () => {
+        const text = currentProject?.originalText || "";
+        if (!text.trim()) {
+            toast.warning(t("extractNoScript"));
+            return;
+        }
+        const toastId = toast.progress(t("extracting"), { projectId: currentProject?.id, projectTitle: currentProject?.title });
+        try {
+            const preview = await requestExtraction(text);
+            toast.update(toastId, {
+                kind: "success",
+                title: t("extractReady"),
+                body: t("extractReadyBody", { count: preview.characters.length + preview.scenes.length + preview.props.length }),
+                autoCloseMs: 3500,
+            });
+        } catch (error) {
+            toast.update(toastId, { kind: "error", title: t("extractFailed"), body: apiErrorMessage(error) });
+        }
+    };
 
     return (
         <div className="flex h-full w-full flex-col overflow-hidden">
@@ -183,6 +195,17 @@ export default function Cast() {
                         />
                     </>
                 ) : null}
+                trailing={totalCast > 0 ? (
+                    <WorkflowActionButton
+                        variant="secondary"
+                        size="sm"
+                        disabled={isAnalyzing}
+                        leftIcon={isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                        onClick={() => void handleExtractEntities()}
+                    >
+                        {isAnalyzing ? t("extracting") : t("updateEntities")}
+                    </WorkflowActionButton>
+                ) : null}
             />
 
             {/* Empty state — no entities extracted yet */}
@@ -198,6 +221,20 @@ export default function Cast() {
                         <p className="mt-2 text-sm text-text-secondary leading-relaxed">
                             {t("emptyBody")}
                         </p>
+                        <div className="mt-5 flex items-center justify-center gap-2">
+                            <WorkflowActionButton
+                                variant="primary"
+                                size="sm"
+                                disabled={isAnalyzing}
+                                leftIcon={isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                                onClick={() => void handleExtractEntities()}
+                            >
+                                {isAnalyzing ? t("extracting") : t("extractEntities")}
+                            </WorkflowActionButton>
+                            <WorkflowActionButton variant="secondary" size="sm" onClick={() => setAddModalOpen("character")} leftIcon={<Plus />}>
+                                {t("manualAdd")}
+                            </WorkflowActionButton>
+                        </div>
                     </div>
                 </div>
             ) : (
@@ -245,6 +282,7 @@ export default function Cast() {
                                 addLabel={t("addCharacter")}
                                 groupByPersona
                                 onOpenWorkbench={(id) => setWorkbench({ kind: "character", entityId: id })}
+                                onBindCharacter={setBindingCharacterId}
                                 hideHeader={activeTab === "character"}
                             />
                         )}
@@ -286,17 +324,18 @@ export default function Cast() {
                 onClose={() => setWorkbench(null)}
             />
 
+            <CharacterResourceBindingModal
+                character={(currentProject?.characters ?? []).find((character) => character.id === bindingCharacterId) ?? null}
+                onClose={() => setBindingCharacterId(null)}
+            />
+
             {/* R2V v2 Phase 5 — real Add new cast modal (AI / upload tabs). */}
             <AddCastPlaceholderModal
                 kind={addModalOpen}
-                seriesId={currentProject?.series_id ?? null}
+                projectId={currentProject?.id ?? null}
                 onClose={() => setAddModalOpen(null)}
-                onCreated={() => {
-                    // Trigger a project refresh by re-selecting; simplest
-                    // way to surface the new series asset in this episode.
-                    if (currentProject?.id) {
-                        useProjectStore.getState().selectProject(currentProject.id);
-                    }
+                onCreated={(project) => {
+                    if (currentProject?.id) useProjectStore.getState().updateProject(currentProject.id, project);
                 }}
             />
         </div>
@@ -304,22 +343,21 @@ export default function Cast() {
 }
 
 // R2V v2 Phase 5 — real "+ 新素材" modal.
-// Two-tab UX: AI generate vs upload image. Both paths POST to
-// /series/{id}/{kind} with a name/persona/description payload + optional
-// image_url for upload. AI generation is a placeholder hand-off (creates
+// Two-tab UX: AI generate vs upload image. Both paths create an episode-local
+// entity with a name/persona/description payload + optional image URL. AI generation is a placeholder hand-off (creates
 // the asset blank, then user can trigger generation from the card detail
 // view) — full async generation queue ships when generation pipeline
 // supports series-scope without project context.
 function AddCastPlaceholderModal({
     kind,
-    seriesId,
+    projectId,
     onClose,
     onCreated,
 }: {
     kind: null | "character" | "scene" | "prop";
-    seriesId: string | null;
+    projectId: string | null;
     onClose: () => void;
-    onCreated: () => void;
+    onCreated: (project: any) => void;
 }) {
     const t = useTranslations("cast");
     const [tab, setTab] = useState<"ai" | "upload">("ai");
@@ -358,8 +396,8 @@ function AddCastPlaceholderModal({
     };
 
     const handleSubmit = async () => {
-        if (!seriesId) {
-            setError(t("seriesRequired"));
+        if (!projectId) {
+            setError(t("projectRequired"));
             return;
         }
         if (!name.trim()) {
@@ -369,15 +407,19 @@ function AddCastPlaceholderModal({
         setSubmitting(true);
         setError(null);
         try {
-            const kindMap = { character: "characters", scene: "scenes", prop: "props" } as const;
-            await api.createSeriesAsset(seriesId, kindMap[kind], {
+            const payload = {
                 name: name.trim(),
                 description: description.trim() || undefined,
                 persona: kind === "character" ? (persona.trim() || undefined) : undefined,
                 voice_id: kind === "character" ? (voiceId.trim() || undefined) : undefined,
                 image_url: imageUrl || undefined,
-            });
-            onCreated();
+            };
+            const project = kind === "character"
+                ? await crudApi.createCharacter(projectId, payload)
+                : kind === "scene"
+                    ? await crudApi.createScene(projectId, payload)
+                    : await crudApi.createProp(projectId, payload);
+            onCreated(project);
             reset();
             onClose();
         } catch (err: any) {
@@ -551,7 +593,7 @@ function AddCastPlaceholderModal({
                         size="sm"
                         loading={submitting}
                         onClick={handleSubmit}
-                        disabled={!name.trim() || !seriesId}
+                        disabled={!name.trim() || !projectId}
                         className="flex-1"
                     >
                         {tab === "ai" ? t("createAndGenerate") : t("create")}
@@ -577,12 +619,13 @@ interface CastSectionProps {
     /** Cast redesign — clicking a card (or its empty CTA) launches the
      *  per-entity generation workbench in the parent. */
     onOpenWorkbench?: (entityId: string) => void;
+    onBindCharacter?: (entityId: string) => void;
     /** When the parent's tab filter is already focused on this kind,
      *  the section's own header becomes redundant — hide it. */
     hideHeader?: boolean;
 }
 
-function CastSection({ kind, icon, title, items, emptyLabel, onAddNew, addLabel, groupByPersona, onOpenWorkbench, hideHeader }: CastSectionProps) {
+function CastSection({ kind, icon, title, items, emptyLabel, onAddNew, addLabel, groupByPersona, onOpenWorkbench, onBindCharacter, hideHeader }: CastSectionProps) {
     const t = useTranslations("cast");
     // R2V v2 P1-a — persona grouping (characters only)
     const groups = useMemo(() => {
@@ -668,21 +711,21 @@ function CastSection({ kind, icon, title, items, emptyLabel, onAddNew, addLabel,
                                 </div>
                             )}
                             <div className={`grid gap-3 ${gridCols}`}>
-                                {group.items.map(item => <CastCard key={item.id} item={item} onOpenWorkbench={() => onOpenWorkbench?.(item.id)} />)}
+                                {group.items.map(item => <CastCard key={item.id} item={item} onOpenWorkbench={() => onOpenWorkbench?.(item.id)} onBindCharacter={() => onBindCharacter?.(item.id)} />)}
                             </div>
                         </div>
                     ))}
                 </div>
             ) : (
                 <div className={`grid gap-3 ${gridCols}`}>
-                    {items.map(item => <CastCard key={item.id} item={item} onOpenWorkbench={() => onOpenWorkbench?.(item.id)} />)}
+                    {items.map(item => <CastCard key={item.id} item={item} onOpenWorkbench={() => onOpenWorkbench?.(item.id)} onBindCharacter={() => onBindCharacter?.(item.id)} />)}
                 </div>
             )}
         </section>
     );
 }
 
-function CastCard({ item, onOpenWorkbench }: { item: CastItem; onOpenWorkbench?: () => void }) {
+function CastCard({ item, onOpenWorkbench, onBindCharacter }: { item: CastItem; onOpenWorkbench?: () => void; onBindCharacter?: () => void }) {
     const t = useTranslations("cast");
     const { open: openLightbox } = useLightbox();
     const updateProject = useProjectStore((state) => state.updateProject);
@@ -897,6 +940,13 @@ function CastCard({ item, onOpenWorkbench }: { item: CastItem; onOpenWorkbench?:
                     Unbound state: 🔊 + 添加音色 (clickable, opens picker). */}
                 {item.kind === "character" && (
                     <div className="flex items-center gap-1 px-0.5 opacity-0 group-hover/cast-card:opacity-100 transition-opacity">
+                        <button
+                            onClick={(event) => { event.stopPropagation(); onBindCharacter?.(); }}
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-glass-border bg-black/30 text-text-secondary hover:border-foreground/30 hover:text-foreground"
+                            title={t("bindCharacterAssets")}
+                        >
+                            <Link2 size={10} className={character?.system_character_id ? "text-primary" : "text-text-muted"} />
+                        </button>
                         <button
                             onClick={(e) => { e.stopPropagation(); setPickerOpen(true); }}
                             className="flex-1 inline-flex items-center gap-1.5 rounded-md border border-glass-border bg-black/30 px-2 py-1 text-sm text-text-secondary hover:border-foreground/30 hover:text-foreground transition-colors min-w-0"

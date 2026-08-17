@@ -32,6 +32,8 @@ export interface DocumentResponse {
   original_text?: string;
   content_source?: 'document' | 'original_text';
   project_version?: number;
+  entity_extraction_stale?: boolean;
+  storyboard_stale?: boolean;
 }
 
 export interface SnapshotResponse {
@@ -129,12 +131,4 @@ export const scriptEditorApi = {
     return res.data;
   },
 
-  /** 确认 ShotBlock */
-  confirmShotBlock: async (projectId: string, shotId: string, data: any): Promise<any> => {
-    const res = await axios.post(
-      `${API_BASE}/projects/${projectId}/shot_blocks/${shotId}/confirm`,
-      data
-    );
-    return res.data;
-  },
 };

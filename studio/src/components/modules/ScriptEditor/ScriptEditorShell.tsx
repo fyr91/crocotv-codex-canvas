@@ -20,11 +20,9 @@ import { ShortcutHelpPanel } from './components/ShortcutHelpPanel';
 import { ContinuityIndicator } from './components/ContinuityIndicator';
 import RightPanelContainer from './panels';
 import LeftSidebar from './sidebar';
-import StoryboardView from './views/StoryboardView';
 import ReadModeOverlay from './components/ReadModeOverlay';
 import PipelineLinkDialog from './dialogs/PipelineLinkDialog';
 import { scriptEditorApi } from '@/lib/scriptEditorApi';
-import { api } from '@/lib/api';
 import { useProjectStore } from '@/store/projectStore';
 import { toast } from '@/store/toastStore';
 import ScriptEntityExtractionConfirm from './components/ScriptEntityExtractionConfirm';
@@ -60,6 +58,7 @@ export default function ScriptEditorShell({
   const currentProject = useProjectStore((s) => s.currentProject);
   const selectProject = useProjectStore((s) => s.selectProject);
   const isAnalyzing = useProjectStore((s) => s.isAnalyzing);
+  const requestExtraction = useProjectStore((s) => s.requestExtraction);
 
   const isDirty = useEditorStore((s) => s.isDirty);
   const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
@@ -161,13 +160,6 @@ export default function ScriptEditorShell({
     return () => window.cancelAnimationFrame(frame);
   }, [documentLoading, editor, isReady, isReadOnly, mode, viewMode]);
 
-  const handleEnterPipeline = useCallback(() => {
-    if (!projectId) return;
-    void save(false).finally(() => {
-      window.location.hash = `#/project/${projectId}`;
-    });
-  }, [projectId, save]);
-
   const handleProjectLink = useCallback((linkedProjectId: string) => {
     window.location.hash = `#/project/${linkedProjectId}/editor`;
   }, []);
@@ -188,12 +180,7 @@ export default function ScriptEditorShell({
     });
     try {
       await save(false);
-      const preview = await api.extractPreview(projectId, text);
-      useProjectStore.setState({
-        pendingExtraction: preview,
-        pendingExtractionScript: text,
-        isAnalyzing: false,
-      });
+      const preview = await requestExtraction(text);
       toast.update(toastId, {
         kind: 'success',
         title: tScript('analysisDone'),
@@ -213,25 +200,7 @@ export default function ScriptEditorShell({
         body: apiErrorMessage(error),
       });
     }
-  }, [currentProject?.id, currentProject?.title, editor, projectId, save, tScript]);
-
-  const handleShotClick = useCallback((shotId: string) => {
-    setViewMode('edit');
-    if (editor) {
-      const { doc } = editor.state;
-      let targetPos: number | null = null;
-      doc.descendants((node, pos) => {
-        if (node.type.name === 'shotBlock' && node.attrs?.id === shotId) {
-          targetPos = pos;
-          return false;
-        }
-      });
-      if (targetPos !== null) {
-        editor.commands.setTextSelection(targetPos);
-        editor.commands.scrollIntoView();
-      }
-    }
-  }, [editor, setViewMode]);
+  }, [currentProject?.id, currentProject?.title, editor, projectId, requestExtraction, save, tScript]);
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-background">
@@ -305,13 +274,8 @@ export default function ScriptEditorShell({
           </aside>
         )}
 
-        {/* Editor Content Area / Storyboard View */}
-        {viewMode === 'storyboard' ? (
-          <main className="relative flex-1 min-w-0 overflow-hidden">
-            <StoryboardView editor={editor} onShotClick={handleShotClick} />
-          </main>
-        ) : (
-          <main className={`relative flex-1 min-w-0 overflow-y-auto ${
+        {/* Editor Content Area */}
+        <main className={`relative flex-1 min-w-0 overflow-y-auto ${
             viewMode === 'focus' ? 'flex items-start justify-center' : ''
           }`}>
             {/* Offline / local restore banner */}
@@ -371,8 +335,7 @@ export default function ScriptEditorShell({
                 </div>
               )}
             </div>
-          </main>
-        )}
+        </main>
 
         {/* Right Sidebar - Panel */}
         {!hideAllSidebars && (showRight || mode === 'embedded') && (
@@ -380,8 +343,6 @@ export default function ScriptEditorShell({
             <RightPanelContainer
               editor={editor}
               mode={mode}
-              projectId={projectId}
-              onEnterPipeline={handleEnterPipeline}
             />
           </aside>
         )}
@@ -417,7 +378,6 @@ export default function ScriptEditorShell({
 
       {/* Shortcut Help Panel */}
       <ShortcutHelpPanel open={showShortcutHelp} onClose={closeShortcutHelp} />
-      <ScriptEntityExtractionConfirm />
       <PipelineLinkDialog
         open={projectPickerOpen}
         onClose={() => {

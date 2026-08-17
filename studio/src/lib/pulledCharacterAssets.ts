@@ -5,6 +5,8 @@ export interface PulledCharacterCatalogEntry {
   name: string;
   chineseName?: string;
   voiceId?: string;
+  subtitle?: string;
+  summary?: string;
   directory?: string;
   avatarUrl?: string;
   primaryResourceId?: string;
@@ -105,6 +107,7 @@ export function buildPulledCharacterAssets(
       id: entry.id,
       name: displayName,
       description: entry.name !== displayName ? entry.name : undefined,
+      persona: [entry.subtitle, entry.summary].filter(Boolean).join(" · ") || undefined,
       english_name: entry.name !== displayName ? entry.name : undefined,
       directory: entry.directory,
       image_url: selectedImage?.url || entry.avatarUrl,

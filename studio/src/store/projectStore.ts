@@ -82,6 +82,9 @@ export interface Character {
 
     voice_id?: string;
     voice_name?: string;
+    system_character_id?: string;
+    reference_image_resource_id?: string;
+    voice_reference_resource_id?: string;
     locked?: boolean;
     starred?: boolean;
     status?: string;
@@ -280,6 +283,8 @@ export interface Project {
     episode_number?: number;
     /** T13 — user-starred (featured) flag; drives the amber-halation card. */
     starred?: boolean;
+    entity_extraction_stale?: boolean;
+    storyboard_stale?: boolean;
 }
 
 interface ProjectStore {
@@ -292,6 +297,8 @@ interface ProjectStore {
     // Entity extraction confirmation (persists across step switches)
     pendingExtraction: ExtractionPreview | null;
     pendingExtractionScript: string | null;
+    pendingExtractionProjectId: string | null;
+    requestExtraction: (text: string) => Promise<ExtractionPreview>;
     confirmExtraction: (extraction: ExtractionPreview) => Promise<void>;
     discardExtraction: () => void;
 
@@ -396,19 +403,37 @@ export const useProjectStore = create<ProjectStore>()(
             // Entity extraction confirmation
             pendingExtraction: null,
             pendingExtractionScript: null,
-            confirmExtraction: async (extraction) => {
-                const { currentProject, pendingExtractionScript } = get();
-                if (!currentProject?.id || !pendingExtractionScript) return;
+            pendingExtractionProjectId: null,
+            requestExtraction: async (text) => {
+                const currentProject = get().currentProject;
+                if (!currentProject?.id || !text.trim()) throw new Error("No script available for extraction");
+                const projectId = currentProject.id;
                 set({ isAnalyzing: true });
                 try {
-                    const project = await api.applyExtraction(currentProject.id, pendingExtractionScript, extraction);
+                    const preview = await api.extractPreview(projectId, text);
+                    set({ pendingExtraction: preview, pendingExtractionScript: text, pendingExtractionProjectId: projectId, isAnalyzing: false });
+                    return preview;
+                } catch (error) {
+                    set({ isAnalyzing: false });
+                    throw error;
+                }
+            },
+            confirmExtraction: async (extraction) => {
+                const { pendingExtractionProjectId, pendingExtractionScript } = get();
+                if (!pendingExtractionProjectId || !pendingExtractionScript) return;
+                set({ isAnalyzing: true });
+                try {
+                    const project = await api.applyExtraction(pendingExtractionProjectId, pendingExtractionScript, extraction);
                     set((state) => ({
                         projects: state.projects.map((p) =>
                             p.id === project.id ? { ...project, updatedAt: new Date().toISOString() } : p
                         ),
-                        currentProject: { ...project, updatedAt: new Date().toISOString() },
+                        currentProject: state.currentProject?.id === project.id
+                            ? { ...project, updatedAt: new Date().toISOString() }
+                            : state.currentProject,
                         pendingExtraction: null,
                         pendingExtractionScript: null,
+                        pendingExtractionProjectId: null,
                         isAnalyzing: false,
                     }));
                 } catch (error) {
@@ -418,7 +443,7 @@ export const useProjectStore = create<ProjectStore>()(
                 }
             },
             discardExtraction: () => {
-                set({ pendingExtraction: null, pendingExtractionScript: null });
+                set({ pendingExtraction: null, pendingExtractionScript: null, pendingExtractionProjectId: null });
             },
 
             // Sync projects from backend

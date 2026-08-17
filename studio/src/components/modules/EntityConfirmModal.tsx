@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Users, MapPin, Box, Check, X } from "lucide-react";
+import { Users, MapPin, Box, Check, X, Link2Off, Volume2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ExtractionPreview } from "@/types/entityExtraction";
+import { api } from "@/lib/api";
+import type { PulledCharacterCatalogEntry, PulledCharacterResource } from "@/lib/pulledCharacterAssets";
 
 type EntityKind = keyof ExtractionPreview;
 
@@ -51,6 +53,9 @@ export default function EntityConfirmModal({
     const [draft, setDraft] = useState<ExtractionPreview | null>(null);
     const [editingEntity, setEditingEntity] = useState<EditingEntity | null>(null);
     const [editingName, setEditingName] = useState("");
+    const [catalog, setCatalog] = useState<PulledCharacterCatalogEntry[]>([]);
+    const [resources, setResources] = useState<PulledCharacterResource[]>([]);
+    const [bindingIndex, setBindingIndex] = useState<number | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -58,6 +63,16 @@ export default function EntityConfirmModal({
         setDraft(clonePreview(preview));
         setEditingEntity(null);
         setEditingName("");
+        setBindingIndex(null);
+        void Promise.all([api.listPulledCharacters(), api.listLocalResources()])
+            .then(([nextCatalog, nextResources]) => {
+                setCatalog(nextCatalog as PulledCharacterCatalogEntry[]);
+                setResources(nextResources as PulledCharacterResource[]);
+            })
+            .catch(() => {
+                setCatalog([]);
+                setResources([]);
+            });
     }, [isOpen, preview]);
 
     useEffect(() => {
@@ -115,6 +130,49 @@ export default function EntityConfirmModal({
             };
         });
         stopEditing();
+        if (kind === "characters" && bindingIndex === index) setBindingIndex(null);
+    };
+
+    const normalizeName = (value: unknown) => String(value || "").trim().toLocaleLowerCase();
+    const characterForItem = (item: Record<string, unknown>) => {
+        const boundId = String(item.system_character_id || "");
+        if (boundId) return catalog.find((character) => character.id === boundId);
+        const name = normalizeName(item.name);
+        const matches = catalog.filter((character) => [character.name, character.chineseName].some((candidate) => normalizeName(candidate) === name));
+        return matches.length === 1 ? matches[0] : undefined;
+    };
+    const resourcesForCharacter = (characterId: string, type: PulledCharacterResource["type"]) => resources.filter((resource) => (
+        resource.type === type && resource.metadata?.characterId === characterId
+    ));
+    const updateCharacter = (index: number, patch: Record<string, unknown>) => {
+        setDraft((current) => current ? {
+            ...current,
+            characters: current.characters.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item),
+        } : current);
+    };
+    const bindCharacter = (index: number, characterId: string) => {
+        const character = catalog.find((item) => item.id === characterId);
+        if (!character) return;
+        const images = resourcesForCharacter(character.id, "image");
+        const audios = resourcesForCharacter(character.id, "audio");
+        const preferredImage = images.find((resource) => resource.metadata?.assetKey === "fullBodyImageUrl")
+            || images.find((resource) => resource.id === character.primaryResourceId)
+            || images[0];
+        updateCharacter(index, {
+            system_character_id: character.id,
+            reference_image_resource_id: preferredImage?.id,
+            voice_id: character.voiceId || undefined,
+            voice_reference_resource_id: audios[0]?.id,
+        });
+        setBindingIndex(index);
+    };
+    const unbindCharacter = (index: number) => {
+        updateCharacter(index, {
+            system_character_id: undefined,
+            reference_image_resource_id: undefined,
+            voice_id: undefined,
+            voice_reference_resource_id: undefined,
+        });
     };
 
     if (!preview || !draft) return null;
@@ -156,7 +214,7 @@ export default function EntityConfirmModal({
                                         <Icon size={14} />
                                         <span className="font-medium">{t(`entityKind_${key}`)}</span>
                                         <span className="ml-auto text-sm opacity-70">
-                                            {prev} → {items.length}
+                                            {prev} + {items.length}
                                         </span>
                                     </div>
                                     {items.length > 0 ? (
@@ -167,6 +225,22 @@ export default function EntityConfirmModal({
                                                     className="inline-flex min-h-6 items-center rounded-md border border-glass-border bg-elevated text-sm text-foreground transition-colors focus-within:border-primary/70 focus-within:ring-1 focus-within:ring-primary/35 hover:border-foreground/25"
                                                     title={item.description}
                                                 >
+                                                    {key === "characters" && characterForItem(item) ? (
+                                                        <button
+                                                            type="button"
+                                                            className="ml-1 grid size-5 shrink-0 place-items-center overflow-hidden rounded-full border border-primary/40 bg-primary/10"
+                                                            title={t("openCharacterBinding")}
+                                                            onClick={() => {
+                                                                const matched = characterForItem(item);
+                                                                if (!item.system_character_id && matched) bindCharacter(index, matched.id);
+                                                                else setBindingIndex(index);
+                                                            }}
+                                                        >
+                                                            {characterForItem(item)?.avatarUrl ? (
+                                                                <img src={characterForItem(item)?.avatarUrl} alt="" className="size-full object-cover" />
+                                                            ) : <Users size={11} />}
+                                                        </button>
+                                                    ) : null}
                                                     {editingEntity?.kind === key && editingEntity.index === index ? (
                                                         <input
                                                             ref={inputRef}
@@ -213,6 +287,68 @@ export default function EntityConfirmModal({
                                     )}
                                 </div>
                             ))}
+                            {bindingIndex !== null && draft.characters[bindingIndex] ? (() => {
+                                const item = draft.characters[bindingIndex];
+                                const character = characterForItem(item);
+                                const images = character ? resourcesForCharacter(character.id, "image") : [];
+                                const audios = character ? resourcesForCharacter(character.id, "audio") : [];
+                                const selectedImage = images.find((resource) => resource.id === item.reference_image_resource_id);
+                                const selectedAudio = audios.find((resource) => resource.id === item.voice_reference_resource_id);
+                                return (
+                                    <section className="rounded-xl border border-primary/25 bg-primary/[0.04] p-4">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-medium text-foreground">{t("characterBindingTitle", { name: item.name })}</p>
+                                                <p className="mt-0.5 text-sm text-text-muted">{t("characterBindingHint")}</p>
+                                            </div>
+                                            {item.system_character_id ? (
+                                                <button type="button" onClick={() => unbindCharacter(bindingIndex)} className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-foreground">
+                                                    <Link2Off size={12} /> {t("unbindCharacter")}
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                        <label className="mt-3 block text-sm text-text-secondary">
+                                            {t("systemCharacter")}
+                                            <select
+                                                value={String(item.system_character_id || "")}
+                                                onChange={(event) => event.target.value ? bindCharacter(bindingIndex, event.target.value) : unbindCharacter(bindingIndex)}
+                                                className="mt-1 w-full rounded-md border border-glass-border bg-elevated px-3 py-2 text-sm text-foreground"
+                                            >
+                                                <option value="">{t("notBound")}</option>
+                                                {catalog.map((entry) => <option key={entry.id} value={entry.id}>{entry.chineseName || entry.name} · {entry.subtitle || entry.name}</option>)}
+                                            </select>
+                                        </label>
+                                        {character ? (
+                                            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                                                <label className="text-sm text-text-secondary">
+                                                    {t("primaryImage")}
+                                                    <select value={String(item.reference_image_resource_id || "")} onChange={(event) => updateCharacter(bindingIndex, { reference_image_resource_id: event.target.value || undefined })} className="mt-1 w-full rounded-md border border-glass-border bg-elevated px-2 py-2 text-sm text-foreground">
+                                                        <option value="">{t("notSelected")}</option>
+                                                        {images.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}
+                                                    </select>
+                                                    {selectedImage ? <img src={selectedImage.url} alt="" className="mt-2 h-20 w-full rounded-md bg-black/30 object-contain" /> : null}
+                                                </label>
+                                                <label className="text-sm text-text-secondary">
+                                                    {t("voiceId")}
+                                                    <select value={String(item.voice_id || "")} onChange={(event) => updateCharacter(bindingIndex, { voice_id: event.target.value || undefined })} className="mt-1 w-full rounded-md border border-glass-border bg-elevated px-2 py-2 text-sm text-foreground">
+                                                        <option value="">{t("notSelected")}</option>
+                                                        {character.voiceId ? <option value={character.voiceId}>{character.voiceId}</option> : null}
+                                                    </select>
+                                                    <div className="mt-2 flex h-20 items-center justify-center rounded-md bg-black/20 text-text-muted"><Volume2 size={18} /></div>
+                                                </label>
+                                                <label className="text-sm text-text-secondary">
+                                                    {t("referenceVoice")}
+                                                    <select value={String(item.voice_reference_resource_id || "")} onChange={(event) => updateCharacter(bindingIndex, { voice_reference_resource_id: event.target.value || undefined })} className="mt-1 w-full rounded-md border border-glass-border bg-elevated px-2 py-2 text-sm text-foreground">
+                                                        <option value="">{t("notSelected")}</option>
+                                                        {audios.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}
+                                                    </select>
+                                                    {selectedAudio ? <audio src={selectedAudio.url} controls preload="none" className="mt-2 h-8 w-full" /> : null}
+                                                </label>
+                                            </div>
+                                        ) : null}
+                                    </section>
+                                );
+                            })() : null}
                         </div>
 
                         <footer className="flex items-center justify-end gap-3 px-6 py-4 border-t border-glass-border">
