@@ -583,6 +583,26 @@ export const api = {
         return response.json();
     },
 
+    /** Store an optional image as a generation input for a Studio asset. */
+    uploadAssetReference: async (
+        scriptId: string,
+        assetType: "character" | "scene" | "prop",
+        assetId: string,
+        file: File,
+    ) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch(
+            `${API_URL}/projects/${scriptId}/assets/${assetType}/${assetId}/reference-image`,
+            { method: "POST", body: formData },
+        );
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || "Failed to upload reference image");
+        }
+        return response.json();
+    },
+
     generateAsset: async (scriptId: string, assetId: string, assetType: string, stylePreset: string, stylePrompt?: string, generationType: string = "all", prompt: string = "", applyStyle: boolean = true, negativePrompt: string = "", batchSize: number = 1, modelName?: string, aspectRatio?: string) => {
         const res = await axios.post(`${API_URL}/projects/${scriptId}/assets/generate`, {
             asset_id: assetId,
@@ -1637,6 +1657,7 @@ export const api = {
 export const crudApi = {
     // Character CRUD
     createCharacter: async (scriptId: string, data: {
+        id?: string;
         name: string;
         description?: string;
         age?: string;
@@ -1657,6 +1678,7 @@ export const crudApi = {
 
     // Scene CRUD
     createScene: async (scriptId: string, data: {
+        id?: string;
         name: string;
         description?: string;
         time_of_day?: string;
@@ -1674,6 +1696,7 @@ export const crudApi = {
 
     // Prop CRUD
     createProp: async (scriptId: string, data: {
+        id?: string;
         name: string;
         description?: string;
         image_url?: string;

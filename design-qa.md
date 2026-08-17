@@ -460,3 +460,61 @@ final result: passed
 - No blocking follow-up polish identified.
 
 final result: passed
+
+---
+
+# Design QA — Unified Studio Asset Generation
+
+- Source visual truth: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-bf2609c2-94ae-4b99-8515-b5e5dd50a216.png`
+- Implementation screenshot: `/Users/raymond/Projects/crocotv-codex-canvas-FEAT-unified-asset-reference-generation/data/runtime/audits/unified-asset-generation/implementation-character-modal.png`
+- Source pixels: 436 × 824 (cropped modal reference)
+- Implementation pixels: 1280 × 720 (full Codex in-app Browser viewport, device scale factor 1)
+- CSS viewport: 1280 × 720
+- State: dark theme, Cast step, “新增本集角色” modal open, no reference selected
+- Normalization: the source is a modal-only crop while the implementation is a full application capture. The central modal region was compared directly; browser chrome and surrounding Studio layout were excluded from fidelity judgments.
+
+## Full-view comparison evidence
+
+The implementation preserves the existing Studio shell and modal visual language. The intentional product changes are visible: the two mode tabs are removed, the reference input is always present and optional, and the primary action is “生成”. At the 720 px viewport the modal uses its bounded internal scroll instead of clipping the page.
+
+## Focused region comparison evidence
+
+A separate crop was not required because both source and implementation keep the complete modal as the dominant readable region. The paired image inspection covered title treatment, field order, control sizes, radii, borders, upload dropzone, and dark-theme tokens.
+
+## Required fidelity surfaces
+
+- Fonts and typography: existing Studio display/body/mono assignments, weights, sizes, line heights, and hierarchy are preserved. The new subtitle wraps cleanly at the narrower modal width.
+- Spacing and layout rhythm: field spacing, 16 px-style gaps, input heights, modal padding, radii, and upload area proportions remain consistent. The removed tab row closes without leaving an empty gap.
+- Colors and visual tokens: existing `bg-elevated`, `bg-input-bg`, `border-glass-border`, text, hover, focus, and primary tokens are reused; no parallel color system was introduced.
+- Image quality and asset fidelity: no new decorative asset was required. The optional uploaded image uses the existing `PreviewImage` path and keeps the original media rather than approximating it.
+- Copy and content: the UI now says the reference image is optional and that clicking generates immediately. There is no text-to-image/image-to-image terminology and no reference-note field.
+
+## Interaction verification
+
+- Opened Cast and all three shared asset sections.
+- Opened the unified character modal and confirmed the old mode tabs are absent.
+- Filled name and description; the Generate action enabled.
+- Clicked Generate; the modal closed, a new card appeared immediately, and the card displayed “生成中...” with the progress notification.
+- In the isolated no-key environment the job later surfaced the expected provider configuration error and removed the loading overlay, confirming failure cleanup.
+- The reference upload REST path was verified separately with a real local image; the resulting Canvas input snapshot contained the uploaded resource ID.
+
+## Findings
+
+- No actionable P0/P1/P2 visual or interaction mismatches remain.
+- P3: on a 720 px-tall viewport, the character modal requires a short internal scroll to reach the footer because character persona, voice, description, and reference image are all retained. The bounded scroll is usable and avoids page clipping.
+- Residual test gap: the in-app Browser surface did not expose a file-input automation method, so file selection was verified through the real REST upload and Canvas runtime path rather than the browser picker.
+
+## Comparison history
+
+- Initial implementation comparison: no P0/P1/P2 issue found. The implementation intentionally differs from the old source by removing the two generation-mode tabs and changing the primary action from a placeholder Create flow to real Generate.
+- No visual fix loop was required after the first paired comparison.
+
+## Implementation checklist
+
+- [x] Remove text/image generation mode tabs.
+- [x] Keep one optional reference-image input.
+- [x] Keep the existing description as the only prompt field.
+- [x] Submit a real generation job and show card loading state.
+- [x] Preserve Studio tokens, components, and responsive modal behavior.
+
+final result: passed

@@ -43,7 +43,7 @@ export type CastKind = "character" | "scene" | "prop";
 // Module-level poll registry — survives modal close/reopen.
 export const activePolls = new Map<string, ReturnType<typeof setInterval>>();
 
-function startAssetPoll(
+export function startAssetPoll(
     entityId: string,
     taskId: string,
     projectId: string,

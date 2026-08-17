@@ -78,6 +78,7 @@ const studioEntitySchema = z.object({
   id: z.string().min(1).max(80).optional(),
   name: z.string().min(1).max(180),
   description: z.string().max(100_000).default(""),
+  referenceImageResourceId: z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
   attributes: z.record(z.string(), z.unknown()).optional(),
 });
 const studioFrameSchema = z.object({
@@ -309,7 +310,7 @@ server.registerTool("studio_set_art_direction", {
 }, async ({ projectId, selectedStyleId, styleConfig, customStyles, recommendations }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/art_direction/save`, { method: "POST", body: { selected_style_id: selectedStyleId, style_config: styleConfig, custom_styles: customStyles, ai_recommendations: recommendations } })));
 
 server.registerTool("studio_upsert_asset", {
-  description: "Create or structurally update one Studio character, scene, or prop. Its deterministic managed Canvas nodes and stage connections are updated atomically.",
+  description: "Create or structurally update one Studio character, scene, or prop. An optional local referenceImageResourceId becomes an image input for subsequent generation; omitting it keeps normal text-only generation. Its deterministic managed Canvas nodes and stage connections are updated atomically.",
   inputSchema: { projectId: z.string().uuid(), assetType: z.enum(["character", "scene", "prop"]), asset: studioEntitySchema },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
 }, async ({ projectId, assetType, asset }) => {
@@ -317,8 +318,25 @@ server.registerTool("studio_upsert_asset", {
   const path = asset.id
     ? `/api/studio/projects/${encodeURIComponent(projectId)}/assets/${assetType}/${encodeURIComponent(asset.id)}`
     : `/api/studio/projects/${encodeURIComponent(projectId)}/${plural}`;
-  return toolResult(await api(path, { method: asset.id ? "PUT" : "POST", body: { name: asset.name, description: asset.description, ...(asset.attributes || {}) } }));
+  return toolResult(await api(path, { method: asset.id ? "PUT" : "POST", body: { name: asset.name, description: asset.description, ...(asset.referenceImageResourceId ? { reference_image_resource_id: asset.referenceImageResourceId } : {}), ...(asset.attributes || {}) } }));
 });
+
+server.registerTool("studio_generate_asset_image", {
+  description: "Queue real image generation for one Studio character, scene, or prop through the shared Canvas runtime. If the asset has a local reference_image_resource_id it is passed automatically as a reference image; otherwise the same call performs normal text-only generation. This can incur provider cost.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    assetType: z.enum(["character", "scene", "prop"]),
+    assetId: z.string().min(1).max(80),
+    prompt: z.string().max(100_000).optional(),
+    batchSize: z.number().int().min(1).max(3).default(1),
+    modelName: z.string().min(1).max(180).optional(),
+    aspectRatio: z.string().min(1).max(20).optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+}, async ({ projectId, assetType, assetId, prompt, batchSize, modelName, aspectRatio }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/assets/generate`, {
+  method: "POST",
+  body: { asset_type: assetType, asset_id: assetId, prompt, batch_size: batchSize, model_name: modelName, aspect_ratio: aspectRatio },
+})));
 
 server.registerTool("studio_bind_character_resources", {
   description: "Bind one project character by reference to one synchronized character plus at most one primary image, one Voice ID, and one optional reference-audio resource. Use canvas_list_characters and canvas_list_resources to discover valid IDs. Set unbind=true to clear the synchronized-character binding without copying files.",

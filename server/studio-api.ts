@@ -97,6 +97,11 @@ studioApiRouter.post("/projects/:id/assets/:assetType/:assetId/upload", upload.s
   const resource = await storeUpload(request);
   response.json(await attachEntityResource(id, entityKind(request.params.assetType), param(request.params.assetId), resource, clientId(request)));
 }));
+studioApiRouter.post("/projects/:id/assets/:assetType/:assetId/reference-image", upload.single("file"), projectRoute(async (request, response, id) => {
+  const resource = await storeUpload(request);
+  if (resource.type !== "image") throw new Error("参考素材必须是图片");
+  response.json(await attachEntityReferenceResource(id, entityKind(request.params.assetType), param(request.params.assetId), resource, clientId(request)));
+}));
 
 studioApiRouter.post("/projects/:id/storyboard/analyze", projectRoute(async (request, response, id) => response.json(await analyzeStudioStoryboard(id, String(request.body?.text || ""), clientId(request)))));
 studioApiRouter.put("/projects/:id/storyboard", projectRoute(async (request, response, id) => response.json(await replaceStudioStoryboard(id, request.body?.frames, clientId(request)))));
@@ -384,6 +389,14 @@ function extensionForMime(mime: string) { return ({ "image/png": ".png", "image/
 async function attachEntityResource(projectId: string, kind: "character" | "scene" | "prop", entityId: string, resource: Awaited<ReturnType<typeof storeUpload>>, originClientId: string) {
   const variant = { id: randomUUID(), url: resource.url, resource_id: resource.id, created_at: Date.now() / 1000 };
   return mutateStudioProject(projectId, (state) => ({ ...state, [collection(kind)]: state[collection(kind)].map((entity) => entity.id === entityId ? { ...entity, image_url: resource.url, image_asset: { selected_id: variant.id, variants: [...(entity.image_asset?.variants || []), variant] }, status: "ready" } : entity) }), { originClientId });
+}
+async function attachEntityReferenceResource(projectId: string, kind: "character" | "scene" | "prop", entityId: string, resource: Awaited<ReturnType<typeof storeUpload>>, originClientId: string) {
+  return patchStudioEntity(projectId, kind, entityId, {
+    image_url: resource.url,
+    reference_image_url: resource.url,
+    reference_image_resource_id: resource.id,
+    status: "ready",
+  }, originClientId);
 }
 async function attachFrameResource(projectId: string, frameId: string, resource: Awaited<ReturnType<typeof storeUpload>>, originClientId: string) {
   const variant = { id: randomUUID(), url: resource.url, resource_id: resource.id, created_at: Date.now() / 1000 };

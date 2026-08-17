@@ -83,6 +83,7 @@ export interface Character {
     voice_id?: string;
     voice_name?: string;
     system_character_id?: string;
+    reference_image_url?: string;
     reference_image_resource_id?: string;
     voice_reference_resource_id?: string;
     locked?: boolean;
@@ -108,6 +109,8 @@ export interface Scene {
     name: string;
     description: string;
     image_url?: string;
+    reference_image_url?: string;
+    reference_image_resource_id?: string;
     image_asset?: ImageAsset;
     video_assets?: VideoTask[];
     video_prompt?: string;
@@ -124,6 +127,8 @@ export interface Prop {
     name: string;
     description: string;
     image_url?: string;
+    reference_image_url?: string;
+    reference_image_resource_id?: string;
     image_asset?: ImageAsset;
     video_assets?: VideoTask[];
     video_prompt?: string;

@@ -16,7 +16,7 @@ import StepPageHeader, { StepPill } from "@/components/shared/StepPageHeader";
 import PreviewImage from "@/components/shared/preview/PreviewImage";
 import WorkflowActionButton from "@/components/shared/WorkflowActionButton";
 import VoicePickerModal from "./cast/VoicePickerModal";
-import CastWorkbenchModal, { activePolls } from "./cast/CastWorkbenchModal";
+import CastWorkbenchModal, { activePolls, startAssetPoll } from "./cast/CastWorkbenchModal";
 import { toast } from "@/store/toastStore";
 import { apiErrorMessage } from "@/lib/apiError";
 import CharacterResourceBindingModal from "./cast/CharacterResourceBindingModal";
@@ -331,8 +331,8 @@ export default function Cast() {
                 onClose={() => setBindingCharacterId(null)}
             />
 
-            {/* R2V v2 Phase 5 — real Add new cast modal (AI / upload tabs). */}
-            <AddCastPlaceholderModal
+            {/* Unified create-and-generate flow with an optional reference image. */}
+            <AddCastGenerationModal
                 kind={addModalOpen}
                 projectId={currentProject?.id ?? null}
                 onClose={() => setAddModalOpen(null)}
@@ -344,13 +344,9 @@ export default function Cast() {
     );
 }
 
-// R2V v2 Phase 5 — real "+ 新素材" modal.
-// Two-tab UX: AI generate vs upload image. Both paths create an episode-local
-// entity with a name/persona/description payload + optional image URL. AI generation is a placeholder hand-off (creates
-// the asset blank, then user can trigger generation from the card detail
-// view) — full async generation queue ships when generation pipeline
-// supports series-scope without project context.
-function AddCastPlaceholderModal({
+// Creates the local entity, optionally stores one reference image, and then
+// submits the same real generation job used by the asset workbench.
+function AddCastGenerationModal({
     kind,
     projectId,
     onClose,
@@ -362,20 +358,28 @@ function AddCastPlaceholderModal({
     onCreated: (project: any) => void;
 }) {
     const t = useTranslations("cast");
-    const [tab, setTab] = useState<"ai" | "upload">("ai");
+    const tw = useTranslations("castWorkbench");
+    const currentProject = useProjectStore((state) => state.currentProject);
+    const addGeneratingTask = useProjectStore((state) => state.addGeneratingTask);
+    const removeGeneratingTask = useProjectStore((state) => state.removeGeneratingTask);
     const [name, setName] = useState("");
     const [persona, setPersona] = useState("");
     const [description, setDescription] = useState("");
     const [voiceId, setVoiceId] = useState("");  // P2-c — character voice binding
-    const [uploading, setUploading] = useState(false);
-    const [imageUrl, setImageUrl] = useState<string>("");
+    const [referenceFile, setReferenceFile] = useState<File | null>(null);
+    const [referencePreviewUrl, setReferencePreviewUrl] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const createdEntityId = useRef<string | null>(null);
+    const referenceUploaded = useRef(false);
 
     // Reset state when modal closes / kind changes
     const reset = () => {
         setName(""); setPersona(""); setDescription(""); setVoiceId("");
-        setImageUrl(""); setError(null); setTab("ai");
+        if (referencePreviewUrl) URL.revokeObjectURL(referencePreviewUrl);
+        setReferenceFile(null); setReferencePreviewUrl(""); setError(null);
+        createdEntityId.current = null;
+        referenceUploaded.current = false;
     };
 
     if (!kind) return null;
@@ -383,18 +387,19 @@ function AddCastPlaceholderModal({
         : kind === "scene" ? t("sectionScenes")
         : t("sectionProps");
 
-    const handleUpload = async (file: File) => {
+    const handleReferenceSelect = (file: File) => {
         if (!file) return;
-        setUploading(true);
+        if (referencePreviewUrl) URL.revokeObjectURL(referencePreviewUrl);
+        setReferenceFile(file);
+        setReferencePreviewUrl(URL.createObjectURL(file));
+        referenceUploaded.current = false;
         setError(null);
-        try {
-            const result = await api.uploadFile(file);
-            setImageUrl(result.url || "");
-        } catch (err: any) {
-            setError(err?.response?.data?.detail || err?.message || t("uploadFailed"));
-        } finally {
-            setUploading(false);
-        }
+    };
+
+    const handleClose = () => {
+        if (submitting) return;
+        reset();
+        onClose();
     };
 
     const handleSubmit = async () => {
@@ -409,32 +414,80 @@ function AddCastPlaceholderModal({
         setSubmitting(true);
         setError(null);
         try {
+            const entityId = createdEntityId.current || crypto.randomUUID();
             const payload = {
+                id: entityId,
                 name: name.trim(),
                 description: description.trim() || undefined,
                 persona: kind === "character" ? (persona.trim() || undefined) : undefined,
                 voice_id: kind === "character" ? (voiceId.trim() || undefined) : undefined,
-                image_url: imageUrl || undefined,
             };
-            const project = kind === "character"
-                ? await crudApi.createCharacter(projectId, payload)
-                : kind === "scene"
-                    ? await crudApi.createScene(projectId, payload)
-                    : await crudApi.createProp(projectId, payload);
-            onCreated(project);
+            if (!createdEntityId.current) {
+                const created = kind === "character"
+                    ? await crudApi.createCharacter(projectId, payload)
+                    : kind === "scene"
+                        ? await crudApi.createScene(projectId, payload)
+                        : await crudApi.createProp(projectId, payload);
+                createdEntityId.current = entityId;
+                onCreated(created);
+            }
+            if (referenceFile && !referenceUploaded.current) {
+                const withReference = await api.uploadAssetReference(projectId, kind, entityId, referenceFile);
+                referenceUploaded.current = true;
+                onCreated(withReference);
+            }
+
+            const generationType = kind === "character" ? "reference_sheet" : "all";
+            addGeneratingTask(entityId, generationType, 1);
+            const progressId = toast.progress(tw("toastGenStart", { kind: tw(`kind.${kind}`) }), {
+                projectId,
+                projectTitle: currentProject?.title,
+                body: tw("toastGenStartBody"),
+            });
+            try {
+                const generated = await api.generateAsset(
+                    projectId,
+                    entityId,
+                    kind,
+                    currentProject?.style_preset || "realistic",
+                    "",
+                    generationType,
+                    description.trim() || name.trim(),
+                    true,
+                    "",
+                    1,
+                    currentProject?.model_settings?.t2i_model,
+                );
+                onCreated(generated);
+                const taskId = generated?._task_id;
+                if (taskId) {
+                    startAssetPoll(entityId, taskId, projectId, kind, generationType, tw, () => ({
+                        updateProject: useProjectStore.getState().updateProject,
+                        removeGeneratingTask: useProjectStore.getState().removeGeneratingTask,
+                    }), progressId);
+                } else {
+                    toast.dismiss(progressId);
+                    removeGeneratingTask(entityId, generationType);
+                    toast.success(tw("toastGenDone", { kind: tw(`kind.${kind}`) }));
+                }
+            } catch (generationError) {
+                toast.dismiss(progressId);
+                removeGeneratingTask(entityId, generationType);
+                throw generationError;
+            }
             reset();
             onClose();
         } catch (err: any) {
-            setError(err?.response?.data?.detail || err?.message || t("createFailed"));
+            setError(err?.response?.data?.detail || err?.message || t("generateFailed"));
         } finally {
             setSubmitting(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-[100] grid place-items-center bg-overlay backdrop-blur-sm" onClick={() => { reset(); onClose(); }}>
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-overlay backdrop-blur-sm" onClick={handleClose}>
             <div
-                className="w-full max-w-md rounded-2xl border border-glass-border bg-elevated p-6 shadow-2xl"
+                className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-glass-border bg-elevated p-6 shadow-2xl custom-scrollbar"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="flex items-start gap-3 mb-4">
@@ -447,30 +500,8 @@ function AddCastPlaceholderModal({
                         </h3>
                         <p className="text-sm text-text-secondary mt-1">{t("addModalSubtitle")}</p>
                     </div>
-                    <button onClick={() => { reset(); onClose(); }} className="p-2 hover:bg-hover-bg rounded-lg text-text-muted hover:text-foreground transition-colors">
+                    <button aria-label={t("close")} disabled={submitting} onClick={handleClose} className="p-2 hover:bg-hover-bg rounded-lg text-text-muted hover:text-foreground transition-colors disabled:opacity-40">
                         <X size={16} />
-                    </button>
-                </div>
-
-                {/* Tab switcher */}
-                <div className="flex gap-1 mb-4 p-1 rounded-lg border border-glass-border bg-glass">
-                    <button
-                        onClick={() => setTab("ai")}
-                        className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                            tab === "ai" ? "bg-primary/15 text-primary" : "text-text-secondary hover:text-foreground"
-                        }`}
-                    >
-                        <Sparkles size={14} />
-                        {t("addTabAi")}
-                    </button>
-                    <button
-                        onClick={() => setTab("upload")}
-                        className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                            tab === "upload" ? "bg-primary/15 text-primary" : "text-text-secondary hover:text-foreground"
-                        }`}
-                    >
-                        <Upload size={14} />
-                        {t("addTabUpload")}
                     </button>
                 </div>
 
@@ -525,58 +556,55 @@ function AddCastPlaceholderModal({
                         <textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            placeholder={tab === "ai" ? t("fieldDescriptionAiPlaceholder") : t("fieldDescriptionPlaceholder")}
+                            placeholder={t("fieldDescriptionAiPlaceholder")}
                             rows={3}
                             className="w-full bg-input-bg border border-glass-border rounded-lg px-3 py-2 text-sm text-foreground placeholder-text-muted focus:outline-none focus:border-primary resize-none"
                         />
                     </div>
 
-                    {/* Upload tab — file dropzone + preview */}
-                    {tab === "upload" && (
-                        <div>
-                            <label className="block text-sm font-medium text-text-secondary mb-1.5">{t("fieldImageUpload")}</label>
-                            {imageUrl ? (
-                                <div className="relative">
-                                    <PreviewImage src={imageUrl} className="w-full aspect-video rounded-lg" />
-                                    <button
-                                        onClick={() => setImageUrl("")}
-                                        className="absolute top-2 right-2 p-1.5 bg-overlay rounded-md text-text-secondary hover:text-foreground transition-colors"
-                                    >
-                                        <X size={12} />
-                                    </button>
+                    <div>
+                        <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                            {t("fieldImageUpload")} <span className="text-text-muted">({t("optional")})</span>
+                        </label>
+                        {referencePreviewUrl ? (
+                            <div className="relative">
+                                <PreviewImage src={referencePreviewUrl} className="w-full aspect-video rounded-lg" />
+                                <button
+                                    aria-label={t("removeReference")}
+                                    onClick={() => {
+                                        URL.revokeObjectURL(referencePreviewUrl);
+                                        setReferenceFile(null);
+                                        setReferencePreviewUrl("");
+                                    }}
+                                    className="absolute top-2 right-2 p-1.5 bg-overlay rounded-md text-text-secondary hover:text-foreground transition-colors"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        ) : (
+                            <label
+                                className="block w-full aspect-video rounded-lg border-2 border-dashed border-glass-border hover:border-primary/40 cursor-pointer transition-colors"
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={(event) => {
+                                    event.preventDefault();
+                                    const file = event.dataTransfer.files?.[0];
+                                    if (file?.type.startsWith("image/")) handleReferenceSelect(file);
+                                }}
+                            >
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => e.target.files?.[0] && handleReferenceSelect(e.target.files[0])}
+                                    className="hidden"
+                                    disabled={submitting}
+                                />
+                                <div className="h-full flex flex-col items-center justify-center text-text-muted">
+                                    <Upload size={20} />
+                                    <span className="mt-2 text-sm">{t("clickToUpload")}</span>
                                 </div>
-                            ) : (
-                                <label className="block w-full aspect-video rounded-lg border-2 border-dashed border-glass-border hover:border-primary/40 cursor-pointer transition-colors">
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])}
-                                        className="hidden"
-                                        disabled={uploading}
-                                    />
-                                    <div className="h-full flex flex-col items-center justify-center text-text-muted">
-                                        {uploading ? (
-                                            <Loader2 size={20} className="animate-spin" />
-                                        ) : (
-                                            <>
-                                                <Upload size={20} />
-                                                <span className="mt-2 text-sm">{t("clickToUpload")}</span>
-                                            </>
-                                        )}
-                                    </div>
-                                </label>
-                            )}
-                        </div>
-                    )}
-
-                    {/* AI tab hint */}
-                    {tab === "ai" && (
-                        <div className="rounded-lg bg-primary/[0.06] border border-primary/20 px-3 py-2.5">
-                            <p className="text-sm text-text-secondary leading-relaxed">
-                                {t("aiTabHint")}
-                            </p>
-                        </div>
-                    )}
+                            </label>
+                        )}
+                    </div>
 
                     {error && (
                         <div className="rounded-lg border border-status-failed-border/40 bg-status-failed-bg/50 px-3 py-2 text-status-failed-fg text-sm">
@@ -587,7 +615,7 @@ function AddCastPlaceholderModal({
 
                 {/* Actions */}
                 <div className="flex gap-2 mt-5">
-                    <WorkflowActionButton variant="ghost" size="sm" onClick={() => { reset(); onClose(); }} className="flex-1">
+                    <WorkflowActionButton variant="ghost" size="sm" onClick={handleClose} disabled={submitting} className="flex-1">
                         {t("cancel")}
                     </WorkflowActionButton>
                     <WorkflowActionButton
@@ -598,7 +626,7 @@ function AddCastPlaceholderModal({
                         disabled={!name.trim() || !projectId}
                         className="flex-1"
                     >
-                        {tab === "ai" ? t("createAndGenerate") : t("create")}
+                        {t("generate")}
                     </WorkflowActionButton>
                 </div>
             </div>

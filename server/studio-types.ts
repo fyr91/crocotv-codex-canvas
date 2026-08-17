@@ -22,12 +22,13 @@ export type StudioNamedEntity = Record<string, unknown> & {
   name: string;
   description: string;
   image_url?: string;
+  reference_image_url?: string;
+  reference_image_resource_id?: string;
   image_asset?: StudioImageAsset;
   locked?: boolean;
   starred?: boolean;
   status?: string;
   system_character_id?: string;
-  reference_image_resource_id?: string;
   voice_id?: string;
   voice_reference_resource_id?: string;
 };

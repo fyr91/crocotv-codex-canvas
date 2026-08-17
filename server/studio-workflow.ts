@@ -223,6 +223,9 @@ async function prepareStudioAssetGeneration(projectId: string, raw: any, originC
   const initial = await getStudioBackedProject(projectId);
   const sourceEntity = requiredEntity(initial.studio[entityCollection(kind)], entityId);
   const resolvedPrompt = String(raw?.prompt || raw?.style_prompt || sourceEntity.description || sourceEntity.name);
+  const referenceResourceId = String(sourceEntity.reference_image_resource_id || "").trim();
+  const referenceNodeId = referenceResourceId ? stableStudioNodeId(projectId, kind, entityId, "image-reference") : "";
+  const composerContent = referenceNodeId ? `${resolvedPrompt}\n\n参考图：@[node:${referenceNodeId}]` : resolvedPrompt;
   const count = boundedCount(raw?.batch_size);
   const variants: StudioImageVariant[] = Array.from({ length: count }, () => ({ id: randomUUID(), url: "", created_at: Date.now() / 1000, prompt_used: resolvedPrompt }));
   const response = await mutateStudioProject(projectId, (state) => {
@@ -235,7 +238,7 @@ async function prepareStudioAssetGeneration(projectId: string, raw: any, originC
   const outputIds = variants.map((variant) => stableStudioNodeId(projectId, kind, entityId, `image-output-${variant.id}`));
   try {
     await configureNode(projectId, configId, {
-      composerContent: resolvedPrompt,
+      composerContent,
       model: resolveImageModel(raw?.model_name), count,
       size: aspectSize(String(raw?.aspect_ratio || "1:1")),
     }, originClientId);

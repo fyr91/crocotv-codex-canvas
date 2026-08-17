@@ -25,6 +25,7 @@ test("rich Studio stages project assets, shots, takes, and assembly into one man
   const nodes = operations.flatMap((operation) => operation.op === "add_node" ? [operation.node] : []);
   assert.equal(nodes.filter((node) => node.type === "group").length, 5);
   assert.ok(nodes.some((node) => node.metadata?.studioRole === "image-output-portrait-1" && node.metadata.storageKey === "image-1"));
+  assert.ok(nodes.some((node) => node.metadata?.studioRole === "image-output-portrait-1" && node.metadata.sourceConfigNodeId === stableStudioNodeId(projectId, "character", "lin-zhou", "image-config")));
   assert.ok(nodes.some((node) => node.metadata?.studioRole === "video-output" && node.metadata.storageKey === "video-1"));
   assert.ok(nodes.some((node) => node.metadata?.studioRole === "visual-context-config" && node.metadata.artifactType === "studio-visual-context-config"));
   assert.ok(nodes.some((node) => node.metadata?.studioRole === "prompt-revision-config" && node.metadata.artifactType === "studio-shot-revision-config"));
@@ -54,7 +55,7 @@ test("Studio full mapping becomes updates when managed nodes already exist", () 
   assert.equal(text.patch.metadata?.content, "第二场");
 });
 
-test("bound character reference image is projected as a shared Canvas resource", () => {
+test("asset reference image is projected as a connected Canvas generation input", () => {
   const projectId = "project-character-binding";
   const state = {
     ...newStudioProjectState("角色测试"),
@@ -70,7 +71,13 @@ test("bound character reference image is projected as a shared Canvas resource",
   const operations = studioScriptMappingOperations({ projectId, state, nodes: [] });
   const imageNode = operations.find((operation) => operation.op === "add_node"
     && operation.node.metadata?.studioEntityId === "xiaolin"
-    && operation.node.metadata?.studioRole === "image-output-imported");
+    && operation.node.metadata?.studioRole === "image-reference");
   assert.ok(imageNode && imageNode.op === "add_node");
   assert.equal(imageNode.node.metadata?.storageKey, "character-image-1");
+  assert.equal(imageNode.node.metadata?.referenceInput, true);
+  const configId = stableStudioNodeId(projectId, "character", "xiaolin", "image-config");
+  assert.ok(operations.some((operation) => operation.op === "connect" && operation.from === imageNode.node.id && operation.to === configId));
+  const configNode = operations.find((operation) => operation.op === "add_node" && operation.node.id === configId);
+  assert.ok(configNode && configNode.op === "add_node");
+  assert.match(String(configNode.node.metadata?.composerContent), new RegExp(`@\\[node:${imageNode.node.id}\\]`));
 });

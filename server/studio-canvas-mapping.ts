@@ -172,26 +172,38 @@ function addEntity(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNo
     groupId, artifactType: `studio-${kind}`, stage: "cast", content: entity.description, studioEntitySnapshot: safeSnapshot(entity), status: entity.status || "success", layoutSection: kind, layoutOrder: y,
   }));
   edges.push({ fromNodeId: artId, toNodeId: entityId });
+  const referenceResourceId = stringValue(entity.reference_image_resource_id);
+  const referenceNodeId = referenceResourceId ? stableStudioNodeId(projectId, kind, entity.id, "image-reference") : "";
+  if (referenceResourceId) {
+    nodes.push(node(projectId, kind, entity.id, "image-reference", "image", `${entity.name} · 参考图`, 1968, y + 280, 320, 320, {
+      ...resourceMetadata(referenceResourceId, stringValue(entity.reference_image_url || entity.image_url) || "", groupId, kind, y + 1),
+      artifactType: "studio-reference-resource",
+      referenceInput: true,
+    }));
+  }
   const configId = stableStudioNodeId(projectId, kind, entity.id, "image-config");
-  nodes.push(node(projectId, kind, entity.id, "image-config", "config", `${entity.name} · 形象生成`, 1968, y + 280, 320, 390, imageConfigMetadata(groupId, `${stylePrefix(state)}${entity.description || entity.name}`, kind, y + 1, undefined, state)));
+  const prompt = `${stylePrefix(state)}${entity.description || entity.name}${referenceNodeId ? `\n\n参考图：@[node:${referenceNodeId}]` : ""}`;
+  nodes.push(node(projectId, kind, entity.id, "image-config", "config", `${entity.name} · 形象生成`, referenceNodeId ? 2312 : 1968, y + 280, 320, 390, imageConfigMetadata(groupId, prompt, kind, y + 1, undefined, state)));
   edges.push({ fromNodeId: entityId, toNodeId: configId });
+  if (referenceNodeId) edges.push({ fromNodeId: referenceNodeId, toNodeId: configId });
   const variants = entity.image_asset?.variants || [];
   variants.forEach((variant, index) => {
     const role = `image-output-${variant.id}`;
     const imageId = stableStudioNodeId(projectId, kind, entity.id, role);
-    nodes.push(node(projectId, kind, entity.id, role, "image", `${entity.name} · 形象 ${index + 1}`, 2312, y + 280 + index * 350, 320, 320,
-      variant.resource_id ? resourceMetadata(variant.resource_id, variant.url || "", groupId, kind, y + 2 + index) : pendingResourceMetadata(groupId, kind, y + 2 + index)));
+    nodes.push(node(projectId, kind, entity.id, role, "image", `${entity.name} · 形象 ${index + 1}`, 2312, y + (referenceNodeId ? 710 : 280) + index * 350, 320, 320,
+      { ...(variant.resource_id ? resourceMetadata(variant.resource_id, variant.url || "", groupId, kind, y + 2 + index) : pendingResourceMetadata(groupId, kind, y + 2 + index)), sourceConfigNodeId: configId }));
     nodes[nodes.length - 1].metadata.selected = variant.id === entity.image_asset?.selected_id;
     edges.push({ fromNodeId: configId, toNodeId: imageId });
   });
-  const directResourceId = stringValue(entity.resource_id || entity.reference_image_resource_id);
+  const directResourceId = stringValue(entity.resource_id);
   if (!variants.length && directResourceId) {
     const imageId = stableStudioNodeId(projectId, kind, entity.id, "image-output-imported");
-    nodes.push(node(projectId, kind, entity.id, "image-output-imported", "image", `${entity.name} · 形象`, 2312, y + 280, 320, 320, resourceMetadata(directResourceId, entity.image_url || "", groupId, kind, y + 2)));
+    nodes.push(node(projectId, kind, entity.id, "image-output-imported", "image", `${entity.name} · 形象`, 2312, y + (referenceNodeId ? 710 : 280), 320, 320, { ...resourceMetadata(directResourceId, entity.image_url || "", groupId, kind, y + 2), sourceConfigNodeId: configId }));
     edges.push({ fromNodeId: configId, toNodeId: imageId });
   }
-  const assetRows = Math.max(1, variants.length || (directResourceId ? 1 : 0));
-  return { blockHeight: Math.max(710, 640 + (assetRows - 1) * 350) + 40 };
+  const assetRows = variants.length || (directResourceId ? 1 : 0);
+  const contentHeight = assetRows ? (referenceNodeId ? 1030 : 600) + (assetRows - 1) * 350 : 670;
+  return { blockHeight: Math.max(710, contentHeight) + 40 };
 }
 
 function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNodeId: string }>, projectId: string, groupId: string, artId: string, frame: StudioStoryboardFrame, y: number, state: StudioProjectState) {
