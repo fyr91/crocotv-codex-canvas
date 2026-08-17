@@ -9,6 +9,7 @@ import type { Character } from "@/store/projectStore";
 import { useProjectStore } from "@/store/projectStore";
 import { toast } from "@/store/toastStore";
 import { apiErrorMessage } from "@/lib/apiError";
+import ImageResourceSelect from "./ImageResourceSelect";
 
 interface BindingDraft {
   system_character_id: string;
@@ -128,16 +129,19 @@ export default function CharacterResourceBindingModal({
 
               {selectedCharacter ? (
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <label className="text-sm text-text-secondary">
-                    {t("primaryImage")}
-                    <select value={draft.reference_image_resource_id} onChange={(event) => setDraft((current) => ({ ...current, reference_image_resource_id: event.target.value }))} className="mt-1 w-full rounded-md border border-glass-border bg-surface px-2 py-2 text-foreground">
-                      <option value="">{t("notSelected")}</option>
-                      {images.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}
-                    </select>
+                  <div className="text-sm text-text-secondary">
+                    <span className="block">{t("primaryImage")}</span>
+                    <ImageResourceSelect
+                      resources={images}
+                      value={draft.reference_image_resource_id}
+                      onChange={(resourceId) => setDraft((current) => ({ ...current, reference_image_resource_id: resourceId }))}
+                      placeholder={t("notSelected")}
+                      ariaLabel={t("primaryImage")}
+                    />
                     <div className="mt-2 grid h-44 place-items-center overflow-hidden rounded-lg border border-glass-border bg-black/25">
                       {selectedImage ? <img src={selectedImage.url} alt="" className="size-full object-contain" /> : <Link2 size={24} className="text-text-muted" />}
                     </div>
-                  </label>
+                  </div>
 
                   <label className="text-sm text-text-secondary">
                     {t("voiceId")}

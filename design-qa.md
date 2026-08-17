@@ -50,6 +50,52 @@
 
 final result: passed
 
+---
+
+# Character Binding Image Picker — Design QA
+
+**Evidence**
+
+- Source visual truth: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-e7f37948-5252-4040-a505-3dc8886d0525.png` (813 × 394 px).
+- Browser-rendered implementation: `/tmp/croco-character-image-preview-dropdown-implementation.png` (1440 × 900 px).
+- Viewport: 1440 × 900 CSS px at device pixel ratio 1, dark theme, Character Resource Binding modal with the primary-image menu open.
+- Comparison input: the source and implementation images were inspected together; the focused comparison used the primary-image trigger, open menu rows, selected state, and retained large preview region.
+
+**Findings**
+
+- No actionable P0, P1, or P2 differences remain for the requested change.
+- Fonts and typography continue to use the existing Studio type hierarchy; filenames retain the existing 14 px control treatment and truncate safely in the narrow column.
+- Spacing and layout preserve the three-column binding form, 40 px trigger height, existing border radius, and the large image preview below the selector.
+- Colors and tokens reuse the existing surface, elevated, hover, border, muted-text, focus-ring, and primary-color tokens.
+- Image quality is materially improved over the native selector: the trigger shows the selected image at 28 px and each menu row shows a 40 px source thumbnail without stretching. Failed images fall back to the existing image icon.
+- Copy remains unchanged: “不选择” is retained, and resource filenames are shown beside their thumbnails.
+
+**Primary Interactions Tested**
+
+- Opened the primary-image menu and verified four synchronized image resources render with four real thumbnails.
+- Selected `小林 · chest-image.png` and verified both the compact trigger thumbnail and the existing large preview update.
+- Opened the menu with Arrow Down and closed it with Escape.
+- Verified no browser console errors were emitted during the interaction.
+
+**Implementation Checklist**
+
+- [x] Add a compact selected-image thumbnail before the filename.
+- [x] Add a thumbnail before every image option.
+- [x] Keep the explicit “不选择” option and selected-row checkmark.
+- [x] Preserve the existing large preview and binding payload.
+- [x] Support mouse, Arrow keys, Home/End, Enter/Space, Escape, and outside-click closing.
+- [x] Show a non-breaking fallback when a thumbnail cannot load.
+
+**Comparison History**
+
+- Initial implementation comparison found no P0/P1/P2 mismatch. No visual-fix iteration was required.
+
+**Follow-up Polish**
+
+- No blocking follow-up polish identified.
+
+final result: passed
+
 # Entity Extraction Inline Edit — Design QA
 
 ## Evidence and state
