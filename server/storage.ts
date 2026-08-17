@@ -9,6 +9,7 @@ export const resourcesDir = path.join(dataDir, "resources");
 export const trashDir = path.join(dataDir, ".trash");
 const resourceIndexPath = path.join(resourcesDir, "index.json");
 const projectQueues = new Map<string, Promise<void>>();
+let resourceQueue: Promise<void> = Promise.resolve();
 
 export class ProjectVersionConflictError extends Error {
   statusCode = 409;
@@ -172,56 +173,64 @@ export async function resourceById(id: string) {
 }
 
 export async function updateResource(id: string, patch: { name?: string; metadata?: Record<string, unknown> }) {
-  const items = await listResources();
-  const index = items.findIndex((item) => item.id === id);
-  if (index < 0) throw new Error("资源不存在");
-  items[index] = { ...items[index], ...(patch.name ? { name: patch.name } : {}), ...(patch.metadata ? { metadata: patch.metadata } : {}) };
-  await atomicJson(resourceIndexPath, items);
-  return items[index];
+  return withResourceQueue(async () => {
+    const items = await listResources();
+    const index = items.findIndex((item) => item.id === id);
+    if (index < 0) throw new Error("资源不存在");
+    items[index] = { ...items[index], ...(patch.name ? { name: patch.name } : {}), ...(patch.metadata ? { metadata: patch.metadata } : {}) };
+    await atomicJson(resourceIndexPath, items);
+    return items[index];
+  });
 }
 
 export async function addResource(input: Omit<StoredResource, "url">): Promise<StoredResource> {
-  const items = await listResources();
-  const sha256 = await fileSha256(safeResourcePath(input.fileName));
-  const matching = input.source === "character"
-    ? undefined
-    : await findContentDuplicate(items, input, sha256);
-  if (matching) {
-    if (matching.fileName !== input.fileName) await unlink(safeResourcePath(input.fileName)).catch(() => {});
-    const resource = {
-      ...matching,
-      ...input,
-      id: matching.id,
-      fileName: matching.fileName,
-      metadata: { ...(matching.metadata || {}), ...(input.metadata || {}), sha256 },
-      url: `/files/by-id/${matching.id}`,
-    };
-    await atomicJson(resourceIndexPath, [resource, ...items.filter((item) => item.id !== matching.id && item.id !== input.id)]);
+  return withResourceQueue(async () => {
+    const items = await listResources();
+    const sha256 = await fileSha256(safeResourcePath(input.fileName));
+    const matching = input.source === "character"
+      ? undefined
+      : await findContentDuplicate(items, input, sha256);
+    if (matching) {
+      if (matching.fileName !== input.fileName) await unlink(safeResourcePath(input.fileName)).catch(() => {});
+      const resource = {
+        ...matching,
+        ...input,
+        id: matching.id,
+        fileName: matching.fileName,
+        metadata: { ...(matching.metadata || {}), ...(input.metadata || {}), sha256 },
+        url: `/files/by-id/${matching.id}`,
+      };
+      await atomicJson(resourceIndexPath, [resource, ...items.filter((item) => item.id !== matching.id && item.id !== input.id)]);
+      return resource;
+    }
+    const resource = { ...input, metadata: { ...(input.metadata || {}), sha256 }, url: `/files/by-id/${input.id}` };
+    const index = items.findIndex((item) => item.id === input.id);
+    if (index >= 0) items[index] = resource; else items.unshift(resource);
+    await atomicJson(resourceIndexPath, items);
     return resource;
-  }
-  const resource = { ...input, metadata: { ...(input.metadata || {}), sha256 }, url: `/files/by-id/${input.id}` };
-  const index = items.findIndex((item) => item.id === input.id);
-  if (index >= 0) items[index] = resource; else items.unshift(resource);
-  await atomicJson(resourceIndexPath, items);
-  return resource;
+  });
 }
 
 export async function addResources(inputs: Omit<StoredResource, "url">[]) {
-  const items = await listResources();
-  const byId = new Map(items.map((item) => [item.id, item]));
-  for (const input of inputs) byId.set(input.id, { ...input, url: `/files/by-id/${input.id}` });
-  await atomicJson(resourceIndexPath, [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  return withResourceQueue(async () => {
+    const items = await listResources();
+    const byId = new Map(items.map((item) => [item.id, item]));
+    for (const input of inputs) byId.set(input.id, { ...input, url: `/files/by-id/${input.id}` });
+    await atomicJson(resourceIndexPath, [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  });
 }
 
 export async function trashResource(id: string) {
-  const items = await listResources();
-  const resource = items.find((item) => item.id === id);
-  if (!resource) throw new Error("资源不存在");
-  if (resource.source === "character") throw new Error("角色资源由角色目录管理，请通过同步更新");
-  const source = safeResourcePath(resource.fileName);
-  await mkdir(path.join(trashDir, "resources"), { recursive: true });
-  await rename(source, path.join(trashDir, "resources", `${id}-${path.basename(resource.fileName)}`));
-  await atomicJson(resourceIndexPath, items.filter((item) => item.id !== id));
+  return withResourceQueue(async () => {
+    const items = await listResources();
+    const resource = items.find((item) => item.id === id);
+    if (!resource) throw new Error("资源不存在");
+    if (resource.source === "character") throw new Error("角色资源由角色目录管理，请通过同步更新");
+    const source = safeResourcePath(resource.fileName);
+    await mkdir(path.join(trashDir, "resources"), { recursive: true });
+    await rename(source, path.join(trashDir, "resources", `${id}-${path.basename(resource.fileName)}`));
+    await atomicJson(resourceIndexPath, items.filter((item) => item.id !== id));
+  });
 }
 
 export function safeResourcePath(fileName: string) {
@@ -247,6 +256,12 @@ export function typeFromMime(mime: string): StoredResource["type"] {
 }
 
 export async function fileSize(filePath: string) { return (await stat(filePath)).size; }
+
+function withResourceQueue<T>(task: () => Promise<T>): Promise<T> {
+  const result = resourceQueue.then(task, task);
+  resourceQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
 
 async function findContentDuplicate(items: StoredResource[], input: Omit<StoredResource, "url">, sha256: string) {
   for (const item of items) {

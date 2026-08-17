@@ -129,7 +129,7 @@ async function runFlash(id) {
   const results = [];
   for (const item of created) {
     let enhancement = item.enhancement;
-    while (!["succeeded", "failed", "canceled"].includes(String(enhancement.status))) {
+    while (!enhancement || !["succeeded", "failed", "canceled"].includes(String(enhancement.status))) {
       await delay(3000);
       enhancement = (await request(`/api/gpu/enhancements/${item.resourceId}`)).enhancement;
     }
