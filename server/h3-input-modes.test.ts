@@ -6,7 +6,11 @@ const base = { externalJobId: "job", count: 1, prompt: "prompt", quality: "previ
 
 test("H3 根据真实资源选择 T2V 与 R2V", () => {
   const t2v = buildH3JobPayload({ ...base, images: [], videos: [], audios: [] });
-  assert.equal(t2v.parameters.mode, "t2v");
+  assert.deepEqual(t2v.parameters, {
+    mode: "t2v",
+    prompt: "prompt",
+    duration_seconds: 6,
+  });
   assert.deepEqual(t2v.inputs, []);
   const r2v = buildH3JobPayload({ ...base, images: ["image"], videos: [], audios: ["audio"] });
   assert.equal(r2v.parameters.mode, "r2v");

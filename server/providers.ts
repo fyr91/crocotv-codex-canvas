@@ -524,10 +524,7 @@ export function buildH3JobPayload(input: { externalJobId: string; count: number;
     parameters: {
       mode,
       prompt: input.prompt,
-      quality: input.quality,
       duration_seconds: input.duration,
-      steps: 20,
-      ref_image_size: "match",
     },
     inputs: [
       ...input.images.map((asset_id) => ({ role: "reference_image", asset_id })),
