@@ -57,23 +57,24 @@ export default function CharacterGenerationCards({ generations, attachedResource
                   <div key={output.id} className="group relative aspect-square overflow-hidden rounded-lg border border-glass-border bg-elevated">
                     <img src={resolvePlaygroundMediaUrl(output.thumbnail_path || output.media_path)} alt={generation.prompt} className="h-full w-full object-cover" />
                     {attached && (
-                      <span className="absolute left-2 top-2 z-[3] inline-flex items-center gap-1 rounded border border-status-success-border bg-status-success-bg px-1.5 py-0.5 font-mono text-sm text-status-success-fg backdrop-blur-sm">
-                        <Check size={10} />
-                        {t("addedToAssets")}
+                      <span role="img" aria-label={t("addedToAssets")} title={t("addedToAssets")} className="absolute left-2 top-2 z-[3] grid h-5 w-5 place-items-center rounded-full bg-status-completed-bg text-status-completed-fg ring-1 ring-status-completed-border backdrop-blur-sm">
+                        <Check size={10} strokeWidth={3} />
                       </span>
                     )}
-                    <div className="absolute inset-x-0 bottom-0 z-[2] flex h-12 items-end justify-end bg-gradient-to-t from-black/75 to-transparent px-2 pb-2">
-                      <button
-                        type="button"
-                        onClick={() => resourceId && onAttach(generation, resourceId)}
-                        disabled={!resourceId || attached || attaching}
-                        aria-label={attached ? t("addedToAssets") : t("addGenerationToCharacter")}
-                        title={attached ? t("addedToAssets") : t("addGenerationToCharacter")}
-                        className={`grid h-7 w-7 place-items-center rounded-full backdrop-blur-sm transition-colors ${attached ? "bg-status-success-bg text-status-success-fg" : "bg-elevated text-foreground hover:bg-hover-bg"} disabled:cursor-default disabled:opacity-70`}
-                      >
-                        {attaching ? <Loader2 size={13} className="animate-spin" /> : attached ? <Check size={13} /> : <FolderPlus size={13} />}
-                      </button>
-                    </div>
+                    {!attached && (
+                      <div className="absolute inset-x-0 bottom-0 z-[2] flex h-12 items-end justify-end bg-gradient-to-t from-black/75 to-transparent px-2 pb-2">
+                        <button
+                          type="button"
+                          onClick={() => resourceId && onAttach(generation, resourceId)}
+                          disabled={!resourceId || attaching}
+                          aria-label={t("addGenerationToCharacter")}
+                          title={t("addGenerationToCharacter")}
+                          className="grid h-7 w-7 place-items-center rounded-full bg-elevated text-foreground backdrop-blur-sm transition-colors hover:bg-hover-bg disabled:cursor-default disabled:opacity-70"
+                        >
+                          {attaching ? <Loader2 size={13} className="animate-spin" /> : <FolderPlus size={13} />}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -347,7 +347,7 @@ final result: passed
 - No actionable P0, P1, or P2 visual differences remain.
 - The modal preserves the existing creation-workbench controls while changing its primary action to task submission. Its supporting copy now explains that the dialog closes after task creation.
 - The inspector uses the same glass surface, border, model tag, prompt hierarchy, image crop, and bottom-gradient toolbar language as Playground result cards, reduced to a two-column layout suitable for the 340 px panel.
-- Completed outputs are independently actionable. Attached outputs receive a visible top-left success badge and a disabled checked toolbar action.
+- Completed outputs are independently actionable. Attached outputs receive a compact green check-only indicator in the top-left corner; the duplicate checked toolbar action is omitted.
 - Pending/processing and failed task states use the existing status tokens and remain in the inspector after the modal closes.
 - Upload, video, audio, metadata, primary-image, and download sections remain unchanged.
 
@@ -367,6 +367,7 @@ final result: passed
 - [x] Keep the modal open when task submission fails and allow manual closing while submitting.
 - [x] Track pending, processing, failed, and completed tasks in the character inspector.
 - [x] Confirm completed outputs one at a time before linking them to the character.
+- [x] Reuse the existing compact completed-state check as a non-interactive status indicator.
 - [x] Preserve single-copy resources and avoid automatic attachment.
 - [x] Keep image generation image-only.
 

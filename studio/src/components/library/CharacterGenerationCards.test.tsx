@@ -36,8 +36,9 @@ describe("CharacterGenerationCards", () => {
     });
     render(<CharacterGenerationCards generations={[completed]} attachedResourceIds={new Set(["resource-1"])} onAttach={onAttach} />);
 
-    expect(screen.getByText("已加入素材")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "已加入素材" })).toBeDisabled();
+    expect(screen.queryByText("已加入素材")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "已加入素材" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "已加入素材" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "加入角色素材" }));
     expect(onAttach).toHaveBeenCalledWith(completed, "resource-2");
   });
