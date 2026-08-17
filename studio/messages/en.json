@@ -2246,24 +2246,20 @@
       "loading": "Loading editor..."
     },
     "toolbar": {
-      "format": "Format",
-      "rendering": "Rendering",
       "undo": "Undo",
       "redo": "Redo",
       "ai": "AI Tools",
       "view": "View",
       "export": "Export"
     },
-    "formats": {
-      "hollywood": "Hollywood",
-      "chinese_film": "Chinese Film Script",
-      "chinese_short": "Chinese Short Drama Script",
-      "japanese_anime": "Japanese Anime"
-    },
-    "renderings": {
-      "latin": "Latin (Courier)",
-      "cjk_zh": "Chinese (Song)",
-      "cjk_ja": "Japanese (Mincho)"
+    "aiTools": {
+      "splitShots": "Split into Shots",
+      "continueWriting": "Continue Writing",
+      "polishText": "Polish Text",
+      "generateScript": "Generate Script",
+      "comingSoon": "Coming soon",
+      "execute": "Run",
+      "executeTool": "Run {tool}"
     },
     "panels": {
       "characters": "Characters",
@@ -2375,6 +2371,7 @@
       "readEmpty": "No script content yet",
       "readEmptyHint": "Return to edit mode to start writing.",
       "focus": "Focus",
+      "exitFocus": "Exit full-screen editing",
       "statusDraft": "Draft",
       "statusConfirmed": "Confirmed",
       "statusRendered": "Rendered",

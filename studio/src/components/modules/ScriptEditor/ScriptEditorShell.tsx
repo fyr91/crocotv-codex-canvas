@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { EditorContent } from '@tiptap/react';
-import { Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, Wand2, X } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, X } from 'lucide-react';
 import { useEditorStore } from '@/store/editorStore';
 import { useEditorSetup } from './hooks/useEditorSetup';
-import FormatToolbar from './toolbar/FormatToolbar';
+import EditorToolbar from './toolbar/EditorToolbar';
 import { usePasteHandler } from './hooks/usePasteHandler';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useContinuityCheck } from './hooks/useContinuityCheck';
@@ -28,6 +28,8 @@ import { api } from '@/lib/api';
 import { useProjectStore } from '@/store/projectStore';
 import { toast } from '@/store/toastStore';
 import ScriptEntityExtractionConfirm from './components/ScriptEntityExtractionConfirm';
+import AiToolsMenu from './components/AiToolsMenu';
+import FocusModeExitButton from './components/FocusModeExitButton';
 import { apiErrorMessage } from '@/lib/apiError';
 
 export interface ScriptEditorShellProps {
@@ -63,8 +65,6 @@ export default function ScriptEditorShell({
   const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
   const wordCount = useEditorStore((s) => s.wordCount);
   const derivedScenes = useEditorStore((s) => s.derivedScenes);
-  const currentFormat = useEditorStore((s) => s.currentFormat);
-  const currentRendering = useEditorStore((s) => s.currentRendering);
   const leftCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const rightCollapsed = useEditorStore((s) => s.rightSidebarCollapsed);
   const toggleLeft = useEditorStore((s) => s.toggleLeftSidebar);
@@ -241,10 +241,13 @@ export default function ScriptEditorShell({
           onExit={() => setViewMode('edit')}
         />
       )}
+      {viewMode === 'focus' && (
+        <FocusModeExitButton onExit={() => setViewMode('edit')} />
+      )}
 
-      {/* Format Toolbar */}
+      {/* Editor Toolbar */}
       {!hideAllSidebars && showToolbar && (
-        <FormatToolbar editor={editor} viewMode={viewMode} onViewModeChange={setViewMode} />
+        <EditorToolbar editor={editor} viewMode={viewMode} onViewModeChange={setViewMode} />
       )}
 
       {/* Top Toolbar */}
@@ -270,15 +273,11 @@ export default function ScriptEditorShell({
           </div>
           <div className="flex items-center gap-3">
             {projectId ? (
-              <button
-                type="button"
-                onClick={() => void handleExtractEntities()}
-                disabled={documentLoading || isAnalyzing || isEditorEmpty}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isAnalyzing ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
-                {isAnalyzing ? tScript('analyzingScript') : tScript('extractEntities')}
-              </button>
+              <AiToolsMenu
+                extracting={isAnalyzing}
+                extractDisabled={documentLoading || isEditorEmpty}
+                onExtractEntities={handleExtractEntities}
+              />
             ) : null}
             <span className="text-sm text-text-muted">
               {isDirty ? t('status.unsaved') : lastSavedAt ? t('status.savedAt', { time: lastSavedAt.toLocaleTimeString() }) : ''}
@@ -357,8 +356,6 @@ export default function ScriptEditorShell({
               className={`script-editor script-editor-content mx-auto px-8 py-10 ${
                 viewMode === 'focus' ? 'max-w-[860px]' : 'max-w-[720px]'
               }`}
-              data-format={currentFormat}
-              data-rendering={currentRendering}
               data-empty={isReady && isEditorEmpty ? 'true' : 'false'}
             >
               {isReady && !documentLoading ? (
@@ -415,18 +412,6 @@ export default function ScriptEditorShell({
           </span>
           <span className="text-foreground/20">|</span>
           <ContinuityIndicator report={continuityReport} />
-          <span className="ml-auto text-text-muted/60">
-            {{
-              hollywood: t('formats.hollywood'),
-              chinese_film: t('formats.chinese_film'),
-              chinese_short: t('formats.chinese_short'),
-              japanese_anime: t('formats.japanese_anime'),
-            }[currentFormat]} / {{
-              latin: t('renderings.latin'),
-              cjk_zh: t('renderings.cjk_zh'),
-              cjk_ja: t('renderings.cjk_ja'),
-            }[currentRendering]}
-          </span>
         </div>
       )}
 

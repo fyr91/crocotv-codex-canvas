@@ -28,8 +28,6 @@ export interface DerivedCharacter {
   firstAppearance: number; // 首次出场场景编号
 }
 
-export type ScriptFormat = 'hollywood' | 'chinese_film' | 'chinese_short' | 'japanese_anime';
-export type TextRendering = 'latin' | 'cjk_zh' | 'cjk_ja';
 export type ViewMode = 'edit' | 'storyboard' | 'read' | 'focus';
 export type EditorMode = 'full' | 'embedded' | 'focus';
 
@@ -39,10 +37,6 @@ interface EditorState {
   isDirty: boolean;
   lastSavedAt: Date | null;
   isLoading: boolean;
-
-  // 格式状态
-  currentFormat: ScriptFormat;
-  currentRendering: TextRendering;
 
   // 视图状态
   viewMode: ViewMode;
@@ -69,8 +63,6 @@ interface EditorState {
   setDirty: (dirty: boolean) => void;
   setLastSavedAt: (date: Date | null) => void;
   setLoading: (loading: boolean) => void;
-  setFormat: (format: ScriptFormat) => void;
-  setRendering: (rendering: TextRendering) => void;
   setViewMode: (mode: ViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
   toggleLeftSidebar: () => void;
@@ -102,9 +94,6 @@ const initialState = {
   lastSavedAt: null,
   isLoading: false,
 
-  currentFormat: 'chinese_short' as ScriptFormat,
-  currentRendering: 'cjk_zh' as TextRendering,
-
   viewMode: 'edit' as ViewMode,
   editorMode: 'full' as EditorMode,
   leftSidebarCollapsed: false,
@@ -131,8 +120,6 @@ export const useEditorStore = create<EditorState>((set) => ({
   setDirty: (dirty) => set({ isDirty: dirty }),
   setLastSavedAt: (date) => set({ lastSavedAt: date }),
   setLoading: (loading) => set({ isLoading: loading }),
-  setFormat: (format) => set({ currentFormat: format }),
-  setRendering: (rendering) => set({ currentRendering: rendering }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setEditorMode: (mode) => set({ editorMode: mode }),
   toggleLeftSidebar: () => set((state) => ({ leftSidebarCollapsed: !state.leftSidebarCollapsed })),

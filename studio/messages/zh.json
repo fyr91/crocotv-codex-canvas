@@ -2246,24 +2246,20 @@
       "loading": "编辑器加载中..."
     },
     "toolbar": {
-      "format": "格式",
-      "rendering": "渲染",
       "undo": "撤销",
       "redo": "重做",
       "ai": "AI 工具",
       "view": "视图",
       "export": "导出"
     },
-    "formats": {
-      "hollywood": "好莱坞格式",
-      "chinese_film": "中国电影剧本",
-      "chinese_short": "中国短剧剧本",
-      "japanese_anime": "日本アニメ"
-    },
-    "renderings": {
-      "latin": "拉丁字符（Courier）",
-      "cjk_zh": "中文 (宋体)",
-      "cjk_ja": "日本語 (明朝)"
+    "aiTools": {
+      "splitShots": "拆分镜",
+      "continueWriting": "续写",
+      "polishText": "文本润色",
+      "generateScript": "脚本生成",
+      "comingSoon": "即将推出",
+      "execute": "执行",
+      "executeTool": "执行{tool}"
     },
     "panels": {
       "characters": "角色",
@@ -2375,6 +2371,7 @@
       "readEmpty": "暂无剧本内容",
       "readEmptyHint": "返回编辑模式开始写作。",
       "focus": "专注",
+      "exitFocus": "退出全屏编辑",
       "statusDraft": "草稿",
       "statusConfirmed": "已确认",
       "statusRendered": "已渲染",

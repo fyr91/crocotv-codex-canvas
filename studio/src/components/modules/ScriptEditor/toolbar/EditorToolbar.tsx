@@ -5,40 +5,23 @@ import { useTranslations } from 'next-intl';
 import {
   Undo2,
   Redo2,
-  Sparkles,
   Download,
-  ChevronDown,
   Pencil,
   LayoutGrid,
   BookOpen,
   Maximize2,
 } from 'lucide-react';
 import type { Editor } from '@tiptap/react';
-import { useFormatEngine } from '../hooks/useFormatEngine';
-import type { ScriptFormat, TextRendering, ViewMode } from '@/store/editorStore';
+import type { ViewMode } from '@/store/editorStore';
 
-export interface FormatToolbarProps {
+export interface EditorToolbarProps {
   editor: Editor | null;
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
 }
 
-export default function FormatToolbar({ editor, viewMode = 'edit', onViewModeChange }: FormatToolbarProps) {
+export default function EditorToolbar({ editor, viewMode = 'edit', onViewModeChange }: EditorToolbarProps) {
   const t = useTranslations('scriptEditor');
-  const { currentFormat, currentRendering, setFormat, setRendering } = useFormatEngine();
-
-  const FORMAT_OPTIONS: { value: ScriptFormat; label: string }[] = [
-    { value: 'hollywood', label: t('formats.hollywood') },
-    { value: 'chinese_film', label: t('formats.chinese_film') },
-    { value: 'chinese_short', label: t('formats.chinese_short') },
-    { value: 'japanese_anime', label: t('formats.japanese_anime') },
-  ];
-
-  const RENDERING_OPTIONS: { value: TextRendering; label: string }[] = [
-    { value: 'latin', label: t('renderings.latin') },
-    { value: 'cjk_zh', label: t('renderings.cjk_zh') },
-    { value: 'cjk_ja', label: t('renderings.cjk_ja') },
-  ];
 
   const VIEW_OPTIONS: { value: ViewMode; label: string; icon: typeof Pencil }[] = [
     { value: 'edit', label: t('views.edit'), icon: Pencil },
@@ -57,47 +40,6 @@ export default function FormatToolbar({ editor, viewMode = 'edit', onViewModeCha
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-foreground/10 bg-surface/80 px-4">
-      {/* Format Selector */}
-      <div className="relative">
-        <select
-          value={currentFormat}
-          onChange={(e) => setFormat(e.target.value as ScriptFormat)}
-          className="appearance-none rounded-md border border-foreground/10 bg-elevated px-3 py-1.5 pr-7 text-sm text-foreground outline-none transition-colors hover:border-foreground/20 focus:border-primary"
-        >
-          {FORMAT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          size={12}
-          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-text-secondary"
-        />
-      </div>
-
-      {/* Rendering Selector */}
-      <div className="relative">
-        <select
-          value={currentRendering}
-          onChange={(e) => setRendering(e.target.value as TextRendering)}
-          className="appearance-none rounded-md border border-foreground/10 bg-elevated px-3 py-1.5 pr-7 text-sm text-foreground outline-none transition-colors hover:border-foreground/20 focus:border-primary"
-        >
-          {RENDERING_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          size={12}
-          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-text-secondary"
-        />
-      </div>
-
-      {/* Separator */}
-      <div className="mx-1 h-5 w-px bg-foreground/10" />
-
       {/* Undo / Redo */}
       <button
         type="button"
@@ -116,20 +58,6 @@ export default function FormatToolbar({ editor, viewMode = 'edit', onViewModeCha
         aria-label={t('toolbar.redo')}
       >
         <Redo2 size={15} />
-      </button>
-
-      {/* Separator */}
-      <div className="mx-1 h-5 w-px bg-foreground/10" />
-
-      {/* AI Tool (placeholder) */}
-      <button
-        type="button"
-        disabled
-        className="flex items-center gap-1 rounded px-2 py-1.5 text-sm text-text-muted transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-        aria-label={t('toolbar.ai')}
-      >
-        <Sparkles size={14} />
-        <span>AI</span>
       </button>
 
       {/* Spacer */}
