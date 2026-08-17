@@ -10,9 +10,10 @@ interface CharacterGenerationCardsProps {
   attachedResourceIds: Set<string>;
   attachingResourceId?: string;
   onAttach: (generation: PlaygroundGenerationResponse, resourceId: string) => void;
+  onPreview: (generation: PlaygroundGenerationResponse, output: PlaygroundGenerationResponse["outputs"][number]) => void;
 }
 
-export default function CharacterGenerationCards({ generations, attachedResourceIds, attachingResourceId, onAttach }: CharacterGenerationCardsProps) {
+export default function CharacterGenerationCards({ generations, attachedResourceIds, attachingResourceId, onAttach, onPreview }: CharacterGenerationCardsProps) {
   const t = useTranslations("library");
 
   return (
@@ -20,7 +21,7 @@ export default function CharacterGenerationCards({ generations, attachedResource
       {generations.map((generation) => {
         if (generation.status === "failed") {
           return (
-            <div key={generation.id} className="overflow-hidden rounded-xl border border-status-failed-border bg-glass">
+            <div key={generation.id} data-generation-id={generation.id} tabIndex={-1} className="overflow-hidden rounded-xl border border-status-failed-border bg-glass outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
               <div className="flex min-h-24 flex-col items-center justify-center gap-2 bg-status-failed-bg px-4 py-4 text-center">
                 <AlertCircle size={20} className="text-status-failed-fg" />
                 <span className="font-mono text-sm uppercase tracking-[0.1em] text-status-failed-fg">{t("generationFailed")}</span>
@@ -33,7 +34,7 @@ export default function CharacterGenerationCards({ generations, attachedResource
 
         if (generation.status !== "completed") {
           return (
-            <div key={generation.id} className="overflow-hidden rounded-xl border border-glass-border bg-glass">
+            <div key={generation.id} data-generation-id={generation.id} tabIndex={-1} className="overflow-hidden rounded-xl border border-glass-border bg-glass outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
               <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-elevated">
                 <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-elevated via-surface-inset to-elevated" />
                 <div className="relative flex items-center gap-2 rounded-full border border-glass-border bg-surface/80 px-3 py-1.5 text-sm text-text-secondary backdrop-blur-md">
@@ -47,7 +48,7 @@ export default function CharacterGenerationCards({ generations, attachedResource
         }
 
         return (
-          <div key={generation.id} className="rounded-xl border border-glass-border bg-glass p-2.5">
+          <div key={generation.id} data-generation-id={generation.id} tabIndex={-1} className="rounded-xl border border-glass-border bg-glass p-2.5 outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
             <div className="grid grid-cols-2 gap-2">
               {generation.outputs.map((output) => {
                 const resourceId = output.resource_id || "";
@@ -55,7 +56,9 @@ export default function CharacterGenerationCards({ generations, attachedResource
                 const attaching = attachingResourceId === resourceId;
                 return (
                   <div key={output.id} className="group relative aspect-square overflow-hidden rounded-lg border border-glass-border bg-elevated">
-                    <img src={resolvePlaygroundMediaUrl(output.thumbnail_path || output.media_path)} alt={generation.prompt} className="h-full w-full object-cover" />
+                    <button type="button" onClick={() => onPreview(generation, output)} aria-label={t("previewGenerationResult")} className="absolute inset-0 block h-full w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60">
+                      <img src={resolvePlaygroundMediaUrl(output.thumbnail_path || output.media_path)} alt={generation.prompt} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
+                    </button>
                     {attached && (
                       <span role="img" aria-label={t("addedToAssets")} title={t("addedToAssets")} className="absolute left-2 top-2 z-[3] grid h-5 w-5 place-items-center rounded-full bg-status-completed-bg text-status-completed-fg ring-1 ring-status-completed-border backdrop-blur-sm">
                         <Check size={10} strokeWidth={3} />

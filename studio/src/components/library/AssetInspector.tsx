@@ -11,6 +11,7 @@ import { coverGradient, GRAIN_URL } from "@/lib/atelierCover";
 import { isPulledCharacterAsset, type PulledCharacterResource } from "@/lib/pulledCharacterAssets";
 import CharacterImageGenerationModal from "./CharacterImageGenerationModal";
 import CharacterGenerationCards from "./CharacterGenerationCards";
+import CharacterGenerationPreviewModal from "./CharacterGenerationPreviewModal";
 
 type AssetTab = "characters" | "scenes" | "props";
 
@@ -136,6 +137,11 @@ export default function AssetInspector({
   const [generationRefreshKey, setGenerationRefreshKey] = useState(0);
   const [attachingResourceId, setAttachingResourceId] = useState<string>();
   const [optimisticAttachedResourceIds, setOptimisticAttachedResourceIds] = useState<string[]>([]);
+  const [focusGenerationId, setFocusGenerationId] = useState<string>();
+  const [previewGenerationResult, setPreviewGenerationResult] = useState<{
+    generation: PlaygroundGenerationResponse;
+    output: PlaygroundGenerationResponse["outputs"][number];
+  }>();
   const generatorOpenRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -147,6 +153,8 @@ export default function AssetInspector({
   useEffect(() => {
     setCharacterGenerations([]);
     setOptimisticAttachedResourceIds([]);
+    setFocusGenerationId(undefined);
+    setPreviewGenerationResult(undefined);
   }, [asset.id]);
 
   useEffect(() => {
@@ -209,6 +217,18 @@ export default function AssetInspector({
       previouslyFocused?.focus?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!focusGenerationId) return;
+    const frame = requestAnimationFrame(() => {
+      const card = asideRef.current?.querySelector<HTMLElement>(`[data-generation-id="${focusGenerationId}"]`);
+      if (!card) return;
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      card.focus({ preventScroll: true });
+      setFocusGenerationId(undefined);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [characterGenerations, focusGenerationId]);
 
   const activeVariant = variants.find((v) => v.id === activeVariantId) ?? variants[0];
   const heroUrl = activeVariant?.url ?? fallbackUrl(asset, type);
@@ -331,6 +351,7 @@ export default function AssetInspector({
 
   const handleCharacterGenerationCreated = (generation: PlaygroundGenerationResponse) => {
     setCharacterGenerations((current) => [generation, ...current.filter((item) => item.id !== generation.id)]);
+    setFocusGenerationId(generation.id);
     setGenerationRefreshKey((value) => value + 1);
     toast.success(t("generationTaskCreated"));
   };
@@ -545,6 +566,7 @@ export default function AssetInspector({
               attachedResourceIds={attachedGenerationResourceIds}
               attachingResourceId={attachingResourceId}
               onAttach={(generation, resourceId) => void handleAttachGenerationResult(generation, resourceId)}
+              onPreview={(generation, output) => setPreviewGenerationResult({ generation, output })}
             />
           </div>
         )}
@@ -691,6 +713,19 @@ export default function AssetInspector({
           character={pulledCharacter}
           onClose={() => setShowCharacterGenerator(false)}
           onTaskCreated={handleCharacterGenerationCreated}
+        />
+      )}
+      {previewGenerationResult && (
+        <CharacterGenerationPreviewModal
+          generation={previewGenerationResult.generation}
+          output={previewGenerationResult.output}
+          attached={Boolean(previewGenerationResult.output.resource_id && attachedGenerationResourceIds.has(previewGenerationResult.output.resource_id))}
+          attaching={attachingResourceId === previewGenerationResult.output.resource_id}
+          onAttach={() => {
+            const resourceId = previewGenerationResult.output.resource_id;
+            if (resourceId) void handleAttachGenerationResult(previewGenerationResult.generation, resourceId);
+          }}
+          onClose={() => setPreviewGenerationResult(undefined)}
         />
       )}
     </aside>

@@ -96,6 +96,44 @@ final result: passed
 
 final result: passed
 
+---
+
+## Library Character Variant Workflow — 2026-08-17
+
+**Reference Inputs**
+
+- Existing character-generation composition layout: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-74b5d196-843f-4b5b-823c-830e1b5ca386.png`
+- Character design-sheet availability state: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-20757105-f8d9-4214-8650-7eb971535eb1.png`
+- Localized quick-tag target: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-37a229c3-5bf2-4927-be6d-ca31d8bb91d9.png`
+
+**Implementation Captures**
+
+- Reference and implementation side-by-side: `/tmp/croco-library-character-generation-comparison.jpg`
+- Modal upper section: `/tmp/croco-library-character-generation-modal.jpg`
+- Modal generation configuration: `/tmp/croco-library-character-generation-bottom.jpg`
+- Completed-result preview: `/tmp/croco-library-character-generation-preview.jpg`
+- In-app browser viewport: 1280 × 720, dark theme, Chinese locale.
+- No paid generation or asset attachment was triggered during visual QA.
+
+**Findings**
+
+- The composition cards retain the established three-card proportions, imagery, selected check indicator, typography, borders, and spacing.
+- `角色设定图` is enabled and carries a compact `GPT Image 02` model badge instead of a coming-soon state.
+- The prompt editor and quick-tag layout match the existing generation flow. Chinese labels are visible while the textarea receives English tag values.
+- Reference images, batch count, aspect ratio, model grid, advanced settings, and the primary CTA use existing Studio control patterns.
+- The completed-result preview preserves the full image with `object-contain` and exposes the asset-attachment shortcut in its footer.
+- No actionable visual mismatch remained after recapturing the exact 960 × 662 dialog bounds.
+
+**Primary Interactions Tested**
+
+- Selecting `角色设定图` selects `GPT Image 02` and injects a generic English character-design-sheet framework.
+- Clicking `+ 全身` in the Chinese locale appends `full body`, not the translated label.
+- Clicking an existing completed generation thumbnail opens the enlarged preview with `加入角色素材` available.
+- Task creation and modal auto-close are covered by targeted component tests; card scroll/focus is implemented in the inspector without triggering a paid generation during QA.
+- Reloading the verified route produced no new browser console errors or warnings.
+
+final result: passed
+
 # Entity Extraction Inline Edit — Design QA
 
 ## Evidence and state

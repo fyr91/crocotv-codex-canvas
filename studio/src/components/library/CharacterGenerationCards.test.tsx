@@ -21,7 +21,7 @@ function generation(overrides: Partial<PlaygroundGenerationResponse> = {}): Play
 
 describe("CharacterGenerationCards", () => {
   it("shows an asynchronous task state without blocking the inspector", () => {
-    render(<CharacterGenerationCards generations={[generation()]} attachedResourceIds={new Set()} onAttach={vi.fn()} />);
+    render(<CharacterGenerationCards generations={[generation()]} attachedResourceIds={new Set()} onAttach={vi.fn()} onPreview={vi.fn()} />);
     expect(screen.getByText("等待生成")).toBeInTheDocument();
   });
 
@@ -34,12 +34,24 @@ describe("CharacterGenerationCards", () => {
         { id: "output-2", resource_id: "resource-2", media_path: "/api/files/by-id/resource-2", media_type: "image" },
       ],
     });
-    render(<CharacterGenerationCards generations={[completed]} attachedResourceIds={new Set(["resource-1"])} onAttach={onAttach} />);
+    render(<CharacterGenerationCards generations={[completed]} attachedResourceIds={new Set(["resource-1"])} onAttach={onAttach} onPreview={vi.fn()} />);
 
     expect(screen.queryByText("已加入素材")).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "已加入素材" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "已加入素材" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "加入角色素材" }));
     expect(onAttach).toHaveBeenCalledWith(completed, "resource-2");
+  });
+
+  it("opens a completed image in the result preview", () => {
+    const onPreview = vi.fn();
+    const completed = generation({
+      status: "completed",
+      outputs: [{ id: "output-1", resource_id: "resource-1", media_path: "/api/files/by-id/resource-1", media_type: "image" }],
+    });
+    render(<CharacterGenerationCards generations={[completed]} attachedResourceIds={new Set()} onAttach={vi.fn()} onPreview={onPreview} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "放大查看生成结果" }));
+    expect(onPreview).toHaveBeenCalledWith(completed, completed.outputs[0]);
   });
 });

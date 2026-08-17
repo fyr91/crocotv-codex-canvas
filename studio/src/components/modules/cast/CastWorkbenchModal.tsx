@@ -28,6 +28,15 @@ import { toast } from "@/store/toastStore";
 import { getAssetUrl } from "@/lib/utils";
 import PreviewImage from "@/components/shared/preview/PreviewImage";
 import GroupedModelGrid from "@/components/common/GroupedModelGrid";
+import { CharacterCompositionQuickTags, CharacterCompositionTemplatePicker } from "@/components/shared/CharacterCompositionControls";
+import {
+    buildCharacterCompositionPrompt,
+    characterCompositionNegative,
+    CHARACTER_COMPOSITION_TEMPLATES,
+    GPT_IMAGE_02_MODEL_ID,
+    appendEnglishCompositionTag,
+    type CharacterCompositionTemplate,
+} from "@/components/shared/characterCompositionTemplates";
 
 export type CastKind = "character" | "scene" | "prop";
 
@@ -96,48 +105,12 @@ interface ImageVariant {
     is_favorited?: boolean;
 }
 
-type CharacterTemplate = "simple" | "detailed" | "design_sheet";
-
-const CHARACTER_TEMPLATES: Record<CharacterTemplate, {
-    labelKey: string;
-    descKey: string;
-    compositionEn: string;
-    negativeAppend: string;
-    comingSoon?: boolean;
-    exampleImage?: string;
-}> = {
-    simple: {
-        labelKey: "tplSimpleLabel",
-        descKey: "tplSimpleDesc",
-        compositionEn: "Composition: character reference sheet, single unified image, seamless layout without borders or frames, neutral gray background. Left half: large head close-up portrait (shoulders up, sharp facial details, front-facing, detailed skin texture). Right half: three equally-sized full-body standing poses arranged side by side (front view, side view, back view), head-to-toe fully visible, relaxed neutral pose. Consistent soft studio lighting across all views, no harsh shadows, even illumination.",
-        negativeAppend: "text, labels, watermark, UI overlay, panel borders, frames, multiple separate images",
-        exampleImage: "/assets/templates/simple-triview.png",
-    },
-    detailed: {
-        labelKey: "tplDetailedLabel",
-        descKey: "tplDetailedDesc",
-        compositionEn: "Composition: detailed character reference sheet, single unified image, seamless layout without borders or frames, neutral gray background. Left section: three full-body standing views side by side (front / side / back), head-to-toe visible, neutral relaxed pose. Upper right: large face close-up portrait (shoulders up, detailed skin texture, sharp eyes, pores visible). Lower right: three smaller head shots showing different angles (front, three-quarter, profile). Consistent soft studio lighting, no harsh shadows, even illumination across all panels.",
-        negativeAppend: "text, labels, watermark, UI overlay, panel borders, frames, multiple separate images",
-        exampleImage: "/assets/templates/detailed-reference.png",
-    },
-    design_sheet: {
-        labelKey: "tplDesignSheetLabel",
-        descKey: "tplDesignSheetDesc",
-        compositionEn: "Composition: professional character design sheet, single unified image with dark cyberpunk-themed background (deep blue-black with subtle neon circuit patterns). Layout divided into labeled panels with thin border frames: - Top left: large dramatic character portrait (bust shot, three-quarter angle, moody rim lighting, glowing blue cybernetic eye) - Center: three full-body standing views (front / side / back) with labels \"正面\" \"侧面\" \"背面\" - Top right: 4 expression close-ups in a row (neutral, smirking, intense focus, combat rage), labeled \"表情特写\" - Bottom left: 3-4 detail close-up panels showing cybernetic eye mechanism, neck circuit tattoo, armor texture, weapon holster, labeled \"细节特写\" - Bottom right: character info panel with dark translucent background containing text fields (name, age, traits, abilities). Cinematic lighting, high detail, concept art quality, game character sheet aesthetic.",
-        negativeAppend: "watermark, UI overlay, signature, low quality, distorted anatomy, multiple separate images",
-        comingSoon: true,
-        exampleImage: "/assets/templates/design-sheet.png",
-    },
-};
-
-function buildTemplate(kind: CastKind, entity: any, template?: CharacterTemplate): string {
+function buildTemplate(kind: CastKind, entity: any, template?: CharacterCompositionTemplate): string {
     const name = entity?.name || "";
     const desc = entity?.description || "";
-    const charDesc = `${name}${desc ? "，" + desc : ""}`;
 
     if (kind === "character") {
-        const tpl = CHARACTER_TEMPLATES[template || "simple"];
-        return `${charDesc}\n\n${tpl.compositionEn}`;
+        return buildCharacterCompositionPrompt(entity, template || "simple");
     }
     if (kind === "scene") {
         return `${name}${desc ? "：" + desc : ""}\n\nComposition: wide establishing shot of the environment on neutral gray background, single unified image, no figures in foreground. Emphasize atmosphere, architecture and terrain structure. Lighting and color palette match the scene mood. Soft volumetric lighting, depth of field.`;
@@ -145,10 +118,9 @@ function buildTemplate(kind: CastKind, entity: any, template?: CharacterTemplate
     return `${name}${desc ? "：" + desc : ""}\n\nComposition: product photography style on neutral gray background, single unified image, seamless layout without borders. Main view: object centered at slight angle. Secondary views: detail close-ups of material and texture. Clean even studio lighting, subtle shadow beneath object.`;
 }
 
-function getTemplateNegative(kind: CastKind, template?: CharacterTemplate): string {
+function getTemplateNegative(kind: CastKind, template?: CharacterCompositionTemplate): string {
     if (kind === "character") {
-        const tpl = CHARACTER_TEMPLATES[template || "simple"];
-        return tpl.negativeAppend;
+        return characterCompositionNegative(template || "simple");
     }
     return "text, labels, watermark, UI overlay, panel borders, frames";
 }
@@ -217,13 +189,8 @@ export default function CastWorkbenchModal({ isOpen, kind, entityId, onClose }: 
     const [applyStyle, setApplyStyle] = useState(true);
     const [galleryFilter, setGalleryFilter] = useState<"all" | "favorited">("all");
     const generating = generatingTasks.some((t) => t.assetId === entityId);
-    // Effective t2i model — drives the "design_sheet" template gating: that
-    // template only works with gpt-image-2, so it stays locked unless the
-    // user has selected gpt-image-2 (override or project default).
-    const selectedModelId = modelOverride || currentProject?.model_settings?.t2i_model || "wan2.1-t2i";
-    const isGptImage2 = selectedModelId === "gpt-image-2";
-    const [selectedTemplate, setSelectedTemplate] = useState<CharacterTemplate>("simple");
-    const [pendingTemplate, setPendingTemplate] = useState<CharacterTemplate | null>(null);
+    const [selectedTemplate, setSelectedTemplate] = useState<CharacterCompositionTemplate>("simple");
+    const [pendingTemplate, setPendingTemplate] = useState<CharacterCompositionTemplate | null>(null);
     const [promptDirty, setPromptDirty] = useState(false);
     const lastSeededEntityId = useRef<string | null>(null);
     const overlayMouseDown = useRef(false);
@@ -272,26 +239,26 @@ export default function CastWorkbenchModal({ isOpen, kind, entityId, onClose }: 
         setPromptDirty(false);
     };
 
-    const handleTemplateSwitch = (tpl: CharacterTemplate) => {
+    const applyTemplateSwitch = (tpl: CharacterCompositionTemplate) => {
+        setSelectedTemplate(tpl);
+        setPendingTemplate(null);
+        setPrompt(buildTemplate(kind, entity, tpl));
+        setPromptDirty(false);
+        if (CHARACTER_COMPOSITION_TEMPLATES[tpl].requiredModelId === GPT_IMAGE_02_MODEL_ID) setModelOverride(GPT_IMAGE_02_MODEL_ID);
+    };
+
+    const handleTemplateSwitch = (tpl: CharacterCompositionTemplate) => {
         if (tpl === selectedTemplate) return;
-        // design_sheet (comingSoon) is gated on gpt-image-2 — the button
-        // unlocks when isGptImage2, so allow the switch too.
-        if (CHARACTER_TEMPLATES[tpl].comingSoon && !isGptImage2) return;
         if (promptDirty) {
             setPendingTemplate(tpl);
         } else {
-            setSelectedTemplate(tpl);
-            setPrompt(buildTemplate(kind, entity, tpl));
-            setPromptDirty(false);
+            applyTemplateSwitch(tpl);
         }
     };
 
     const confirmTemplateSwitch = () => {
         if (!pendingTemplate) return;
-        setSelectedTemplate(pendingTemplate);
-        setPrompt(buildTemplate(kind, entity, pendingTemplate));
-        setPromptDirty(false);
-        setPendingTemplate(null);
+        applyTemplateSwitch(pendingTemplate);
     };
 
     const cancelTemplateSwitch = () => {
@@ -586,58 +553,7 @@ export default function CastWorkbenchModal({ isOpen, kind, entityId, onClose }: 
                             {/* Template selection cards — character only */}
                             {kind === "character" && (
                                 <div className="mb-4">
-                                    <p className="font-mono text-sm uppercase tracking-[0.18em] text-text-muted mb-2.5">
-                                        {t("templateSelectLabel")}
-                                    </p>
-                                    <div className="flex gap-3">
-                                        {(Object.entries(CHARACTER_TEMPLATES) as [CharacterTemplate, typeof CHARACTER_TEMPLATES[CharacterTemplate]][]).map(([key, tpl]) => {
-                                            const isActive = selectedTemplate === key;
-                                            const isLocked = !!(tpl.comingSoon && !isGptImage2);
-                                            return (
-                                                <button
-                                                    key={key}
-                                                    onClick={() => !isLocked && handleTemplateSwitch(key)}
-                                                    disabled={isLocked}
-                                                    className={`relative flex flex-col rounded-lg border overflow-hidden transition-all flex-1 min-w-0 ${
-                                                        isActive
-                                                            ? "border-primary/60 ring-1 ring-primary/30 bg-primary/5"
-                                                            : isLocked
-                                                                ? "border-glass-border bg-black/20 opacity-50 cursor-not-allowed"
-                                                                : "border-glass-border bg-black/20 hover:border-foreground/30 hover:bg-hover-bg"
-                                                    }`}
-                                                >
-                                                    {/* Example thumbnail area — 4:3 ratio */}
-                                                    <div className="aspect-[4/3] bg-black/30 flex items-center justify-center overflow-hidden">
-                                                        {tpl.exampleImage ? (
-                                                            <img src={tpl.exampleImage} alt="" className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <span className="text-xl text-text-muted/40">
-                                                                {isLocked ? "🔒" : "📐"}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {/* Label + description */}
-                                                    <div className="px-2.5 py-2">
-                                                        <p className={`text-sm font-medium ${isActive ? "text-foreground" : "text-text-secondary"}`}>
-                                                            {t(tpl.labelKey)}
-                                                        </p>
-                                                        <p className="text-sm text-text-muted mt-0.5 line-clamp-1">
-                                                            {t(tpl.descKey)}
-                                                        </p>
-                                                    </div>
-                                                    {/* Active indicator */}
-                                                    {isActive && (
-                                                        <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary grid place-items-center">
-                                                            <Check size={9} className="text-foreground" strokeWidth={3} />
-                                                        </span>
-                                                    )}
-                                                    {isLocked && (
-                                                        <span className="absolute top-1.5 right-1.5 text-sm text-text-muted font-mono uppercase">{t("soon")}</span>
-                                                    )}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                                    <CharacterCompositionTemplatePicker selected={selectedTemplate} onSelect={handleTemplateSwitch} disabled={generating} />
                                     {/* Inline confirm when switching with dirty prompt */}
                                     {pendingTemplate && (
                                         <div className="mt-2 flex items-center gap-2 px-2 py-1.5 rounded-md bg-status-processing-bg border border-status-processing-border">
@@ -682,22 +598,15 @@ export default function CastWorkbenchModal({ isOpen, kind, entityId, onClose }: 
                             />
 
                             {/* Quick tags — immediately below textarea */}
-                            <div className="mt-2.5 flex flex-wrap gap-1.5">
-                                {(kind === "character"
-                                    ? ["full body", "close-up", "three-view", "dynamic pose", "soft lighting", "studio lighting", "white background", "detailed face"]
-                                    : kind === "scene"
-                                        ? ["wide angle", "establishing shot", "golden hour", "dramatic lighting", "aerial view", "depth of field", "atmospheric", "cinematic"]
-                                        : ["product shot", "white background", "multi-angle", "studio lighting", "macro detail", "floating", "transparent background", "clean"]
-                                ).map((tag) => (
-                                    <button
-                                        key={tag}
-                                        onClick={() => setPrompt((p) => p.trimEnd() + (p.endsWith(",") || p.endsWith("，") || !p.trim() ? " " : ", ") + tag)}
-                                        disabled={generating}
-                                        className="px-2.5 py-1 rounded border border-glass-border bg-glass text-sm text-text-muted hover:text-text-secondary hover:border-foreground/30 hover:bg-hover-bg transition-colors disabled:opacity-30"
-                                    >
-                                        + {tag}
-                                    </button>
-                                ))}
+                            <div className="mt-2.5">
+                                <CharacterCompositionQuickTags
+                                    kind={kind}
+                                    onAppend={(value) => {
+                                        setPrompt((current) => appendEnglishCompositionTag(current, value));
+                                        setPromptDirty(true);
+                                    }}
+                                    disabled={generating}
+                                />
                             </div>
 
                             {/* Final prompt preview — collapsible, scrollable */}
