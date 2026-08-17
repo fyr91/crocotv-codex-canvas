@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { applyCanvasOperations, type CanvasOperation } from "./canvas-commands";
 import { publishProjectUpdated } from "./canvas-events";
 import { createStudioProjectSchema, newStudioProjectState, parseStudioProjectState, updateStudioScriptSchema } from "./studio-schemas";
@@ -114,6 +115,7 @@ export function asStudioProject(value: unknown) {
 
 export function studioProjectResponse(project: StudioBackedProject) {
   const studio = parseStudioProjectState(project.studio);
+  const currentScriptHash = createHash("sha256").update(studio.originalText).digest("hex");
   return {
     id: project.id,
     title: project.title,
@@ -146,6 +148,8 @@ export function studioProjectResponse(project: StudioBackedProject) {
     updatedAt: project.updatedAt,
     canvas_project_id: project.id,
     project_version: project.version,
+    entity_extraction_stale: studio.derivationBaselines.entityExtraction?.sourceHash !== currentScriptHash,
+    storyboard_stale: studio.frames.length > 0 && studio.derivationBaselines.storyboard?.sourceHash !== currentScriptHash,
     document: {
       content: studio.document.content || studioTextToDocument(studio.originalText),
       updated_at: studio.document.updatedAt || "",

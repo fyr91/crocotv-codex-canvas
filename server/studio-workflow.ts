@@ -9,6 +9,7 @@ import { getStudioBackedProject, listStudioProjectResponses, mutateStudioProject
 import type { StudioImageAsset, StudioImageVariant, StudioNamedEntity, StudioProjectState, StudioStoryboardFrame, StudioVideoTask } from "./studio-types";
 import { models } from "./providers";
 import { readProject, resourceById } from "./storage";
+import { listCharacters } from "./characters";
 import { executeStudioPrompt, type StudioPromptOperation } from "./studio-prompt-runtime";
 import { createStudioGenerationJob } from "./studio-generation-jobs";
 import type { TextThinkingMode } from "./providers";
@@ -55,29 +56,48 @@ export async function recoverInterruptedStudioGenerations() {
 export async function extractStudioEntities(projectId: string, text: string, originClientId: string) {
   await mutateStudioProject(projectId, (state) => ({ ...state, originalText: text }), { originClientId });
   const parsed = await resolveEntityExtractionPreview(projectId, text, originClientId);
-  return mutateStudioProject(projectId, (state) => ({
-    ...state,
-    characters: normalizeEntities(parsed.characters),
-    scenes: normalizeEntities(parsed.scenes),
-    props: normalizeEntities(parsed.props),
-  }), { originClientId });
+  return applyStudioEntityExtraction(projectId, text, parsed, originClientId);
 }
 
 export async function previewStudioEntities(projectId: string, text: string, originClientId: string) {
+  const project = await getStudioBackedProject(projectId);
   const parsed = await resolveEntityExtractionPreview(projectId, text, originClientId);
-  return { characters: normalizeEntities(parsed.characters), scenes: normalizeEntities(parsed.scenes), props: normalizeEntities(parsed.props) };
+  return {
+    characters: onlyNewEntities(normalizeEntities(parsed.characters), project.studio.characters),
+    scenes: onlyNewEntities(normalizeEntities(parsed.scenes), project.studio.scenes),
+    props: onlyNewEntities(normalizeEntities(parsed.props), project.studio.props),
+  };
 }
 
 async function resolveEntityExtractionPreview(projectId: string, text: string, originClientId: string): Promise<EntityExtractionPayload> {
   const current = await getStudioBackedProject(projectId);
+  const sourceHash = textHash(text);
+  if (current.studio.derivationBaselines.entityExtraction?.sourceHash === sourceHash) {
+    return { characters: [], scenes: [], props: [] };
+  }
+  const availableSystemCharacters = (await listCharacters()).map((character) => ({
+    name: character.name,
+    chinese_name: character.chineseName,
+    subtitle: character.subtitle || "",
+    summary: character.summary || "",
+  }));
+  const requestPayload = JSON.stringify({
+    script_context: changedScriptContext(current.studio.derivationBaselines.entityExtraction?.sourceText, text),
+    existing_entities: {
+      characters: entityContext(current.studio.characters),
+      scenes: entityContext(current.studio.scenes),
+      props: entityContext(current.studio.props),
+    },
+    available_system_characters: availableSystemCharacters,
+  }, null, 2);
   const reusable = findReusableEntityExtraction({
-    text,
+    text: requestPayload,
     nodes: current.nodes,
     executions: current.studio.generationExecutions,
   });
   if (reusable) return reusable;
 
-  const requestKey = `${projectId}:${createHash("sha256").update(text).digest("hex")}`;
+  const requestKey = `${projectId}:${createHash("sha256").update(requestPayload).digest("hex")}`;
   const inFlight = entityExtractionRequests.get(requestKey);
   if (inFlight) return inFlight;
 
@@ -86,7 +106,7 @@ async function resolveEntityExtractionPreview(projectId: string, text: string, o
     projectId,
     configId,
     operation: "entity_extraction",
-    draftPrompt: text,
+    draftPrompt: requestPayload,
     requestedModel: ENTITY_EXTRACTION_MODEL,
     thinking: ENTITY_EXTRACTION_THINKING,
     originClientId,
@@ -106,13 +126,23 @@ async function resolveEntityExtractionPreview(projectId: string, text: string, o
 export async function applyStudioEntityExtraction(projectId: string, text: string, extraction: unknown, originClientId: string) {
   const parsed = objectValue(extraction);
   if (!Array.isArray(parsed.characters) || !Array.isArray(parsed.scenes) || !Array.isArray(parsed.props)) throw new Error("实体提取结果必须包含 characters、scenes 和 props 数组");
+  const confirmedCharacters = await validateCharacterBindings(normalizeEntities(parsed.characters));
   return mutateStudioProject(projectId, (state) => ({
     ...state,
     originalText: text,
-    characters: normalizeEntities(parsed.characters),
-    scenes: normalizeEntities(parsed.scenes),
-    props: normalizeEntities(parsed.props),
+    derivationBaselines: {
+      ...state.derivationBaselines,
+      entityExtraction: { sourceText: text, sourceHash: textHash(text) },
+    },
+    characters: mergeNewEntities(state.characters, confirmedCharacters),
+    scenes: mergeNewEntities(state.scenes, normalizeEntities(parsed.scenes)),
+    props: mergeNewEntities(state.props, normalizeEntities(parsed.props)),
   }), { originClientId });
+}
+
+export async function bindStudioCharacterResources(projectId: string, characterId: string, raw: unknown, originClientId: string) {
+  const patch = await validateCharacterBindingPatch(objectValue(raw));
+  return patchStudioEntity(projectId, "character", characterId, patch, originClientId);
 }
 
 export async function analyzeStudioArtDirection(projectId: string, text: string, originClientId: string) {
@@ -237,10 +267,26 @@ async function executeStudioAssetGeneration(prepared: Awaited<ReturnType<typeof 
 }
 
 export async function analyzeStudioStoryboard(projectId: string, text: string, originClientId: string) {
+  const project = await getStudioBackedProject(projectId);
   const configId = stableStudioNodeId(projectId, "frame", projectId, "analysis-config");
-  const parsed = await runStudioPromptJson({ projectId, configId, operation: "storyboard_extraction", draftPrompt: text, originClientId });
-  const frames = normalizeFrames(parsed.frames || parsed.shots);
-  return mutateStudioProject(projectId, (state) => ({ ...state, originalText: text || state.originalText, frames, assembly: { ...state.assembly, orderedFrameIds: frames.map((frame) => frame.id) } }), { originClientId });
+  const script = text || project.studio.originalText;
+  const promptInput = JSON.stringify({
+    script,
+    existing_frames: project.studio.frames.map(frameContext),
+    characters: entityContext(project.studio.characters),
+    scenes: entityContext(project.studio.scenes),
+    props: entityContext(project.studio.props),
+    art_direction: project.studio.artDirection || project.studio.stylePrompt || project.studio.stylePreset || null,
+  }, null, 2);
+  const parsed = await runStudioPromptJson({ projectId, configId, operation: "storyboard_extraction", draftPrompt: promptInput, originClientId });
+  const frames = mergeStoryboardFrames(project.studio.frames, parsed.frames || parsed.shots);
+  return mutateStudioProject(projectId, (state) => ({
+    ...state,
+    originalText: script,
+    derivationBaselines: { ...state.derivationBaselines, storyboard: { sourceHash: textHash(script) } },
+    frames,
+    assembly: { ...state.assembly, orderedFrameIds: frames.map((frame) => frame.id) },
+  }), { originClientId });
 }
 
 export async function createStudioFrame(projectId: string, raw: any, originClientId: string) {
@@ -255,6 +301,7 @@ export async function replaceStudioStoryboard(projectId: string, rawFrames: unkn
   const frames = normalizeFrames(rawFrames);
   return mutateStudioProject(projectId, (state) => ({
     ...state,
+    derivationBaselines: { ...state.derivationBaselines, storyboard: { sourceHash: textHash(state.originalText) } },
     frames,
     videoTasks: state.videoTasks.filter((task) => frames.some((frame) => frame.id === task.frame_id)),
     assembly: { ...state.assembly, orderedFrameIds: frames.map((frame) => frame.id) },
@@ -701,6 +748,103 @@ function normalizeEntities(value: unknown): StudioNamedEntity[] { return Array.i
 function normalizeEntity(value: any): StudioNamedEntity { return { ...objectValue(value), id: safeId(value?.id), name: String(value?.name || "未命名").slice(0, 180), description: String(value?.description || "").slice(0, 100_000), status: String(value?.status || "ready") }; }
 function normalizeFrames(value: unknown): StudioStoryboardFrame[] { return Array.isArray(value) ? value.slice(0, 2_000).map((item, index) => normalizeFrame(item, index)) : []; }
 function normalizeFrame(value: any, order: number): StudioStoryboardFrame { return { ...objectValue(value), id: safeId(value?.id), title: String(value?.title || `镜头 ${order + 1}`).slice(0, 180), prompt: String(value?.prompt || value?.image_prompt || value?.action_description || "").slice(0, 100_000), order, status: String(value?.status || "ready") }; }
+function textHash(value: string) { return createHash("sha256").update(value).digest("hex"); }
+function normalizedEntityName(value: unknown) { return String(value || "").trim().toLocaleLowerCase(); }
+function entityContext(items: StudioNamedEntity[]) { return items.map((item) => ({ name: item.name, description: item.description })); }
+function onlyNewEntities(candidates: StudioNamedEntity[], existing: StudioNamedEntity[]) {
+  const names = new Set(existing.map((item) => normalizedEntityName(item.name)));
+  return candidates.filter((item) => {
+    const name = normalizedEntityName(item.name);
+    if (!name || names.has(name)) return false;
+    names.add(name);
+    return true;
+  });
+}
+function mergeNewEntities(existing: StudioNamedEntity[], candidates: StudioNamedEntity[]) {
+  return [...existing, ...onlyNewEntities(candidates, existing)];
+}
+async function validateCharacterBindings(characters: StudioNamedEntity[]) {
+  return Promise.all(characters.map(async (character) => ({ ...character, ...await validateCharacterBindingPatch(character) })));
+}
+async function validateCharacterBindingPatch(raw: Record<string, any>) {
+  const systemCharacterId = String(raw.system_character_id || "").trim();
+  if (!systemCharacterId) {
+    return {
+      system_character_id: undefined,
+      reference_image_resource_id: undefined,
+      voice_id: raw.voice_id ? String(raw.voice_id).slice(0, 180) : undefined,
+      voice_reference_resource_id: undefined,
+    };
+  }
+  const character = (await listCharacters()).find((item) => item.id === systemCharacterId);
+  if (!character) throw new Error(`同步角色不存在：${systemCharacterId}`);
+  const imageResourceId = String(raw.reference_image_resource_id || "").trim();
+  const audioResourceId = String(raw.voice_reference_resource_id || "").trim();
+  const imageResource = imageResourceId
+    ? await requireCharacterResource(systemCharacterId, imageResourceId, "image")
+    : undefined;
+  if (audioResourceId) await requireCharacterResource(systemCharacterId, audioResourceId, "audio");
+  const voiceId = String(raw.voice_id || character.voiceId || "").trim();
+  if (voiceId && voiceId !== character.voiceId) throw new Error("绑定音色必须来自选中的同步角色");
+  return {
+    system_character_id: systemCharacterId,
+    reference_image_resource_id: imageResourceId || undefined,
+    image_url: imageResource?.url,
+    voice_id: voiceId || undefined,
+    voice_reference_resource_id: audioResourceId || undefined,
+  };
+}
+async function requireCharacterResource(characterId: string, resourceId: string, type: "image" | "audio") {
+  const resource = await resourceById(resourceId);
+  const linkedIds = Array.isArray(resource?.metadata?.characterLibraryCharacterIds)
+    ? resource.metadata.characterLibraryCharacterIds.map(String)
+    : [];
+  const belongs = resource?.metadata?.characterId === characterId || linkedIds.includes(characterId);
+  if (!resource || resource.type !== type || !belongs) throw new Error(`所选${type === "image" ? "图片" : "参考声音"}不属于同步角色`);
+  return resource;
+}
+function changedScriptContext(previousText: string | undefined, currentText: string) {
+  if (!previousText) return { mode: "full", current_text: currentText };
+  if (previousText === currentText) return { mode: "unchanged", current_text: "" };
+  let start = 0;
+  const shortest = Math.min(previousText.length, currentText.length);
+  while (start < shortest && previousText[start] === currentText[start]) start += 1;
+  let previousEnd = previousText.length;
+  let currentEnd = currentText.length;
+  while (previousEnd > start && currentEnd > start && previousText[previousEnd - 1] === currentText[currentEnd - 1]) {
+    previousEnd -= 1;
+    currentEnd -= 1;
+  }
+  const contextStart = Math.max(0, currentText.lastIndexOf("\n", Math.max(0, start - 1)) - 400);
+  const contextEnd = Math.min(currentText.length, Math.max(currentEnd, currentText.indexOf("\n", currentEnd) + 1) + 400);
+  const previousContextStart = Math.max(0, previousText.lastIndexOf("\n", Math.max(0, start - 1)) - 400);
+  const previousContextEnd = Math.min(previousText.length, Math.max(previousEnd, previousText.indexOf("\n", previousEnd) + 1) + 400);
+  return {
+    mode: "incremental",
+    previous_changed_text: previousText.slice(previousContextStart, previousContextEnd),
+    current_changed_text: currentText.slice(contextStart, contextEnd),
+  };
+}
+function frameContext(frame: StudioStoryboardFrame) {
+  return {
+    id: frame.id,
+    title: frame.title,
+    prompt: frame.prompt,
+    order: frame.order,
+    scene_id: frame.scene_id,
+    character_ids: Array.isArray(frame.character_ids) ? frame.character_ids : [],
+    prop_ids: Array.isArray(frame.prop_ids) ? frame.prop_ids : [],
+    duration: frame.duration,
+    dialogue: frame.dialogue,
+  };
+}
+function mergeStoryboardFrames(existing: StudioStoryboardFrame[], generated: unknown) {
+  const existingById = new Map(existing.map((frame) => [frame.id, frame]));
+  return normalizeFrames(generated).map((frame, order) => {
+    const current = existingById.get(frame.id);
+    return current ? { ...current, ...frame, id: current.id, order } : { ...frame, order };
+  });
+}
 function normalizeStyle(value: any, index: number) { return { ...objectValue(value), id: safeId(value?.id || `recommendation-${index + 1}`), name: String(value?.name || `风格 ${index + 1}`), description: String(value?.description || ""), positive_prompt: String(value?.positive_prompt || ""), negative_prompt: String(value?.negative_prompt || "") }; }
 function normalizeEntityKind(value: unknown): EntityKind { const text = String(value || "").toLowerCase().replace(/s$/, ""); if (text === "character" || text === "scene" || text === "prop") return text; throw new Error(`不支持的资产类型：${value}`); }
 function entityCollection(kind: EntityKind): "characters" | "scenes" | "props" { return kind === "character" ? "characters" : kind === "scene" ? "scenes" : "props"; }

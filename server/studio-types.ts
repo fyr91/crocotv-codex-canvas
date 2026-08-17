@@ -26,6 +26,20 @@ export type StudioNamedEntity = Record<string, unknown> & {
   locked?: boolean;
   starred?: boolean;
   status?: string;
+  system_character_id?: string;
+  reference_image_resource_id?: string;
+  voice_id?: string;
+  voice_reference_resource_id?: string;
+};
+
+export type StudioDerivationBaselines = {
+  entityExtraction?: {
+    sourceText: string;
+    sourceHash: string;
+  };
+  storyboard?: {
+    sourceHash: string;
+  };
 };
 
 export type StudioVideoTask = Record<string, unknown> & {
@@ -153,6 +167,7 @@ export type StudioProjectState = {
   generationExecutions: StudioGenerationExecution[];
   canvasBindings: StudioCanvasBinding[];
   canvasNodeOverrides: StudioCanvasNodeOverride[];
+  derivationBaselines: StudioDerivationBaselines;
   characters: StudioNamedEntity[];
   scenes: StudioNamedEntity[];
   props: StudioNamedEntity[];

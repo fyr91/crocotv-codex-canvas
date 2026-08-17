@@ -4,7 +4,7 @@
 import { fileURLToPath } from "node:url";
 import path2 from "node:path";
 
-// node_modules/@breezystack/lamejs/dist/lamejs.js
+// ../crocotv-codex-canvas/node_modules/@breezystack/lamejs/dist/lamejs.js
 var fa = {};
 function Xa(w) {
   return new Int8Array(w);

@@ -36,7 +36,12 @@ const uploadTemp = path.join(dataDir, ".uploads");
 await mkdir(uploadTemp, { recursive: true });
 const upload = multer({ dest: uploadTemp, limits: { fileSize: 2 * 1024 * 1024 * 1024 } });
 
-app.use(cors({ origin: ["http://localhost:3000", "http://127.0.0.1:3000"] }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || /^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin)) return callback(null, true);
+    callback(new Error("Croco Canvas 只允许本机前端访问"));
+  },
+}));
 app.use(express.json({ limit: "10mb" }));
 app.use("/api/studio", studioApiRouter);
 

@@ -270,13 +270,13 @@ server.registerTool("studio_list_prompt_executions", {
 });
 
 server.registerTool("studio_set_script", {
-  description: "Replace the Studio source script, regenerate its compatible structured editor document, and atomically update the stable managed Canvas Text node without touching free Canvas nodes.",
+  description: "Replace the pure-text Studio source script, regenerate its editor document, and atomically update the stable managed Canvas Text node without touching free Canvas nodes. Existing entities and storyboard frames are not regenerated automatically; the project response reports their stale state.",
   inputSchema: { projectId: z.string().uuid(), text: z.string().max(1_000_000), expectedVersion: z.number().int().positive().optional() },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 }, async ({ projectId, text, expectedVersion }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/text`, { method: "PUT", body: { text, expectedVersion } })));
 
 server.registerTool("studio_get_script_document", {
-  description: "Read the structured LumenX script document plus its compatible plain text and shared project version.",
+  description: "Read the Studio editor document plus its canonical plain text, shared project version, and derivation stale state.",
   inputSchema: { projectId: z.string().uuid() },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }, async ({ projectId }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/document`)));
@@ -320,6 +320,31 @@ server.registerTool("studio_upsert_asset", {
   return toolResult(await api(path, { method: asset.id ? "PUT" : "POST", body: { name: asset.name, description: asset.description, ...(asset.attributes || {}) } }));
 });
 
+server.registerTool("studio_bind_character_resources", {
+  description: "Bind one project character by reference to one synchronized character plus at most one primary image, one Voice ID, and one optional reference-audio resource. Use canvas_list_characters and canvas_list_resources to discover valid IDs. Set unbind=true to clear the synchronized-character binding without copying files.",
+  inputSchema: {
+    projectId: z.string().uuid(),
+    characterId: z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/),
+    systemCharacterId: z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    primaryImageResourceId: z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    voiceId: z.string().min(1).max(180).optional(),
+    referenceAudioResourceId: z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    unbind: z.boolean().default(false),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+}, async ({ projectId, characterId, systemCharacterId, primaryImageResourceId, voiceId, referenceAudioResourceId, unbind }) => {
+  if (!unbind && !systemCharacterId) throw new Error("绑定角色素材需要 systemCharacterId，或设置 unbind=true");
+  return toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/binding`, {
+    method: "POST",
+    body: unbind ? {} : {
+      system_character_id: systemCharacterId,
+      reference_image_resource_id: primaryImageResourceId,
+      voice_id: voiceId,
+      voice_reference_resource_id: referenceAudioResourceId,
+    },
+  }));
+});
+
 server.registerTool("studio_set_storyboard", {
   description: "Atomically replace the structured Studio storyboard and project it into deterministic managed Canvas frame/config nodes while preserving free Canvas nodes.",
   inputSchema: { projectId: z.string().uuid(), frames: z.array(studioFrameSchema).max(2_000) },
@@ -327,7 +352,7 @@ server.registerTool("studio_set_storyboard", {
 }, async ({ projectId, frames }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/storyboard`, { method: "PUT", body: { frames: frames.map((frame, order) => ({ id: frame.id, title: frame.title || `镜头 ${order + 1}`, prompt: frame.prompt, scene_id: frame.sceneId, duration: frame.duration, dialogue: frame.dialogue, character_ids: frame.characterIds, order })) } })));
 
 server.registerTool("studio_run_stage", {
-  description: "Run one high-level Studio stage through Croco Canvas generation-module nodes and the shared runtime. The extract_entities stage makes one DeepSeek V4 Flash call with thinking disabled and atomically saves that result. Other generation calls may use configured external providers and can incur cost. Read the project after each stage before deciding the next one.",
+  description: "Run one user-triggered high-level Studio stage through Croco Canvas generation-module nodes and the shared runtime. extract_entities uses the frozen extraction baseline, changed-script context, current entities, and synchronized-character profiles, then only appends newly returned entities. analyze_storyboard passes existing frames and asks for the smallest viable update while preserving stable IDs and their generated assets. Calls may use configured external providers and incur cost; script edits alone never invoke a model.",
   inputSchema: { projectId: z.string().uuid(), stage: z.enum(["extract_entities", "analyze_art_direction", "analyze_storyboard", "generate_assets", "render_storyboard", "generate_videos", "generate_audio", "merge"]) },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
 }, async ({ projectId, stage }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/run-stage`, { method: "POST", body: { stage } })));

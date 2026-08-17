@@ -22,7 +22,20 @@ const namedEntitySchema = z.object({
   locked: z.boolean().optional(),
   starred: z.boolean().optional(),
   status: z.string().max(80).optional(),
+  system_character_id: boundedId.optional(),
+  reference_image_resource_id: boundedId.optional(),
+  voice_id: z.string().max(180).optional(),
+  voice_reference_resource_id: boundedId.optional(),
 }).passthrough();
+const derivationBaselinesSchema = z.object({
+  entityExtraction: z.object({
+    sourceText: z.string().max(1_000_000),
+    sourceHash: z.string().length(64),
+  }).strict().optional(),
+  storyboard: z.object({
+    sourceHash: z.string().length(64),
+  }).strict().optional(),
+}).strict();
 const storyboardFrameSchema = z.object({
   id: boundedId,
   title: z.string().trim().min(1).max(180),
@@ -136,6 +149,7 @@ export const studioProjectStateSchema = z.object({
   generationExecutions: z.array(generationExecutionSchema).max(500).default([]),
   canvasBindings: z.array(canvasBindingSchema).max(1_000).default([]),
   canvasNodeOverrides: z.array(canvasNodeOverrideSchema).max(10_000).default([]),
+  derivationBaselines: derivationBaselinesSchema.default({}),
   characters: z.array(namedEntitySchema).max(10_000),
   scenes: z.array(namedEntitySchema).max(10_000),
   props: z.array(namedEntitySchema).max(10_000),
@@ -179,6 +193,7 @@ export function newStudioProjectState(originalText = "", workflowMode: StudioWor
     generationExecutions: [],
     canvasBindings: [],
     canvasNodeOverrides: [],
+    derivationBaselines: {},
     characters: [],
     scenes: [],
     props: [],

@@ -184,7 +184,7 @@ function addEntity(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNo
     nodes[nodes.length - 1].metadata.selected = variant.id === entity.image_asset?.selected_id;
     edges.push({ fromNodeId: configId, toNodeId: imageId });
   });
-  const directResourceId = stringValue(entity.resource_id);
+  const directResourceId = stringValue(entity.resource_id || entity.reference_image_resource_id);
   if (!variants.length && directResourceId) {
     const imageId = stableStudioNodeId(projectId, kind, entity.id, "image-output-imported");
     nodes.push(node(projectId, kind, entity.id, "image-output-imported", "image", `${entity.name} · 形象`, 2312, y + 280, 320, 320, resourceMetadata(directResourceId, entity.image_url || "", groupId, kind, y + 2)));

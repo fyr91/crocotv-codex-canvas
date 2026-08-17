@@ -19,10 +19,23 @@ export async function listCharacters(): Promise<CharacterEntry[]> {
   const index = await readJson<{ characters: any[] }>(indexPath, { characters: [] });
   const overrides = await readLocalOverrides();
   const resources = await listResources();
-  return index.characters.filter((item) => item.tts_voice_id).map((item) => {
+  return Promise.all(index.characters.filter((item) => item.tts_voice_id).map(async (item) => {
+    const profile = item.directory
+      ? await readJson<Record<string, any>>(path.join(charactersDir, item.directory, "character.json"), {})
+      : {};
     const avatar = resources.find((resource) => resource.source === "character" && resource.type === "image" && resource.metadata?.characterId === item.id);
-    return { id: item.id, name: item.name, chineseName: item.chinese_name, voiceId: item.tts_voice_id, directory: item.directory, avatarUrl: avatar?.url, primaryResourceId: overrides.characters[item.id]?.primaryResourceId };
-  });
+    return {
+      id: profile.id || item.id,
+      name: profile.name || item.name,
+      chineseName: profile.chinese_name || item.chinese_name,
+      subtitle: profile.subtitle || item.subtitle,
+      summary: profile.summary || item.summary,
+      voiceId: profile.voice?.tts_voice_id || item.tts_voice_id,
+      directory: item.directory,
+      avatarUrl: avatar?.url,
+      primaryResourceId: overrides.characters[item.id]?.primaryResourceId,
+    };
+  }));
 }
 
 export async function attachCharacterResources(characterId: string, resourceIds: string[], origin: "upload" | "generated" | "agent" = "upload") {
@@ -132,7 +145,7 @@ export async function syncCharacters() {
     const manifest = { character_id: character.id, character: character.chineseName, source: "CrocoBackend current publish version", assets: (character.assets || []).map((asset: any) => ({ key: asset.key, relative_path: safeRelative(asset.relativePath), sha256: asset.sha256 ?? null, mime_type: asset.mimeType ?? null, byte_size: asset.byteSize ?? null })) };
     if (await writeIfChanged(path.join(characterDir, "assets", "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`)) changed = true;
     if (!existed) result.added += 1; else if (changed) result.updated += 1; else result.unchanged += 1;
-    entries.push({ id: character.id, name: character.name, chinese_name: character.chineseName, subtitle: character.subtitle, tts_voice_id: character.voice?.ttsVoiceId ?? null, directory, asset_count: (character.assets || []).length });
+    entries.push({ id: character.id, name: character.name, chinese_name: character.chineseName, subtitle: character.subtitle, summary: character.summary, tts_voice_id: character.voice?.ttsVoiceId ?? null, directory, asset_count: (character.assets || []).length });
   }
   const currentIds = new Set(entries.map((entry) => entry.id));
   const preserved = previous.characters.filter((entry) => !currentIds.has(entry.id));

@@ -24,7 +24,7 @@ after(async () => {
   if (testDataDir) await rm(testDataDir, { recursive: true, force: true });
 });
 
-test("确认实体预览只保存给定结果，不再次运行模型", async () => {
+test("确认实体预览增量追加结果并记录提取基线，不再次运行模型", async () => {
   const applied = await workflow.applyStudioEntityExtraction(projectId, "新剧本", {
     characters: [{ id: "xiaoming", name: "小明", description: "主角" }],
     scenes: [{ id: "office", name: "办公室", description: "白天" }],
@@ -37,6 +37,24 @@ test("确认实体预览只保存给定结果，不再次运行模型", async ()
   assert.deepEqual(applied.props.map((item: { name: string }) => item.name), ["钥匙"]);
   const stored = await commands.getStudioBackedProject(projectId);
   assert.equal(stored.studio.generationExecutions.length, 0);
+  assert.equal(stored.studio.derivationBaselines.entityExtraction?.sourceText, "新剧本");
+  assert.equal(stored.studio.derivationBaselines.entityExtraction?.sourceHash.length, 64);
+});
+
+test("后续确认只追加新实体，不替换或重复已有实体", async () => {
+  const applied = await workflow.applyStudioEntityExtraction(projectId, "新剧本增加小红", {
+    characters: [
+      { id: "duplicate-xiaoming", name: "小明", description: "不应覆盖原描述" },
+      { id: "xiaohong", name: "小红", description: "新角色" },
+    ],
+    scenes: [{ id: "office-again", name: "办公室", description: "不应重复" }],
+    props: [],
+  }, "test-incremental-apply");
+
+  assert.deepEqual(applied.characters.map((item: { name: string }) => item.name), ["小明", "小红"]);
+  assert.equal(applied.characters[0].description, "主角");
+  assert.deepEqual(applied.scenes.map((item: { name: string }) => item.name), ["办公室"]);
+  assert.equal(applied.entity_extraction_stale, false);
 });
 
 test("缺失实体数组的确认请求不会清空正式实体", async () => {
@@ -45,8 +63,8 @@ test("缺失实体数组的确认请求不会清空正式实体", async () => {
     /必须包含 characters、scenes 和 props 数组/,
   );
   const stored = await commands.getStudioProject(projectId);
-  assert.deepEqual(stored.characters.map((item: { name: string }) => item.name), ["小明"]);
+  assert.deepEqual(stored.characters.map((item: { name: string }) => item.name), ["小明", "小红"]);
   assert.deepEqual(stored.scenes.map((item: { name: string }) => item.name), ["办公室"]);
   assert.deepEqual(stored.props.map((item: { name: string }) => item.name), ["钥匙"]);
-  assert.equal(stored.original_text, "新剧本");
+  assert.equal(stored.original_text, "新剧本增加小红");
 });

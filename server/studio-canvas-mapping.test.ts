@@ -53,3 +53,24 @@ test("Studio full mapping becomes updates when managed nodes already exist", () 
   assert.equal(text.op, "update_node");
   assert.equal(text.patch.metadata?.content, "第二场");
 });
+
+test("bound character reference image is projected as a shared Canvas resource", () => {
+  const projectId = "project-character-binding";
+  const state = {
+    ...newStudioProjectState("角色测试"),
+    characters: [{
+      id: "xiaolin",
+      name: "小林",
+      description: "同步角色",
+      system_character_id: "system-xiaolin",
+      reference_image_resource_id: "character-image-1",
+      image_url: "/files/by-id/character-image-1",
+    }],
+  };
+  const operations = studioScriptMappingOperations({ projectId, state, nodes: [] });
+  const imageNode = operations.find((operation) => operation.op === "add_node"
+    && operation.node.metadata?.studioEntityId === "xiaolin"
+    && operation.node.metadata?.studioRole === "image-output-imported");
+  assert.ok(imageNode && imageNode.op === "add_node");
+  assert.equal(imageNode.node.metadata?.storageKey, "character-image-1");
+});

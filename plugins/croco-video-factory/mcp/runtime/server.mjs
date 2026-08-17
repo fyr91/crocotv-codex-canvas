@@ -32730,12 +32730,12 @@ var init_server3 = __esm({
       return toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/prompt-executions?${query}`));
     });
     server.registerTool("studio_set_script", {
-      description: "Replace the Studio source script, regenerate its compatible structured editor document, and atomically update the stable managed Canvas Text node without touching free Canvas nodes.",
+      description: "Replace the pure-text Studio source script, regenerate its editor document, and atomically update the stable managed Canvas Text node without touching free Canvas nodes. Existing entities and storyboard frames are not regenerated automatically; the project response reports their stale state.",
       inputSchema: { projectId: external_exports.string().uuid(), text: external_exports.string().max(1e6), expectedVersion: external_exports.number().int().positive().optional() },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
     }, async ({ projectId, text, expectedVersion }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/text`, { method: "PUT", body: { text, expectedVersion } })));
     server.registerTool("studio_get_script_document", {
-      description: "Read the structured LumenX script document plus its compatible plain text and shared project version.",
+      description: "Read the Studio editor document plus its canonical plain text, shared project version, and derivation stale state.",
       inputSchema: { projectId: external_exports.string().uuid() },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
     }, async ({ projectId }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/document`)));
@@ -32773,13 +32773,37 @@ var init_server3 = __esm({
       const path3 = asset.id ? `/api/studio/projects/${encodeURIComponent(projectId)}/assets/${assetType}/${encodeURIComponent(asset.id)}` : `/api/studio/projects/${encodeURIComponent(projectId)}/${plural}`;
       return toolResult(await api(path3, { method: asset.id ? "PUT" : "POST", body: { name: asset.name, description: asset.description, ...asset.attributes || {} } }));
     });
+    server.registerTool("studio_bind_character_resources", {
+      description: "Bind one project character by reference to one synchronized character plus at most one primary image, one Voice ID, and one optional reference-audio resource. Use canvas_list_characters and canvas_list_resources to discover valid IDs. Set unbind=true to clear the synchronized-character binding without copying files.",
+      inputSchema: {
+        projectId: external_exports.string().uuid(),
+        characterId: external_exports.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/),
+        systemCharacterId: external_exports.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
+        primaryImageResourceId: external_exports.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
+        voiceId: external_exports.string().min(1).max(180).optional(),
+        referenceAudioResourceId: external_exports.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
+        unbind: external_exports.boolean().default(false)
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+    }, async ({ projectId, characterId, systemCharacterId, primaryImageResourceId, voiceId, referenceAudioResourceId, unbind }) => {
+      if (!unbind && !systemCharacterId) throw new Error("\u7ED1\u5B9A\u89D2\u8272\u7D20\u6750\u9700\u8981 systemCharacterId\uFF0C\u6216\u8BBE\u7F6E unbind=true");
+      return toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/characters/${encodeURIComponent(characterId)}/binding`, {
+        method: "POST",
+        body: unbind ? {} : {
+          system_character_id: systemCharacterId,
+          reference_image_resource_id: primaryImageResourceId,
+          voice_id: voiceId,
+          voice_reference_resource_id: referenceAudioResourceId
+        }
+      }));
+    });
     server.registerTool("studio_set_storyboard", {
       description: "Atomically replace the structured Studio storyboard and project it into deterministic managed Canvas frame/config nodes while preserving free Canvas nodes.",
       inputSchema: { projectId: external_exports.string().uuid(), frames: external_exports.array(studioFrameSchema).max(2e3) },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
     }, async ({ projectId, frames }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/storyboard`, { method: "PUT", body: { frames: frames.map((frame, order) => ({ id: frame.id, title: frame.title || `\u955C\u5934 ${order + 1}`, prompt: frame.prompt, scene_id: frame.sceneId, duration: frame.duration, dialogue: frame.dialogue, character_ids: frame.characterIds, order })) } })));
     server.registerTool("studio_run_stage", {
-      description: "Run one high-level Studio stage through Croco Canvas generation-module nodes and the shared runtime. The extract_entities stage makes one DeepSeek V4 Flash call with thinking disabled and atomically saves that result. Other generation calls may use configured external providers and can incur cost. Read the project after each stage before deciding the next one.",
+      description: "Run one user-triggered high-level Studio stage through Croco Canvas generation-module nodes and the shared runtime. extract_entities uses the frozen extraction baseline, changed-script context, current entities, and synchronized-character profiles, then only appends newly returned entities. analyze_storyboard passes existing frames and asks for the smallest viable update while preserving stable IDs and their generated assets. Calls may use configured external providers and incur cost; script edits alone never invoke a model.",
       inputSchema: { projectId: external_exports.string().uuid(), stage: external_exports.enum(["extract_entities", "analyze_art_direction", "analyze_storyboard", "generate_assets", "render_storyboard", "generate_videos", "generate_audio", "merge"]) },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
     }, async ({ projectId, stage }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/run-stage`, { method: "POST", body: { stage } })));

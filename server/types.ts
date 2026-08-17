@@ -19,4 +19,6 @@ export type CharacterEntry = {
   directory: string;
   avatarUrl?: string;
   primaryResourceId?: string;
+  subtitle?: string;
+  summary?: string;
 };

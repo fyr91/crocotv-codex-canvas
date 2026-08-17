@@ -8,7 +8,7 @@ import { addResource, fileSize, listProjects, listResources, readProject, typeFr
 import { createStudioProject, deleteStudioProject, getStudioBackedProject, getStudioProject, listStudioAssetSources, listStudioProjectResponses, mutateStudioProject, updateStudioScript } from "./studio-commands";
 import { studioDocumentToText, studioTextToDocument } from "./studio-document";
 import {
-  analyzeStudioArtDirection, analyzeStudioStoryboard, applyStudioEntityExtraction, clearStudioArtDirection, copyStudioFrame, createStudioEntity, createStudioFrame, createStudioVideoTasks,
+  analyzeStudioArtDirection, analyzeStudioStoryboard, applyStudioEntityExtraction, bindStudioCharacterResources, clearStudioArtDirection, copyStudioFrame, createStudioEntity, createStudioFrame, createStudioVideoTasks,
   deleteStudioEntity, deleteStudioFrame, extractStudioEntities, generateStudioAsset, generateStudioFrameAudio, mergeStudioProject, patchStudioEntity, patchStudioFrame,
   polishStudioText, previewStudioEntities, queueStudioAssetGeneration, queueStudioVideoTasks, renderStudioFrame, reorderStudioFrames, replaceStudioStoryboard, saveStudioArtDirection, selectStudioVideo, toggleStudioEntityFlag,
 } from "./studio-workflow";
@@ -225,6 +225,9 @@ studioApiRouter.post("/projects/:id/characters/:charId/voice", projectRoute(asyn
   const presetId = String(request.body?.voice_id || "");
   response.json(await patchStudioEntity(id, "character", param(request.params.charId), { voice_id: decodePresetVoice(presetId), voice_preset_id: presetId, voice_name: request.body?.voice_name }, clientId(request)));
 }));
+studioApiRouter.post("/projects/:id/characters/:charId/binding", projectRoute(async (request, response, id) => {
+  response.json(await bindStudioCharacterResources(id, param(request.params.charId), request.body, clientId(request)));
+}));
 studioApiRouter.put("/projects/:id/characters/:charId/voice_params", projectRoute(async (request, response, id) => response.json(await patchStudioEntity(id, "character", param(request.params.charId), { voice_params: objectValue(request.body) }, clientId(request)))));
 studioApiRouter.post("/projects/:id/dialogue_audio/batch", projectRoute(async (request, response, id) => { const project = await getStudioBackedProject(id); let generated = 0, failed = 0, noVoice = 0; for (const frame of project.studio.frames) { if (!frame.dialogue && !frame.dialogue_structured) continue; try { await generateStudioFrameAudio(id, frame.id, {}, clientId(request)); generated += 1; } catch (error) { if (String(error).includes("Voice")) noVoice += 1; else failed += 1; } } response.json({ _batch_stats: { generated, skipped: 0, failed, no_voice: noVoice } }); }));
 studioApiRouter.post("/projects/:id/generate_audio", projectRoute(async (request, response, id) => { const project = await getStudioBackedProject(id); for (const frame of project.studio.frames) if (frame.dialogue || frame.dialogue_structured) await generateStudioFrameAudio(id, frame.id, {}, clientId(request)); response.json(await getStudioProject(id)); }));
@@ -255,7 +258,15 @@ studioApiRouter.post("/projects/:id/document", projectRoute(async (request, resp
         : state.document.snapshots,
     },
   }), { originClientId: clientId(request) });
-  response.json({ project_id: id, content, original_text: text, updated_at: updatedAt, project_version: project.project_version });
+  response.json({
+    project_id: id,
+    content,
+    original_text: text,
+    updated_at: updatedAt,
+    project_version: project.project_version,
+    entity_extraction_stale: project.entity_extraction_stale,
+    storyboard_stale: project.storyboard_stale,
+  });
 }));
 studioApiRouter.get("/projects/:id/document", projectRoute(async (_request, response, id) => {
   const project = await getStudioBackedProject(id);
@@ -276,7 +287,6 @@ studioApiRouter.post("/projects/:id/document/import", projectRoute(async (reques
 studioApiRouter.post("/projects/:id/document/export", projectRoute(async (request, response, id) => { const text = studioDocumentToText(objectValue(request.body?.content)); response.setHeader("Content-Type", "text/plain; charset=utf-8"); response.setHeader("Content-Disposition", `attachment; filename=studio-${id}.txt`); response.send(text); }));
 studioApiRouter.post("/projects/:id/sync_derivation", projectRoute(async (request, response, id) => { await mutateStudioProject(id, (state) => ({ ...state, metadata: { ...state.metadata, derivation: objectValue(request.body) } }), { originClientId: clientId(request) }); response.json({ status: "ok", synced_at: new Date().toISOString() }); }));
 studioApiRouter.post("/projects/:id/derive_gaps", projectRoute(async (request, response, id) => { const project = await getStudioBackedProject(id); const preview = await previewStudioEntities(id, stringArray(request.body?.raw_text_blocks).join("\n") || project.studio.originalText, clientId(request)); const results = [...preview.characters.map((item) => ({ type: "character", name: item.name, description: item.description, confidence: 1 })), ...preview.props.map((item) => ({ type: "prop", name: item.name, description: item.description, confidence: 1 })), ...preview.scenes.map((item) => ({ type: "location", name: item.name, description: item.description, confidence: 1 }))]; response.json({ results, entities: results, cached: false }); }));
-studioApiRouter.post("/projects/:id/shot_blocks/:shotId/confirm", projectRoute(async (request, response, id) => { const shotId = param(request.params.shotId); await patchStudioFrame(id, shotId, { ...objectValue(request.body), status: "confirmed" }, clientId(request)); response.json({ shot_id: shotId, status: "confirmed", ...objectValue(request.body), confirmed_at: new Date().toISOString() }); }));
 
 studioApiRouter.get("/config/env", route(async (_request, response) => response.json({ managed_by: "Croco Canvas", secrets_configured: Object.fromEntries((await listProviderSecretStatuses()).map((item) => [item.key, item.configured])) })));
 studioApiRouter.post("/config/env", route(async (_request, response) => response.status(403).json({ detail: "Provider 密钥由 Croco 的 .codex/.env 统一管理，不写入 Studio 或浏览器状态" })));
