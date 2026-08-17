@@ -18,4 +18,5 @@ export type CharacterEntry = {
   voiceId: string;
   directory: string;
   avatarUrl?: string;
+  primaryResourceId?: string;
 };

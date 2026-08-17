@@ -1391,14 +1391,29 @@ export const api = {
         const response = await axios.get(`${API_URL}/asset-sources`);
         return response.data;
     },
-    /** 统一资源库中的已同步角色目录（只读）。 */
+    /** 统一资源库中的已同步角色目录及其本地扩充设置。 */
     listPulledCharacters: async () => {
         const response = await axios.get("/api/characters");
         return response.data;
     },
-    /** Canvas 与 Studio 共用的本地资源索引（只读）。 */
+    /** Canvas 与 Studio 共用的本地资源索引。 */
     listLocalResources: async () => {
         const response = await axios.get("/api/resources");
+        return response.data;
+    },
+    uploadPulledCharacterResource: async (characterId: string, file: File) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        const uploaded = await axios.post("/api/resources", formData, { headers: { "Content-Type": "multipart/form-data" } });
+        await axios.post(`/api/characters/${encodeURIComponent(characterId)}/resources`, { resourceId: uploaded.data.id, origin: "upload" });
+        return uploaded.data;
+    },
+    detachPulledCharacterResource: async (characterId: string, resourceId: string) => {
+        const response = await axios.delete(`/api/characters/${encodeURIComponent(characterId)}/resources/${encodeURIComponent(resourceId)}`);
+        return response.data;
+    },
+    setPulledCharacterPrimaryImage: async (characterId: string, resourceId: string) => {
+        const response = await axios.put(`/api/characters/${encodeURIComponent(characterId)}/primary-image`, { resourceId });
         return response.data;
     },
     getSeries: async (seriesId: string) => {
@@ -1703,6 +1718,7 @@ export interface PlaygroundGenerateRequest {
   input_media?: string[];
   parameters?: Record<string, any>;
   batch_size?: number;
+  target_character_id?: string;
 }
 
 export interface PlaygroundGenerationResponse {
@@ -1716,6 +1732,7 @@ export interface PlaygroundGenerationResponse {
   batch_size: number;
   outputs: Array<{
     id: string;
+    resource_id?: string;
     media_path: string;
     media_type: string;
     thumbnail_path?: string;

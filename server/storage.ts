@@ -177,6 +177,24 @@ export async function updateResource(id: string, patch: { name?: string; metadat
   return items[index];
 }
 
+export async function updateResources(
+  ids: string[],
+  updater: (resource: StoredResource) => StoredResource,
+) {
+  const requested = new Set(ids);
+  const items = await listResources();
+  const found = new Set<string>();
+  const updated = items.map((resource) => {
+    if (!requested.has(resource.id)) return resource;
+    found.add(resource.id);
+    return updater(resource);
+  });
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length) throw new Error(`资源不存在：${missing.join(", ")}`);
+  await atomicJson(resourceIndexPath, updated);
+  return updated.filter((resource) => requested.has(resource.id));
+}
+
 export async function addResource(input: Omit<StoredResource, "url">): Promise<StoredResource> {
   const items = await listResources();
   const sha256 = await fileSha256(safeResourcePath(input.fileName));

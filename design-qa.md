@@ -265,3 +265,66 @@ No actionable P0, P1, or P2 differences were found.
 No P3 follow-up is required for this scoped change.
 
 final result: passed
+
+---
+
+# Synchronized Character Supplements — Design QA
+
+**Comparison Target**
+
+- Source visual truth: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-1f1d8176-35e1-4ac0-82d6-0ce7f9e80be3.png`
+- Rendered implementation: `http://localhost:3014/#/library`
+- Implementation screenshots: `/tmp/croco-character-asset-inspector.png`, `/tmp/croco-character-generation-modal.png`
+- Combined comparison: `/tmp/croco-character-asset-inspector-comparison.png`
+- Source pixels: 333 × 662. Implementation pixels and CSS viewport: 491 × 767 at device scale 1.
+- Normalization: the source was proportionally scaled to 767 px high for the combined comparison; the implementation remained at its native capture size. The source shows a project character while the implementation shows a synchronized character with additional media, so comparison focuses on the shared inspector metadata and action hierarchy rather than differing media content.
+- State: dark theme, asset library, synchronized-character inspector open and scrolled to the metadata/action region. The image-generation modal was also captured separately.
+
+**Findings**
+
+- No actionable P0, P1, or P2 differences remain.
+- Fonts and typography: the existing display, body, and monospace hierarchy is preserved; button labels and metadata rows match the source weight and density.
+- Spacing and layout rhythm: metadata rows, full-width primary action, secondary outlined actions, gaps, radii, and inspector padding remain consistent with the source. The added upload action uses the same established action stack.
+- Colors and visual tokens: the implementation reuses the existing surface, border, muted-text, primary-action, and destructive-action tokens. No parallel visual language was introduced.
+- Image and media fidelity: synchronized originals use the existing local files. Uploaded media remain single-copy resources and render in the existing image, video, and audio groups without placeholder artwork.
+- Copy and content: the entry is now correctly labeled “上传资产”; its file input accepts `image/*,video/*,audio/*`. Image generation remains explicitly image-only.
+
+**Full-view Comparison Evidence**
+
+- The combined comparison confirms that the inspector retains the source's dark surface, metadata rhythm, prominent “生成更多变体” action, and stacked secondary actions.
+- Intentional differences are the synchronized-character metadata, the additional “上传资产” action, and the local audio removal affordance required by the confirmed scope.
+
+**Focused Region Evidence**
+
+- `/tmp/croco-character-asset-inspector.png` verifies the metadata/action region, the local audio removal icon, and the “上传资产” label.
+- `/tmp/croco-character-generation-modal.png` verifies the centered image-generation flow, reference images, prompt, model, aspect ratio, and count controls without expanding video/audio generation.
+
+**Primary Interactions Tested**
+
+- Opened a synchronized character from the library.
+- Opened and closed the image-generation modal without starting a paid generation.
+- Verified image-to-image mode and the no-reference text-to-image state.
+- Verified uploaded video and audio resources appear in their existing media groups.
+- Verified local media receive removal controls while synchronized originals remain protected.
+- Verified the hidden file input accepts image, video, and audio media.
+- Browser console warnings/errors checked: none.
+
+**Comparison History**
+
+- Initial pass found the synchronized-character cards still labeled “只读”. Fixed the card badge to “同步角色” and re-captured the implementation.
+- Updated-scope pass found no remaining P0/P1/P2 visual mismatch after changing the upload entry to “上传资产” and adding local video/audio removal controls.
+
+**Implementation Checklist**
+
+- [x] Preserve existing inspector composition and visual tokens.
+- [x] Support unified image, video, and audio upload.
+- [x] Keep image generation image-only.
+- [x] Protect synchronized source assets and allow local supplements to be detached.
+- [x] Verify responsive narrow-panel rendering and browser console.
+
+**Follow-up Polish**
+
+- No blocking follow-up polish identified.
+
+final result: passed
+

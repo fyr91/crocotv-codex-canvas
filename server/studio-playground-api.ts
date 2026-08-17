@@ -10,6 +10,7 @@ import { models } from "./providers";
 import { createStudioProject, getStudioBackedProject, listStudioProjectResponses, mutateStudioProject } from "./studio-commands";
 import { addResource, fileSize, readProject, resourceById, typeFromMime, writeGenerated } from "./storage";
 import { cancelStudioGenerationJob, createStudioGenerationJob, findStudioGenerationJob } from "./studio-generation-jobs";
+import { attachCharacterResources, listCharacters } from "./characters";
 
 export const studioPlaygroundRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
@@ -30,9 +31,12 @@ async function queueGeneration(raw: any, originClientId: string) {
   const mode = String(raw?.mode || "t2i");
   if (mode === "v2v") throw new Error("MiniMax H3 暂不支持视频参考或视频编辑");
   const generationMode = ["t2v", "i2v", "r2v"].includes(mode) ? "video" : "image";
+  const targetCharacterId = String(raw?.target_character_id || "").trim();
+  if (targetCharacterId && generationMode !== "image") throw new Error("角色资产库首期只支持图片生成");
+  if (targetCharacterId && !(await listCharacters()).some((character) => character.id === targetCharacterId)) throw new Error(`同步角色不存在：${targetCharacterId}`);
   const id = randomUUID(); const inputMedia = stringArray(raw?.input_media);
   for (const mediaUrl of inputMedia) if (!await resourceById(resourceIdFromUrl(mediaUrl))) throw new Error(`输入素材不在 Croco 本地资源库：${mediaUrl}`);
-  const history = { id, mode, model_id: String(raw?.model_id || (generationMode === "video" ? "minimax-h3" : models.image[0])), prompt: String(raw?.prompt || ""), negative_prompt: String(raw?.negative_prompt || ""), input_media: inputMedia, parameters: objectValue(raw?.parameters), batch_size: boundedCount(raw?.batch_size), outputs: [], status: "pending", created_at: new Date().toISOString(), canvas_project_id: project.id, canvas_node_ids: [], generation_job_id: id };
+  const history = { id, mode, model_id: String(raw?.model_id || (generationMode === "video" ? "minimax-h3" : models.image[0])), prompt: String(raw?.prompt || ""), negative_prompt: String(raw?.negative_prompt || ""), input_media: inputMedia, parameters: objectValue(raw?.parameters), batch_size: boundedCount(raw?.batch_size), outputs: [], status: "pending", created_at: new Date().toISOString(), canvas_project_id: project.id, canvas_node_ids: [], generation_job_id: id, ...(targetCharacterId ? { target_character_id: targetCharacterId } : {}) };
   await mutateStudioProject(project.id, (state) => ({ ...state, metadata: { ...state.metadata, playground: { ...readPlayground(state.metadata), history: [history, ...readPlayground(state.metadata).history].slice(0, 500) } } }), { originClientId });
   try {
     await createStudioGenerationJob({
@@ -73,7 +77,13 @@ async function processGeneration(projectId: string, id: string, raw: any, origin
   await updateHistory(projectId, id, { canvas_node_ids: [configId, ...inputNodes] }, originClientId);
   const result = await runCanvasConfigNodes({ projectId, configNodeIds: [configId], concurrency: 1, originClientId, signal }); const run = result.results[0];
   const final = await readProject(projectId) as any; const outputNodes = (run?.outputNodeIds || []).map((nodeId) => final.nodes.find((node: any) => node.id === nodeId)).filter(Boolean);
-  const patch = { outputs: outputNodes.map((node: any) => ({ id: node.id, media_path: String(node.metadata?.content || ""), media_type: generationMode, thumbnail_path: generationMode === "video" ? undefined : String(node.metadata?.content || "") })), status: run?.status === "success" ? "completed" : "failed", error: run?.error, canvas_node_ids: [configId, ...inputNodes, ...outputNodes.map((node: any) => node.id), ...(run?.toneNodeId ? [run.toneNodeId] : [])] };
+  const outputs = outputNodes.map((node: any) => ({ id: node.id, resource_id: String(node.metadata?.storageKey || ""), media_path: String(node.metadata?.content || ""), media_type: generationMode, thumbnail_path: generationMode === "video" ? undefined : String(node.metadata?.content || "") }));
+  if (run?.status === "success" && raw?.target_character_id) {
+    const resourceIds = outputs.map((output) => output.resource_id).filter(Boolean);
+    if (resourceIds.length !== outputs.length) throw new Error("生成结果缺少本地资源 ID，无法加入角色资产库");
+    await attachCharacterResources(String(raw.target_character_id), resourceIds, "generated");
+  }
+  const patch = { outputs, status: run?.status === "success" ? "completed" : "failed", error: run?.error, canvas_node_ids: [configId, ...inputNodes, ...outputNodes.map((node: any) => node.id), ...(run?.toneNodeId ? [run.toneNodeId] : [])] };
   await updateHistory(projectId, id, patch, originClientId);
   if (run?.status !== "success") throw new Error(run?.error || "创作台生成失败");
   } catch (error) {

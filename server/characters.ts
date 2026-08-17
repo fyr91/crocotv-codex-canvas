@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { addResources, atomicJson, fileSize, readJson, resourcesDir, typeFromMime } from "./storage";
+import { addResources, atomicJson, fileSize, listResources, readJson, resourcesDir, typeFromMime, updateResources } from "./storage";
 import type { CharacterEntry, StoredResource } from "./types";
 
 const charactersDir = path.join(resourcesDir, "characters");
 const indexPath = path.join(charactersDir, "index.json");
+const localOverridesPath = path.join(charactersDir, "local-overrides.json");
 
 type Catalog = {
   schemaVersion: number;
@@ -16,11 +17,73 @@ type Catalog = {
 
 export async function listCharacters(): Promise<CharacterEntry[]> {
   const index = await readJson<{ characters: any[] }>(indexPath, { characters: [] });
-  const resources = await import("./storage").then((module) => module.listResources());
+  const overrides = await readLocalOverrides();
+  const resources = await listResources();
   return index.characters.filter((item) => item.tts_voice_id).map((item) => {
     const avatar = resources.find((resource) => resource.source === "character" && resource.type === "image" && resource.metadata?.characterId === item.id);
-    return { id: item.id, name: item.name, chineseName: item.chinese_name, voiceId: item.tts_voice_id, directory: item.directory, avatarUrl: avatar?.url };
+    return { id: item.id, name: item.name, chineseName: item.chinese_name, voiceId: item.tts_voice_id, directory: item.directory, avatarUrl: avatar?.url, primaryResourceId: overrides.characters[item.id]?.primaryResourceId };
   });
+}
+
+export async function attachCharacterResources(characterId: string, resourceIds: string[], origin: "upload" | "generated" | "agent" = "upload") {
+  const character = await requiredCharacter(characterId);
+  const ids = [...new Set(resourceIds.map(String).filter(Boolean))];
+  if (!ids.length) throw new Error("至少需要一个角色资产");
+  const updated = await updateResources(ids, (resource) => {
+    if (!isCharacterMedia(resource)) throw new Error(`角色资产只支持图片、视频和音频：${resource.name}`);
+    const linkedIds = new Set(stringArray(resource.metadata?.characterLibraryCharacterIds));
+    const wasAlreadyLinked = linkedIds.has(characterId);
+    linkedIds.add(characterId);
+    return {
+      ...resource,
+      metadata: {
+        ...(resource.metadata || {}),
+        characterLibraryCharacterIds: [...linkedIds],
+        characterAssetOrigin: wasAlreadyLinked && resource.metadata?.characterAssetOrigin
+          ? resource.metadata.characterAssetOrigin
+          : origin,
+        characterName: character.chinese_name || character.name,
+      },
+    };
+  });
+  const overrides = await readLocalOverrides();
+  if (!overrides.characters[characterId]?.primaryResourceId) {
+    const hasOriginalImage = (await listResources()).some((resource) => resource.source === "character" && resource.type === "image" && resource.metadata?.characterId === characterId);
+    const firstAttachedImage = updated.find((resource) => resource.type === "image" || resource.mimeType.startsWith("image/"));
+    if (!hasOriginalImage && firstAttachedImage) await writePrimaryOverride(characterId, firstAttachedImage.id);
+  }
+  return updated;
+}
+
+export async function detachCharacterResource(characterId: string, resourceId: string) {
+  await requiredCharacter(characterId);
+  const [updated] = await updateResources([resourceId], (resource) => {
+    if (resource.source === "character" && resource.metadata?.characterId === characterId) throw new Error("同步角色原始资产不可移除");
+    const linkedIds = stringArray(resource.metadata?.characterLibraryCharacterIds);
+    if (!linkedIds.includes(characterId)) throw new Error("资产未关联到该角色");
+    const remaining = linkedIds.filter((id) => id !== characterId);
+    const metadata = { ...(resource.metadata || {}) };
+    if (remaining.length) metadata.characterLibraryCharacterIds = remaining;
+    else {
+      delete metadata.characterLibraryCharacterIds;
+      delete metadata.characterAssetOrigin;
+      delete metadata.characterName;
+    }
+    return { ...resource, metadata };
+  });
+  const overrides = await readLocalOverrides();
+  if (overrides.characters[characterId]?.primaryResourceId === resourceId) await writePrimaryOverride(characterId, undefined);
+  return updated;
+}
+
+export async function setCharacterPrimaryImage(characterId: string, resourceId: string) {
+  await requiredCharacter(characterId);
+  const resource = (await listResources()).find((item) => item.id === resourceId);
+  const belongsToCharacter = (resource?.source === "character" && resource.metadata?.characterId === characterId)
+    || stringArray(resource?.metadata?.characterLibraryCharacterIds).includes(characterId);
+  if (!resource || resource.type !== "image" || !belongsToCharacter) throw new Error("主图必须来自当前角色的图片资产");
+  await writePrimaryOverride(characterId, resourceId);
+  return { characterId, primaryResourceId: resourceId };
 }
 
 export async function syncCharacters() {
@@ -106,6 +169,36 @@ async function writeIfChanged(target: string, content: string) {
   await writeFile(temporary, content);
   await rename(temporary, target);
   return true;
+}
+
+type LocalOverrides = { characters: Record<string, { primaryResourceId?: string }> };
+
+async function readLocalOverrides(): Promise<LocalOverrides> {
+  return readJson<LocalOverrides>(localOverridesPath, { characters: {} });
+}
+
+async function writePrimaryOverride(characterId: string, primaryResourceId: string | undefined) {
+  const overrides = await readLocalOverrides();
+  const characters = { ...overrides.characters };
+  if (primaryResourceId) characters[characterId] = { ...characters[characterId], primaryResourceId };
+  else delete characters[characterId];
+  await atomicJson(localOverridesPath, { characters });
+}
+
+async function requiredCharacter(characterId: string) {
+  const index = await readJson<{ characters: any[] }>(indexPath, { characters: [] });
+  const character = index.characters.find((item) => item.id === characterId);
+  if (!character) throw new Error(`同步角色不存在：${characterId}`);
+  return character;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+function isCharacterMedia(resource: StoredResource) {
+  return resource.type === "image" || resource.type === "video" || resource.type === "audio"
+    || resource.mimeType.startsWith("image/") || resource.mimeType.startsWith("video/") || resource.mimeType.startsWith("audio/");
 }
 
 function safeSegment(value: unknown) { const segment = String(value || "").trim(); if (!segment || segment === "." || segment === ".." || /[\\/\0]/.test(segment)) throw new Error("非法角色目录名"); return segment; }

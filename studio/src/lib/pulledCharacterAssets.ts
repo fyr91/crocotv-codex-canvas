@@ -7,6 +7,7 @@ export interface PulledCharacterCatalogEntry {
   voiceId?: string;
   directory?: string;
   avatarUrl?: string;
+  primaryResourceId?: string;
 }
 
 export interface PulledCharacterResource {
@@ -23,12 +24,15 @@ export interface PulledCharacterResource {
     characterId?: string;
     characterName?: string;
     assetKey?: string;
+    characterLibraryCharacterIds?: string[];
+    characterAssetOrigin?: "upload" | "generated" | "agent";
     [key: string]: unknown;
   };
 }
 
 /**
- * Studio 资产库中的同步角色视图。它只引用统一资源库，不复制文件，也不写入项目。
+ * Studio 资产库中的同步角色视图。它引用统一资源库，并允许用本地图片、视频和音频扩充角色；
+ * 仍然不复制文件，也不写入具体项目。
  */
 export interface PulledCharacterAsset extends Character {
   library_origin: "pulled-character";
@@ -68,12 +72,16 @@ export function buildPulledCharacterAssets(
 ): PulledCharacterAsset[] {
   const byCharacter = new Map<string, PulledCharacterResource[]>();
   for (const resource of resources) {
-    if (resource.source !== "character") continue;
-    const characterId = resource.metadata?.characterId;
-    if (!characterId) continue;
-    const entries = byCharacter.get(characterId) ?? [];
-    entries.push(resource);
-    byCharacter.set(characterId, entries);
+    const characterIds = new Set<string>();
+    if (resource.source === "character" && resource.metadata?.characterId) characterIds.add(resource.metadata.characterId);
+    if (resource.metadata?.characterAssetOrigin) {
+      for (const characterId of resource.metadata.characterLibraryCharacterIds ?? []) characterIds.add(characterId);
+    }
+    characterIds.forEach((characterId) => {
+      const entries = byCharacter.get(characterId) ?? [];
+      entries.push(resource);
+      byCharacter.set(characterId, entries);
+    });
   }
 
   return catalog.map((entry) => {
@@ -82,13 +90,15 @@ export function buildPulledCharacterAssets(
     );
     const images = characterResources
       .filter((resource) => resource.type === "image")
-      .sort((a, b) => imageRank(a) - imageRank(b) || a.name.localeCompare(b.name, "zh"));
+      .sort((a, b) => Number(b.id === entry.primaryResourceId) - Number(a.id === entry.primaryResourceId)
+        || imageRank(a) - imageRank(b)
+        || a.name.localeCompare(b.name, "zh"));
     const variants: ImageVariant[] = images.map((resource) => ({
       id: resource.id,
       url: resource.url,
       created_at: createdAtSeconds(resource),
     }));
-    const selectedImage = images[0];
+    const selectedImage = images.find((resource) => resource.id === entry.primaryResourceId) ?? images[0];
     const displayName = entry.chineseName?.trim() || entry.name;
 
     return {

@@ -9,7 +9,7 @@ import { resourceThumbnail, thumbnailSize } from "./thumbnails";
 import { generateH3Video, generateImage, generateMusic, generateText, models } from "./providers";
 import { prepareH3Prompt } from "./h3-prompt";
 import { generateSpeech, type SpeechGenerationProgress } from "./speech";
-import { listCharacters, syncCharacters } from "./characters";
+import { attachCharacterResources, detachCharacterResource, listCharacters, setCharacterPrimaryImage, syncCharacters } from "./characters";
 import { startSunoCallbackService, sunoCallbackState } from "./suno-callback";
 import { applyCanvasOperations, type CanvasOperation } from "./canvas-commands";
 import { openProjectEventStream, publishProjectUpdated } from "./canvas-events";
@@ -180,6 +180,13 @@ app.get("/files/by-id/:id", asyncHandler(async (request, response) => {
 
 app.get("/api/characters", asyncHandler(async (_request, response) => response.json(await listCharacters())));
 app.post("/api/characters/sync", asyncHandler(async (_request, response) => response.json(await syncCharacters())));
+app.post("/api/characters/:id/resources", asyncHandler(async (request, response) => response.status(201).json(await attachCharacterResources(
+  param(request.params.id),
+  Array.isArray(request.body?.resourceIds) ? request.body.resourceIds : [request.body?.resourceId],
+  request.body?.origin === "generated" || request.body?.origin === "agent" ? request.body.origin : "upload",
+))));
+app.delete("/api/characters/:id/resources/:resourceId", asyncHandler(async (request, response) => response.json(await detachCharacterResource(param(request.params.id), param(request.params.resourceId)))));
+app.put("/api/characters/:id/primary-image", asyncHandler(async (request, response) => response.json(await setCharacterPrimaryImage(param(request.params.id), requiredText(request.body?.resourceId, "图片资源 ID")))));
 
 app.post("/api/generate/text", asyncHandler(async (request, response) => response.json({ text: await generateText(requiredText(request.body?.prompt, "Prompt"), String(request.body?.model || ""), Array.isArray(request.body?.inputResourceIds) ? request.body.inputResourceIds : [], Array.isArray(request.body?.inputDataUrls) ? request.body.inputDataUrls : [], String(request.body?.systemPrompt || "")) })));
 app.post("/api/generate/image", asyncHandler(async (request, response) => response.json({ resource: await generateImage({ ...request.body, prompt: requiredText(request.body?.prompt, "图片 Prompt") }) })));

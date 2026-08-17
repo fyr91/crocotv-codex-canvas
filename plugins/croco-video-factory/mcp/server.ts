@@ -450,6 +450,30 @@ server.registerTool("canvas_sync_characters", {
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
 }, async () => toolResult(await api("/api/characters/sync", { method: "POST" })));
 
+server.registerTool("canvas_attach_character_assets", {
+  description: "Attach existing local image, video, or audio resources to one synchronized character. Use canvas_import_resource or a Canvas generation tool first; media files remain single-copy resources shared by Canvas and Studio.",
+  inputSchema: { characterId: z.string().min(1).max(80), resourceIds: z.array(z.string().min(1).max(80)).min(1).max(20), primaryResourceId: z.string().min(1).max(80).optional() },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ characterId, resourceIds, primaryResourceId }) => {
+  const attached = await api(`/api/characters/${encodeURIComponent(characterId)}/resources`, { method: "POST", body: { resourceIds, origin: "agent" } });
+  const primary = primaryResourceId
+    ? await api(`/api/characters/${encodeURIComponent(characterId)}/primary-image`, { method: "PUT", body: { resourceId: primaryResourceId } })
+    : undefined;
+  return toolResult({ attached, primary });
+});
+
+server.registerTool("canvas_detach_character_asset", {
+  description: "Remove one user-uploaded or generated image, video, or audio asset from a synchronized character without deleting the single-copy resource or its Canvas provenance. Synchronized source assets are protected.",
+  inputSchema: { characterId: z.string().min(1).max(80), resourceId: z.string().min(1).max(80) },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+}, async ({ characterId, resourceId }) => toolResult(await api(`/api/characters/${encodeURIComponent(characterId)}/resources/${encodeURIComponent(resourceId)}`, { method: "DELETE" })));
+
+server.registerTool("canvas_set_character_primary_image", {
+  description: "Choose one image already attached to a synchronized character as its primary image in the shared Studio asset library.",
+  inputSchema: { characterId: z.string().min(1).max(80), resourceId: z.string().min(1).max(80) },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async ({ characterId, resourceId }) => toolResult(await api(`/api/characters/${encodeURIComponent(characterId)}/primary-image`, { method: "PUT", body: { resourceId } })));
+
 server.registerTool("canvas_import_resource", {
   description: "Copy a file from this repository into the unified local resource library. The source file must be inside the CrocoTV workspace.",
   inputSchema: { filePath: z.string().min(1), title: z.string().max(180).optional() },

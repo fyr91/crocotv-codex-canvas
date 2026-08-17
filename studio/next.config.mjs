@@ -20,8 +20,16 @@ const nextConfig = {
                 destination: `${CROCO_API_ORIGIN}/api/characters`,
             },
             {
+                source: '/api/characters/:path*',
+                destination: `${CROCO_API_ORIGIN}/api/characters/:path*`,
+            },
+            {
                 source: '/api/resources',
                 destination: `${CROCO_API_ORIGIN}/api/resources`,
+            },
+            {
+                source: '/api/resources/:path*',
+                destination: `${CROCO_API_ORIGIN}/api/resources/:path*`,
             },
             {
                 source: '/api-proxy/:path*',

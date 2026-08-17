@@ -242,7 +242,7 @@ export default function AssetLibraryPage() {
         : k === "episode"
           ? t("episode")
           : k === "character-library"
-            ? t("readOnlySource")
+            ? t("characterLibrary")
             : t("project");
     return sources
       .map((src): RenderGroup => {
@@ -517,7 +517,7 @@ export default function AssetLibraryPage() {
                       const isSel = selected?.sourceId === src.id && selected?.assetId === asset.id && selected?.type === type;
                       const isStar = !!asset.starred;
                       const isChar = type === "characters";
-                      const isReadOnly = src.kind === "character-library";
+                      const isCharacterLibrary = src.kind === "character-library";
                       return (
                         <div
                           key={`${type}-${asset.id}`}
@@ -578,8 +578,8 @@ export default function AssetLibraryPage() {
                               <div className="pointer-events-none absolute inset-0 shadow-none" aria-hidden="true" />
                             )}
                             {/* top row: star chip + variant chip */}
-                            <div className={`absolute top-2 left-2 right-2 flex items-center ${isReadOnly ? "justify-end" : "justify-between"}`}>
-                              {!isReadOnly && (
+                            <div className={`absolute top-2 left-2 right-2 flex items-center ${isCharacterLibrary ? "justify-end" : "justify-between"}`}>
+                              {!isCharacterLibrary && (
                                 <button
                                   type="button"
                                   aria-label={isStar ? t("unstar") : t("star")}
@@ -604,9 +604,9 @@ export default function AssetLibraryPage() {
                                 </span>
                               )}
                             </div>
-                            {isReadOnly && (
+                            {isCharacterLibrary && (
                               <span className="absolute bottom-2 left-2 whitespace-nowrap px-2 py-[3px] rounded-full font-mono text-sm font-medium text-white bg-black/55 backdrop-blur-md tracking-wide">
-                                {t("readOnlyBadge")}
+                                {t("syncedBadge")}
                               </span>
                             )}
                             {/* kind chip（仅「按项目」视图 + 「全部」类型下显示，告知卡片类型） */}
@@ -645,6 +645,7 @@ export default function AssetLibraryPage() {
             starred={!!selectedAsset.starred}
             onClose={() => setSelected(null)}
             onToggleStar={() => toggleStar(selected.sourceId, selected.assetId, selected.type)}
+            onLibraryChanged={loadAssets}
           />
         )}
       </div>

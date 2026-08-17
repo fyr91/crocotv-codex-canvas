@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { X, Star, Download, Sparkles, Loader2 } from "lucide-react";
+import { X, Star, Download, Sparkles, Loader2, Upload, Trash2 } from "lucide-react";
 import type { Character, Scene, Prop, ImageAsset, ImageVariant } from "@/store/projectStore";
 import { characterImageAsset } from "@/lib/characterImage";
 import { api } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { coverGradient, GRAIN_URL } from "@/lib/atelierCover";
-import { isPulledCharacterAsset } from "@/lib/pulledCharacterAssets";
+import { isPulledCharacterAsset, type PulledCharacterResource } from "@/lib/pulledCharacterAssets";
+import CharacterImageGenerationModal from "./CharacterImageGenerationModal";
 
 type AssetTab = "characters" | "scenes" | "props";
 
@@ -24,17 +25,22 @@ const VARIANT_BATCH = 3;
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_ATTEMPTS = 150;
 
+function canDetachCharacterResource(resource: PulledCharacterResource | undefined) {
+  return Boolean(resource?.metadata?.characterAssetOrigin);
+}
+
 interface AssetInspectorProps {
   asset: Character | Scene | Prop;
   type: AssetTab;
   sourceName: string;
   /** 裸 series/project id（调生成/刷新 API 用）。 */
   sourceId: string;
-  /** 同步角色库只读；系列资产无生成端点；独立项目和剧集资产均走项目生成端点。 */
+  /** 同步角色库走本地补充流程；系列资产无生成端点；独立项目和剧集资产均走项目生成端点。 */
   sourceKind: "series" | "project" | "episode" | "character-library";
   starred: boolean;
   onClose: () => void;
   onToggleStar: () => void;
+  onLibraryChanged: () => Promise<void> | void;
 }
 
 /** Character 走 characterImageAsset（reference_sheet→full_body，归一化成 ImageAsset 形状）；scene/prop 用 image_asset。 */
@@ -90,6 +96,7 @@ export default function AssetInspector({
   starred,
   onClose,
   onToggleStar,
+  onLibraryChanged,
 }: AssetInspectorProps) {
   const t = useTranslations("library");
   const pulledCharacter = isPulledCharacterAsset(asset) ? asset : undefined;
@@ -122,6 +129,10 @@ export default function AssetInspector({
   const defaultId = imageAsset?.selected_id ?? baseVariants[0]?.id ?? null;
   const [activeVariantId, setActiveVariantId] = useState<string | null>(defaultId);
   const [generating, setGenerating] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [showCharacterGenerator, setShowCharacterGenerator] = useState(false);
+  const generatorOpenRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 切换选中资产时重置本地高亮的变体 + 丢弃上一个资产本地追加的变体。
   useEffect(() => {
@@ -135,6 +146,9 @@ export default function AssetInspector({
   useEffect(() => {
     currentAssetIdRef.current = asset.id;
   }, [asset.id]);
+  useEffect(() => {
+    generatorOpenRef.current = showCharacterGenerator;
+  }, [showCharacterGenerator]);
   useEffect(() => {
     aliveRef.current = true;
     return () => {
@@ -152,7 +166,7 @@ export default function AssetInspector({
     const previouslyFocused = document.activeElement as HTMLElement | null;
     asideRef.current?.focus();
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape" && !generatorOpenRef.current) onCloseRef.current();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -164,6 +178,9 @@ export default function AssetInspector({
   const activeVariant = variants.find((v) => v.id === activeVariantId) ?? variants[0];
   const heroUrl = activeVariant?.url ?? fallbackUrl(asset, type);
   const prompt = activeVariant?.prompt_used ?? "";
+  const activePulledResource = pulledResources.find((resource) => resource.id === activeVariant?.id);
+  const canDetachActiveImage = canDetachCharacterResource(activePulledResource);
+  const isPrimaryImage = pulledCharacter?.reference_sheet?.selected_image_id === activeVariant?.id;
 
   // 元数据行（数据驱动）：先放现有四项，再在字段存在时追加 SEED/MODEL/SIZE。
   // 后端 TODO：当前 ImageVariant 仅 id/url/created_at/prompt_used，资产无 seed/model/size，
@@ -207,6 +224,51 @@ export default function AssetInspector({
     } catch {
       // 跨域(CORS)/网络失败：download 属性对跨域 URL 无效，退回到新标签打开。
       window.open(heroUrl, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const handleCharacterAssetUpload = async (file: File | undefined) => {
+    if (!pulledCharacter || !file || uploading) return;
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/") && !file.type.startsWith("audio/")) {
+      toast.error(t("uploadAssetFailed"), { body: t("characterMediaOnly") });
+      return;
+    }
+    setUploading(true);
+    const tid = toast.progress(t("uploadingAsset"), { body: file.name });
+    try {
+      const resource = await api.uploadPulledCharacterResource(pulledCharacter.id, file);
+      await onLibraryChanged();
+      if (resource.type === "image") setActiveVariantId(resource.id);
+      toast.update(tid, { kind: "success", title: t("assetUploaded"), body: t("assetAddedToCharacter", { name: pulledCharacter.name }), autoCloseMs: 4000 });
+    } catch (reason) {
+      toast.update(tid, { kind: "error", title: t("uploadAssetFailed"), body: reason instanceof Error ? reason.message : String(reason), autoCloseMs: 0 });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSetPrimaryImage = async () => {
+    if (!pulledCharacter || !activeVariant) return;
+    try {
+      await api.setPulledCharacterPrimaryImage(pulledCharacter.id, activeVariant.id);
+      await onLibraryChanged();
+      toast.success(t("primaryImageUpdated"));
+    } catch (reason) {
+      toast.error(t("primaryImageUpdateFailed"), { body: reason instanceof Error ? reason.message : String(reason) });
+    }
+  };
+
+  const handleDetachResource = async (resource: PulledCharacterResource | undefined) => {
+    if (!pulledCharacter || !resource || !canDetachCharacterResource(resource)) return;
+    if (!window.confirm(t("removeCharacterAssetConfirm", { name: resource.name }))) return;
+    try {
+      await api.detachPulledCharacterResource(pulledCharacter.id, resource.id);
+      if (resource.type === "image" && activeVariant?.id === resource.id) setActiveVariantId(null);
+      await onLibraryChanged();
+      toast.success(t("characterAssetRemoved"));
+    } catch (reason) {
+      toast.error(t("characterAssetRemoveFailed"), { body: reason instanceof Error ? reason.message : String(reason) });
     }
   };
 
@@ -323,7 +385,7 @@ export default function AssetInspector({
         )}
         {pulledCharacter ? (
           <span className="absolute top-3 left-3 inline-flex items-center px-3 py-1.5 rounded-full font-mono text-sm font-medium uppercase tracking-[0.1em] text-white bg-black/50 backdrop-blur-md border border-white/10">
-            {t("readOnlyBadge")}
+            {t("syncedBadge")}
           </span>
         ) : (
           <button
@@ -387,6 +449,18 @@ export default function AssetInspector({
                 );
               })}
             </div>
+            {pulledCharacter && activeVariant && (
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={handleSetPrimaryImage} disabled={isPrimaryImage} className="flex-1 rounded-lg border border-glass-border bg-surface-inset px-2.5 py-2 text-sm text-text-secondary transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-50">
+                  {isPrimaryImage ? t("currentPrimaryImage") : t("setPrimaryImage")}
+                </button>
+                {canDetachActiveImage && (
+                  <button type="button" onClick={() => void handleDetachResource(activePulledResource)} aria-label={t("removeCharacterAsset", { name: activePulledResource?.name ?? asset.name })} className="grid h-9 w-9 place-items-center rounded-lg border border-status-error-border bg-status-error-bg text-status-error-fg transition-colors hover:opacity-80">
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -405,7 +479,14 @@ export default function AssetInspector({
                     className="w-full aspect-video bg-black object-contain"
                     aria-label={resource.name}
                   />
-                  <div className="px-3 py-2 text-sm text-text-secondary truncate">{resource.name}</div>
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <div className="min-w-0 flex-1 truncate text-sm text-text-secondary">{resource.name}</div>
+                    {canDetachCharacterResource(resource) && (
+                      <button type="button" onClick={() => void handleDetachResource(resource)} aria-label={t("removeCharacterAsset", { name: resource.name })} className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-md text-status-error-fg transition-colors hover:bg-status-error-bg">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -420,7 +501,14 @@ export default function AssetInspector({
             <div className="flex flex-col gap-2.5">
               {pulledAudio.map((resource) => (
                 <div key={resource.id} className="rounded-lg border border-glass-border bg-surface-inset px-3 py-2.5">
-                  <div className="text-sm text-text-secondary truncate mb-2">{resource.name}</div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="min-w-0 flex-1 truncate text-sm text-text-secondary">{resource.name}</div>
+                    {canDetachCharacterResource(resource) && (
+                      <button type="button" onClick={() => void handleDetachResource(resource)} aria-label={t("removeCharacterAsset", { name: resource.name })} className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-md text-status-error-fg transition-colors hover:bg-status-error-bg">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                   <audio src={resource.url} controls preload="none" className="w-full h-8" aria-label={resource.name} />
                 </div>
               ))}
@@ -465,10 +553,18 @@ export default function AssetInspector({
           项目内进行），故置灰并提示在剧集内生成。「用于分镜」按钮已移除（占位、无落地路径）。
         */}
         <div className="flex flex-col gap-2">
-          {sourceKind === "character-library" ? (
-            <div className="rounded-lg border border-glass-border bg-surface-inset px-3.5 py-3 text-sm leading-relaxed text-text-secondary">
-              {t("readOnlyHint")}
-            </div>
+          {sourceKind === "character-library" && pulledCharacter ? (
+            <>
+              <button type="button" onClick={() => setShowCharacterGenerator(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-on-accent text-sm font-medium hover:bg-primary-hover transition-colors">
+                <Sparkles size={15} />
+                {t("generateMoreVariants")}
+              </button>
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-surface-inset border border-glass-border text-foreground text-sm font-medium hover:bg-hover-bg transition-colors disabled:opacity-50">
+                {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                {uploading ? t("uploadingAsset") : t("uploadAsset")}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*" className="sr-only" onChange={(event) => void handleCharacterAssetUpload(event.target.files?.[0])} />
+            </>
           ) : sourceKind !== "series" ? (
             <button
               type="button"
@@ -505,6 +601,13 @@ export default function AssetInspector({
           </button>
         </div>
       </div>
+      {showCharacterGenerator && pulledCharacter && (
+        <CharacterImageGenerationModal
+          character={pulledCharacter}
+          onClose={() => setShowCharacterGenerator(false)}
+          onCompleted={onLibraryChanged}
+        />
+      )}
     </aside>
   );
 }
