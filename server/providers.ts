@@ -69,7 +69,8 @@ async function releaseModelAssetLeases(leases: ModelAssetLease[]) {
   await Promise.allSettled(leases.map((lease) => lease.release()));
 }
 
-export async function generateMusic(input: { prompt: string; model?: string; params?: Record<string, unknown> }) {
+export async function generateMusic(input: { prompt: string; model?: string; params?: Record<string, unknown>; signal?: AbortSignal; onProgress?: (progress: GpuJobProgress) => void | Promise<void> }) {
+  if (input.model === "minimax-music-3") return generateMiniMaxMusic3(input);
   const baseUrl = (process.env.SUNO_BASE_URL || "https://api.sunoapi.org").replace(/\/$/, "");
   const apiKey = required("SUNO_API_KEY");
   const params = input.params || {};
@@ -78,7 +79,7 @@ export async function generateMusic(input: { prompt: string; model?: string; par
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       prompt: input.prompt,
-      model: input.model || models.music,
+      model: input.model || models.music[0],
       customMode: Boolean(params.customMode),
       instrumental: Boolean(params.instrumental),
       callBackUrl: await getSunoCallbackUrl(),
@@ -124,6 +125,65 @@ export async function generateMusic(input: { prompt: string; model?: string; par
   }
   if (!resources.length) throw new Error("Suno 音乐任务成功，但没有返回音频");
   return resources;
+}
+
+export function buildMusic3JobPayload(input: { prompt: string; params?: Record<string, unknown> }) {
+  const params = input.params || {};
+  const caption = String(params.style || params.caption || params.title || "").trim();
+  if (!caption) throw new Error("MiniMax Music 3 需要音乐描述");
+  const instrumental = Boolean(params.instrumental);
+  const lyrics = instrumental ? "" : String(params.lyrics ?? input.prompt ?? "").trim();
+  const maxDuration = Number(params.maxDuration ?? params.max_duration ?? 120);
+  if (!Number.isFinite(maxDuration) || maxDuration < 0.04 || maxDuration > 360) throw new Error("MiniMax Music 3 时长必须为 0.04–360 秒");
+  const seed = Number(params.seed ?? 0);
+  if (!Number.isSafeInteger(seed) || seed < 0) throw new Error("MiniMax Music 3 Seed 必须为非负整数");
+  const outputFormat = String(params.outputFormat || params.output_format || "mp3").toLowerCase();
+  if (!["mp3", "wav"].includes(outputFormat)) throw new Error("MiniMax Music 3 输出格式只支持 mp3 或 wav");
+  return {
+    caption,
+    lyrics,
+    max_duration: maxDuration,
+    seed,
+    tiled_decode: Boolean(params.tiledDecode ?? params.tiled_decode),
+    output_format: outputFormat,
+  };
+}
+
+async function generateMiniMaxMusic3(input: { prompt: string; params?: Record<string, unknown>; signal?: AbortSignal; onProgress?: (progress: GpuJobProgress) => void | Promise<void> }) {
+  const parameters = buildMusic3JobPayload(input);
+  const created = await submitUnifiedGpuJob({
+    modelId: "minimax-music-3",
+    operation: "audio.generate",
+    contractVersion: "1",
+    parameters,
+    signal: input.signal,
+  });
+  await input.onProgress?.({ stage: "submitted", jobId: created.job_id, outputIndex: 0, progress: 0, label: "MiniMax Music 3 任务已提交" });
+  try {
+    await waitForUnifiedGpuJob({ job: created, signal: input.signal, onProgress: input.onProgress });
+  } catch (error) {
+    if (input.signal?.aborted) await cancelUnifiedGpuJob(created.job_id).catch(() => undefined);
+    throw error;
+  }
+  const outputs = await listUnifiedGpuOutputs(created.job_id, input.signal);
+  const output = outputs.find((item) => item.output_type === "audio" && item.delivery_state === "ready");
+  if (!output) throw new Error("MiniMax Music 3 任务成功，但没有返回音频");
+  const audio = await downloadUnifiedGpuOutput(created.job_id, output.output_id, input.signal);
+  const extension = extensionForMime(audio.mimeType, parameters.output_format);
+  const stored = await writeGenerated("minimax-music3", extension, audio.bytes);
+  const title = String(input.params?.title || "MiniMax Music 3").trim() || "MiniMax Music 3";
+  const resource = await addResource({
+    id: stored.id,
+    name: `${title}.${extension}`,
+    type: "audio",
+    mimeType: audio.mimeType,
+    size: await fileSize(stored.target),
+    fileName: stored.fileName,
+    createdAt: new Date().toISOString(),
+    source: "minimax-music3",
+    metadata: { model: "minimax-music-3", jobId: created.job_id, duration: parameters.max_duration, caption: parameters.caption, instrumental: !parameters.lyrics, seed: parameters.seed },
+  });
+  return [resource];
 }
 
 export async function generateImage(input: { prompt: string; model: string; width?: number; height?: number; referenceResourceIds?: string[]; signal?: AbortSignal }) {

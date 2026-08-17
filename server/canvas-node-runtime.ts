@@ -143,7 +143,7 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
     if (inputs.imageIds.length > 1) throw new Error("LTX 2.5 每次只接受一张首帧或 Ingredients 参考图");
     if (String(config.metadata?.videoInputMode || "text") === "firstFrame" && inputs.imageIds.length !== 1) throw new Error("LTX 2.5 首帧生视频需要连接一张首帧图片");
   }
-  const count = targetOutputNodeIds?.length || generationCount(config, mode);
+  const count = targetOutputNodeIds?.length || generationCount(config, mode, model);
   const outputType = mode === "audio" ? "audio" : mode;
   const outputIds = targetOutputNodeIds?.length ? [...new Set(targetOutputNodeIds)] : Array.from({ length: count }, () => randomUUID());
   const inputSnapshot = resolvedInputSnapshot(inputs);
@@ -281,6 +281,8 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
       const resources = await generateMusic({
         prompt: String(config.metadata?.musicLyrics || inputs.prompt),
         model,
+        signal,
+        onProgress: (progress) => signal?.aborted ? undefined : publishMusicProgress(projectId, config.id, outputIds, progress, originClientId, remoteOperation, operationId),
         params: {
           customMode: true,
           instrumental: Boolean(config.metadata?.musicInstrumental),
@@ -290,12 +292,13 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
           vocalGender: config.metadata?.musicVocalGender,
           styleWeight: config.metadata?.musicStyleWeight,
           weirdnessConstraint: config.metadata?.musicWeirdnessConstraint,
+          maxDuration: config.metadata?.musicMaxDuration,
         },
       });
       signal?.throwIfAborted();
       const settled = outputIds.map((_, index) => resources[index]
         ? ({ status: "fulfilled", value: resources[index] } as PromiseFulfilledResult<StoredResource>)
-        : ({ status: "rejected", reason: new Error("Suno 未返回该音乐结果") } as PromiseRejectedResult));
+        : ({ status: "rejected", reason: new Error(`${model} 未返回该音乐结果`) } as PromiseRejectedResult));
       const failure = await finishResourceOutputs(projectId, config.id, outputIds, settled, originClientId);
       if (failure) return { configNodeId, outputNodeIds: outputIds, status: "error", error: failure };
     }
@@ -466,6 +469,25 @@ async function publishVideoProgress(projectId: string, configNodeId: string, out
   ], originClientId);
 }
 
+async function publishMusicProgress(projectId: string, configNodeId: string, outputIds: string[], progress: H3GenerationProgress, originClientId: string, remoteOperation: boolean, operationId?: string) {
+  const outputNodeId = outputIds[progress.outputIndex];
+  if (!outputNodeId) return;
+  const generationState = progress.stage === "queued" || progress.stage === "submitted" ? "queued" : "running";
+  const metadata = {
+    generationJobId: progress.jobId,
+    generationStage: progress.stage,
+    generationState,
+    ...(progress.progress != null ? { generationProgress: progress.progress } : {}),
+    remoteOperationActive: remoteOperation,
+    remoteOperationId: remoteOperation ? operationId : null,
+    remoteOperationLabel: progress.label,
+  };
+  await mutateAndPublish(projectId, [
+    { op: "update_node", nodeId: configNodeId, patch: { metadata } },
+    { op: "update_node", nodeId: outputNodeId, patch: { metadata } },
+  ], originClientId);
+}
+
 async function mutateAndPublish(projectId: string, operations: CanvasOperation[], originClientId: string) {
   // This runtime is the canonical internal execution path for both free Canvas
   // nodes and Studio-projected nodes. Studio semantic writes remain blocked at
@@ -502,11 +524,11 @@ function generationMode(node: CanvasNode): GenerationMode { const value = String
 function nodeText(node: CanvasNode) { return node.type === "text" ? String(node.metadata?.content || node.metadata?.prompt || "").trim() : ""; }
 function systemNodeText(node: CanvasNode) { return node.type === "text" ? String(node.metadata?.content || node.metadata?.prompt || "") : ""; }
 function mediaKind(node: CanvasNode): "image" | "video" | "audio" | undefined { if (node.type === "image") return "image"; if (node.type === "video") return "video"; if (node.type === "audio" || node.type === "music") return "audio"; return undefined; }
-function normalizeModel(value: string) { const decoded = value.includes("::") ? value.slice(value.indexOf("::") + 2) : value; const aliases: Record<string, string> = { "volc-doubao-turbo": models.volcengineLlm[0], "volc-deepseek-flash": models.volcengineLlm[1], "deepseek-v4-flash-260425": models.volcengineLlm[1], "volc-deepseek-pro": models.volcengineLlm[2], "bigmodel-glm-52": models.bigmodelLlm[0], "bigmodel-glm-5v": models.bigmodelLlm[1], "runware-gemini-pro": models.runwareLlm[0], "runware-gemini-flash": models.runwareLlm[1], "runware-gemini-flash-lite": models.runwareLlm[2], "runware-lite": models.image[0], "runware-nano": models.image[1], "runware-gpt-image-02": models.image[2], "ernie-image-turbo": "ernie-image-turbo", "minimax-h3": "minimax-h3", "minimax-h3-r2v": "minimax-h3", "ltx-2.5": "ltx-2.5", "volc-speech": "volcengine:seed-tts-2.0-expressive", "suno-music": String(models.music) }; return aliases[decoded] || decoded; }
+function normalizeModel(value: string) { const decoded = value.includes("::") ? value.slice(value.indexOf("::") + 2) : value; const aliases: Record<string, string> = { "volc-doubao-turbo": models.volcengineLlm[0], "volc-deepseek-flash": models.volcengineLlm[1], "deepseek-v4-flash-260425": models.volcengineLlm[1], "volc-deepseek-pro": models.volcengineLlm[2], "bigmodel-glm-52": models.bigmodelLlm[0], "bigmodel-glm-5v": models.bigmodelLlm[1], "runware-gemini-pro": models.runwareLlm[0], "runware-gemini-flash": models.runwareLlm[1], "runware-gemini-flash-lite": models.runwareLlm[2], "runware-lite": models.image[0], "runware-nano": models.image[1], "runware-gpt-image-02": models.image[2], "ernie-image-turbo": "ernie-image-turbo", "minimax-h3": "minimax-h3", "minimax-h3-r2v": "minimax-h3", "ltx-2.5": "ltx-2.5", "minimax-music-3": "minimax-music-3", "volc-speech": "volcengine:seed-tts-2.0-expressive", "suno-music": models.music[0] }; return aliases[decoded] || decoded; }
 function speechToneModel() { const configured = process.env.TTS_TONE_MODEL || "deepseek-v4-flash-ga-260731"; return configured === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : configured; }
-function validateModel(mode: GenerationMode, model: string) { if (!model) throw new Error("生成模组必须指定模型"); if (mode === "text" && ![...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(model)) throw new Error(`模型 ${model} 不是可用的文字模型`); if (mode === "image" && !models.image.includes(model)) throw new Error(`模型 ${model} 不是可用的图片模型`); if (mode === "video" && !models.video.includes(model)) throw new Error(`模型 ${model} 不是可用的视频模型`); }
+function validateModel(mode: GenerationMode, model: string) { if (!model) throw new Error("生成模组必须指定模型"); if (mode === "text" && ![...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(model)) throw new Error(`模型 ${model} 不是可用的文字模型`); if (mode === "image" && !models.image.includes(model)) throw new Error(`模型 ${model} 不是可用的图片模型`); if (mode === "video" && !models.video.includes(model)) throw new Error(`模型 ${model} 不是可用的视频模型`); if (mode === "music" && !models.music.includes(model)) throw new Error(`模型 ${model} 不是可用的音乐模型`); }
 function textResourceIdsForModel(model: string, inputs: ResolvedInput) { if (models.runwareLlm.includes(model)) return [...inputs.imageIds, ...inputs.videoIds, ...inputs.audioIds]; if (model === "glm-5v-turbo") return [...inputs.imageIds, ...inputs.videoIds]; if (model === "doubao-seed-2-1-turbo-260628") return inputs.imageIds; return []; }
-function generationCount(node: CanvasNode, mode: GenerationMode) { if (mode === "audio") return 1; if (mode === "music") return 2; const value = Number(mode === "video" ? node.metadata?.videoCount : node.metadata?.count); return Math.max(1, Math.min(3, Number.isFinite(value) ? Math.floor(value) : 1)); }
+function generationCount(node: CanvasNode, mode: GenerationMode, model: string) { if (mode === "audio") return 1; if (mode === "music") return model === "minimax-music-3" ? 1 : 2; const value = Number(mode === "video" ? node.metadata?.videoCount : node.metadata?.count); return Math.max(1, Math.min(3, Number.isFinite(value) ? Math.floor(value) : 1)); }
 function textThinkingMode(node: CanvasNode): TextThinkingMode | undefined { const value = String(node.metadata?.thinking || ""); return value === "enabled" || value === "disabled" || value === "auto" ? value : undefined; }
 function videoDuration(node: CanvasNode, model: string) { return Math.max(3, Math.min(model === "ltx-2.5" ? 20 : 15, Math.floor(Number(node.metadata?.seconds) || 6))); }
 function videoInputMode(node: CanvasNode, model: string, inputs: ResolvedInput) { if (model === "minimax-h3") return normalizeH3InputMode(node.metadata?.videoInputMode || node.metadata?.generation_mode); if (!inputs.imageIds.length) return "text"; return String(node.metadata?.videoInputMode || "") === "firstFrame" ? "firstFrame" : "multimodal"; }
@@ -514,7 +536,7 @@ function imageDimension(node: CanvasNode, index: 0 | 1) { const match = String(n
 function outputSize(type: string) { if (type === "image") return { width: 360, height: 320 }; if (type === "video") return { width: 400, height: 300 }; if (type === "audio") return { width: 360, height: 180 }; if (type === "music") return { width: 380, height: 220 }; return { width: 320, height: 240 }; }
 function outputPosition(project: CanvasProject, config: CanvasNode, index: number, width: number, height: number) { const existing = project.connections.filter((connection) => connection.fromNodeId === config.id).length; return { x: config.position.x + config.width + 96, y: config.position.y + (existing + index) * (height + 36) }; }
 function outputTitle(mode: GenerationMode, config: CanvasNode, prompt: string) { const configured = String(config.title || "").trim().replace(/生成模组/g, "结果"); const fallback: Record<GenerationMode, string> = { text: "Generated Text", image: "Generated Image", video: "Generated Video", audio: "Generated Audio", music: "Generated Music" }; return configured && configured !== "结果" ? configured.slice(0, 64) : prompt.replace(/\s+/g, " ").slice(0, 32) || fallback[mode]; }
-function providerLabel(mode: GenerationMode, model: string) { if (mode === "audio") return "等待 DeepSeek 语气优化"; if (mode === "video") return model === "ltx-2.5" ? "LTX 2.5 生成中" : "MiniMax H3 生成中"; if (mode === "music") return "Suno 生成中"; return `${model} 请求中`; }
+function providerLabel(mode: GenerationMode, model: string) { if (mode === "audio") return "等待 DeepSeek 语气优化"; if (mode === "video") return model === "ltx-2.5" ? "LTX 2.5 生成中" : "MiniMax H3 生成中"; if (mode === "music") return model === "minimax-music-3" ? "MiniMax Music 3 生成中" : "Suno 生成中"; return `${model} 请求中`; }
 function shotLayoutMetadata(config: CanvasNode) {
   const factoryRunId = String(config.metadata?.factoryRunId || "");
   const groupId = String(config.metadata?.groupId || "");

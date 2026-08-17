@@ -10,6 +10,7 @@ export type MusicGenerationConfig = {
     vocalGender?: "m" | "f";
     styleWeight: number;
     weirdnessConstraint: number;
+    maxDuration?: number;
 };
 
 export const MUSIC_STYLE_GROUPS = [
@@ -29,6 +30,7 @@ export function musicConfigFromMetadata(metadata?: CanvasNodeMetadata): MusicGen
         vocalGender: metadata?.musicVocalGender,
         styleWeight: metadata?.musicStyleWeight ?? 0.65,
         weirdnessConstraint: metadata?.musicWeirdnessConstraint ?? 0.65,
+        maxDuration: metadata?.musicMaxDuration ?? 120,
     };
 }
 

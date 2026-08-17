@@ -607,6 +607,47 @@
         ]
       }
     },
+    "minimax-music-3": {
+      "id": "minimax-music-3",
+      "display_name": "MiniMax Music 3",
+      "description": "成都 GPU 调度中心提供的歌词与风格可控音乐生成模型",
+      "family": "minimax",
+      "status": "active",
+      "capabilities": [
+        "audio_generate"
+      ],
+      "duration": {
+        "type": "slider",
+        "min": 1,
+        "max": 360,
+        "step": 1,
+        "default": 120
+      },
+      "params": {
+        "output_format": {
+          "options": [
+            "mp3",
+            "wav"
+          ],
+          "default": "mp3"
+        }
+      },
+      "inputs": {},
+      "ui": {
+        "selection_group": "music",
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings"
+        ],
+        "recommended": false,
+        "order": 80,
+        "badges": [
+          "GPU",
+          "Croco"
+        ]
+      }
+    },
     "flashvsr": {
       "id": "flashvsr",
       "display_name": "FlashVSR",
@@ -683,6 +724,16 @@
       ],
       "legacy_model_ids": [
         "ltx-2.5"
+      ]
+    },
+    "minimax-music-3": {
+      "id": "minimax-music-3",
+      "family": "minimax",
+      "modes": [
+        "audio_generate"
+      ],
+      "legacy_model_ids": [
+        "minimax-music-3"
       ]
     },
     "flashvsr": {
@@ -986,6 +1037,35 @@
           "series_settings",
           "global_settings",
           "video_sidebar"
+        ],
+        "recommended": true,
+        "order": 100,
+        "badges": [
+          "Croco"
+        ]
+      }
+    },
+    "minimax/minimax-music-3#audio_generate": {
+      "id": "minimax/minimax-music-3#audio_generate",
+      "model_line_id": "minimax-music-3",
+      "legacy_model_id": "minimax-music-3",
+      "mode": "audio_generate",
+      "family": "minimax",
+      "status": "active",
+      "capabilities": [
+        "audio_generate"
+      ],
+      "runtime": {
+        "croco": {
+          "gateway": "minimax-music-3"
+        }
+      },
+      "ui": {
+        "selection_group": "music",
+        "visible_in": [
+          "project_settings",
+          "series_settings",
+          "global_settings"
         ],
         "recommended": true,
         "order": 100,

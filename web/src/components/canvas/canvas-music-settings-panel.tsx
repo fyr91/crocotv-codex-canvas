@@ -1,4 +1,4 @@
-import { Collapse, Input, Select, Slider, Switch } from "antd";
+import { Collapse, Input, InputNumber, Select, Slider, Switch } from "antd";
 import type { ReactNode } from "react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
@@ -61,6 +61,7 @@ export function CanvasMusicSettingsPanel({ music, model, references, compact = f
                             {music.instrumental ? null : <Field label="演唱性别"><Select<"m" | "f"> size="small" className="w-full" allowClear value={music.vocalGender} placeholder="不指定" options={[{ label: "男声", value: "m" }, { label: "女声", value: "f" }]} onChange={(musicVocalGender) => onChange({ musicVocalGender })} /></Field>}
                             <WeightField label="风格遵循度" value={music.styleWeight} onChange={(musicStyleWeight) => onChange({ musicStyleWeight })} />
                             <WeightField label="创意度" value={music.weirdnessConstraint} onChange={(musicWeirdnessConstraint) => onChange({ musicWeirdnessConstraint })} />
+                            {model === "minimax-music-3" ? <Field label="生成时长（秒）"><InputNumber size="small" className="w-full" min={1} max={360} step={1} value={music.maxDuration ?? 120} onChange={(value) => onChange({ musicMaxDuration: Number(value) || 120 })} /></Field> : null}
                         </div>
                     ),
                 }]}

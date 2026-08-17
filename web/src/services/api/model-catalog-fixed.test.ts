@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
 import { normalizeVideoGenerationOptions } from "@/lib/video-generation-options";
+import { providerCapabilityForModel, providerIdForModel, useConfigStore } from "@/stores/use-config-store";
 import { getModelCatalog } from "./model-catalog";
 
 test("Canvas 模型目录固定随代码发布且包含全部 GPU 能力", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("不应请求远端模型目录"));
     try {
         const models = await getModelCatalog();
-        assert.deepEqual(models.filter((model) => ["ernie-image-turbo", "minimax-h3", "ltx-2.5"].includes(model.model_key)).map((model) => model.model_key), ["ernie-image-turbo", "minimax-h3", "ltx-2.5"]);
+        assert.deepEqual(models.filter((model) => ["ernie-image-turbo", "minimax-h3", "ltx-2.5", "minimax-music-3"].includes(model.model_key)).map((model) => model.model_key), ["ernie-image-turbo", "minimax-h3", "ltx-2.5", "minimax-music-3"]);
         assert.equal(fetchSpy.mock.calls.length, 0);
         const ltx = models.find((model) => model.model_key === "ltx-2.5");
         assert.ok(ltx);
@@ -16,6 +17,12 @@ test("Canvas 模型目录固定随代码发布且包含全部 GPU 能力", async
         assert.equal(options.selection.size, "1280x704");
         assert.deepEqual(options.durations, [3, 5, 10, 15, 20]);
         assert.deepEqual(options.counts, [1, 2, 3]);
+        const music = models.find((model) => model.model_key === "minimax-music-3");
+        assert.equal(music?.capability, "music");
+        assert.equal(music?.provider_id, "gpu");
+        useConfigStore.getState().setProviderCatalog(models);
+        assert.equal(providerCapabilityForModel("minimax-music-3"), "music");
+        assert.equal(providerIdForModel("ltx-2.5"), "ltx");
     } finally {
         fetchSpy.mockRestore();
     }

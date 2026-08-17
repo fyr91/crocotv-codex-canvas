@@ -4,14 +4,14 @@ export const providerModels: {
   runwareLlm: string[];
   image: string[];
   video: string[];
-  music: string;
+  music: string[];
 } = {
   volcengineLlm: ["doubao-seed-2-1-turbo-260628", "deepseek-v4-flash-ga-260731", "deepseek-v4-pro-260425"],
   bigmodelLlm: ["glm-5.2", "glm-5v-turbo"],
   runwareLlm: ["google:gemini@3.1-pro", "google:gemini@3-flash", "google:gemini@3.1-flash-lite"],
   image: ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2", "ernie-image-turbo"],
   video: ["minimax-h3", "ltx-2.5"],
-  music: process.env.SUNO_MODEL || "V4_5ALL",
+  music: [process.env.SUNO_MODEL || "V4_5ALL", "minimax-music-3"],
 };
 
 const settingsSurfaces = ["project_settings", "series_settings", "global_settings"];
@@ -62,6 +62,7 @@ export function getStudioModelCatalog() {
       "ernie-image-turbo": { id: "ernie-image-turbo", display_name: "ERNIE Image Turbo", description: "成都 GPU 调度中心提供的固定文生图模型", family: "ernie", status: "active", capabilities: ["t2i"], duration: null, params: { ratio: { options: ["1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4"], default: "1:1" } }, inputs: { reference_images: { max: 0 } }, ui: { selection_group: "image", visible_in: settingsSurfaces, recommended: false, order: 70, badges: ["GPU", "Croco"] } },
       "minimax-h3": videoModel("minimax-h3", "MiniMax H3", "统一支持文生视频、首帧、首尾帧与图片/音频多参考；默认先生成结构化 H3 提示词", "i2v", videoSurfaces, ["t2v", "i2v", "fl2v", "r2v"]),
       "ltx-2.5": { id: "ltx-2.5", display_name: "LTX 2.5", description: "成都 GPU 调度中心提供的文生视频、首帧生视频与 Ingredients 参考视频模型", family: "ltx", status: "active", capabilities: ["t2v", "i2v", "r2v"], duration: { type: "slider", min: 3, max: 20, step: 1, default: 5 }, params: { resolution: { options: ["480p", "720p", "1080p"], default: "720p" }, ratio: { options: ["16:9", "9:16", "1:1"], default: "16:9" }, promptExtend: true }, inputs: { reference_images: { max: 1 }, first_frame: { max: 1, ordered: true } }, ui: { selection_group: "i2v", visible_in: videoSurfaces, recommended: false, order: 90, badges: ["GPU", "Croco"] } },
+      "minimax-music-3": { id: "minimax-music-3", display_name: "MiniMax Music 3", description: "成都 GPU 调度中心提供的歌词与风格可控音乐生成模型", family: "minimax", status: "active", capabilities: ["audio_generate"], duration: { type: "slider", min: 1, max: 360, step: 1, default: 120 }, params: { output_format: { options: ["mp3", "wav"], default: "mp3" } }, inputs: {}, ui: { selection_group: "music", visible_in: settingsSurfaces, recommended: false, order: 80, badges: ["GPU", "Croco"] } },
       flashvsr: { id: "flashvsr", display_name: "FlashVSR", description: "MiniMax H3 低分辨率结果的一键 2x 高清修复能力", family: "flashvsr", status: "active", capabilities: ["video_enhance"], duration: null, params: {}, inputs: { source_video: { max: 1 } }, ui: { selection_group: "enhancement", visible_in: [], recommended: false, order: 60, badges: ["GPU", "Croco"] } },
     },
     model_lines: {
@@ -69,6 +70,7 @@ export function getStudioModelCatalog() {
       "minimax-h3": { id: "minimax-h3", family: "minimax", modes: ["t2v", "i2v", "fl2v", "r2v"], legacy_model_ids: ["minimax-h3", "minimax-h3-r2v"] },
       "ernie-image-turbo": { id: "ernie-image-turbo", family: "ernie", modes: ["t2i"], legacy_model_ids: ["ernie-image-turbo"] },
       "ltx-2.5": { id: "ltx-2.5", family: "ltx", modes: ["t2v", "i2v", "r2v"], legacy_model_ids: ["ltx-2.5"] },
+      "minimax-music-3": { id: "minimax-music-3", family: "minimax", modes: ["audio_generate"], legacy_model_ids: ["minimax-music-3"] },
       flashvsr: { id: "flashvsr", family: "flashvsr", modes: ["video_enhance"], legacy_model_ids: ["flashvsr"] },
     },
     modes: {
@@ -82,6 +84,7 @@ export function getStudioModelCatalog() {
       "ltx/ltx-2.5#t2v": mode("ltx/ltx-2.5#t2v", "ltx-2.5", "ltx-2.5", "t2v", "ltx", "i2v", videoSurfaces),
       "ltx/ltx-2.5#i2v": mode("ltx/ltx-2.5#i2v", "ltx-2.5", "ltx-2.5", "i2v", "ltx", "i2v", videoSurfaces),
       "ltx/ltx-2.5#r2v": mode("ltx/ltx-2.5#r2v", "ltx-2.5", "ltx-2.5", "r2v", "ltx", "r2v", videoSurfaces),
+      "minimax/minimax-music-3#audio_generate": mode("minimax/minimax-music-3#audio_generate", "minimax-music-3", "minimax-music-3", "audio_generate", "minimax", "music", settingsSurfaces),
       "flashvsr/flashvsr#video_enhance": mode("flashvsr/flashvsr#video_enhance", "flashvsr", "flashvsr", "video_enhance", "flashvsr", "enhancement", []),
     },
   };

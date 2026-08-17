@@ -94,6 +94,7 @@ export type CanvasNodeMetadata = {
     musicVocalGender?: "m" | "f";
     musicStyleWeight?: number;
     musicWeirdnessConstraint?: number;
+    musicMaxDuration?: number;
     musicBatchId?: string;
     musicOutputIndex?: number;
     musicCoverUrl?: string;

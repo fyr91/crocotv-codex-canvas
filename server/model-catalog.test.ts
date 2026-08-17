@@ -22,4 +22,6 @@ test("模型目录公开统一名称与 H3 四种输入模式", () => {
   assert.equal(catalog.model_lines["runware-image"].legacy_model_ids.includes("ernie-image-turbo"), false);
   assert.deepEqual(catalog.model_lines["ernie-image-turbo"].legacy_model_ids, ["ernie-image-turbo"]);
   assert.deepEqual(catalog.models.flashvsr.capabilities, ["video_enhance"]);
+  assert.deepEqual(catalog.models["minimax-music-3"].capabilities, ["audio_generate"]);
+  assert.deepEqual(catalog.model_lines["minimax-music-3"].legacy_model_ids, ["minimax-music-3"]);
 });

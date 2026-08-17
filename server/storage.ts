@@ -230,10 +230,11 @@ export function safeResourcePath(fileName: string) {
   return target;
 }
 
-export async function writeGenerated(provider: "canvas" | "runware" | "speech" | "h3" | "ltx" | "ernie" | "flashvsr" | "happyhorse" | "suno", extension: string, bytes: Uint8Array) {
+export async function writeGenerated(provider: "canvas" | "runware" | "speech" | "h3" | "ltx" | "ernie" | "flashvsr" | "happyhorse" | "suno" | "minimax-music3", extension: string, bytes: Uint8Array) {
   const id = randomUUID();
   const fileName = path.posix.join("generated", provider, `${id}.${extension.replace(/^\./, "")}`);
   const target = safeResourcePath(fileName);
+  await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, bytes, { flag: "wx" });
   return { id, fileName, target };
 }

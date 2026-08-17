@@ -62,8 +62,8 @@ export async function uploadGpuResource(resourceId: string, kind: "images" | "au
 }
 
 export async function submitUnifiedGpuJob(input: {
-  modelId: "minimax-h3" | "ernie-image-turbo" | "ltx-2.5" | "flashvsr";
-  operation: "image.generate" | "video.generate" | "video.enhance";
+  modelId: "minimax-h3" | "minimax-music-3" | "ernie-image-turbo" | "ltx-2.5" | "flashvsr";
+  operation: "image.generate" | "video.generate" | "video.enhance" | "audio.generate";
   contractVersion: "1" | "2";
   parameters: Record<string, unknown>;
   inputs?: Array<{ role: string; asset_id: string }>;
@@ -165,6 +165,7 @@ export function gpuProgressState(job: Pick<UnifiedGpuJob, "model_id" | "status" 
 export function modelDisplayName(modelId: string) {
   return ({
     "minimax-h3": "MiniMax H3",
+    "minimax-music-3": "MiniMax Music 3",
     "ltx-2.5": "LTX 2.5",
     "ernie-image-turbo": "ERNIE Image Turbo",
     flashvsr: "FlashVSR",

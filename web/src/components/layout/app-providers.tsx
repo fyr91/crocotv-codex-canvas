@@ -78,6 +78,7 @@ export const LOCAL_MODELS: ProviderCatalogModel[] = [
     { id: "ltx-2.5", provider_id: "ltx", capability: "video", model_key: "ltx-2.5", display_name: "LTX 2.5", is_default: false, config: { capabilitiesSource: "ltx-fixed", ltxCapabilities, videoInputModes: ["text", "firstFrame", "multimodal"], inputLimits: { firstFrame: { images: { min: 1, max: 1 } }, multimodal: { images: { min: 1, max: 1 } } }, inputModalities: ["text", "image"] } },
     { id: "volc-speech", provider_id: "volcengine", capability: "speech", model_key: "volcengine:seed-tts-2.0-expressive", display_name: "火山引擎 Seed-TTS 2.0", is_default: true, config: { inputModalities: ["text"] } },
     { id: "suno-music", provider_id: "suno", capability: "music", model_key: "V4_5ALL", display_name: "Suno V4.5 All", is_default: true, config: { inputModalities: ["text"] } },
+    { id: "minimax-music-3", provider_id: "gpu", capability: "music", model_key: "minimax-music-3", display_name: "MiniMax Music 3", is_default: false, config: { inputModalities: ["text"], maxDurationSeconds: 360, defaultDurationSeconds: 120, outputFormats: ["mp3", "wav"] } },
 ];
 
 export function AppProviders({ children }: { children: ReactNode }) {
