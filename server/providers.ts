@@ -313,7 +313,7 @@ export async function generateH3Video(input: Omit<VideoGenerationInput, "model">
     const created = await submitUnifiedGpuJob({
       modelId: "minimax-h3",
       operation: "video.generate",
-      contractVersion: "1",
+      contractVersion: "2",
       clientJobId,
       parameters: request.parameters,
       inputs: request.inputs,
