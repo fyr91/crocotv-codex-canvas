@@ -1739,6 +1739,8 @@ export interface PlaygroundGenerationResponse {
   }>;
   status: string;
   error?: string;
+  target_character_id?: string;
+  attached_resource_ids?: string[];
   created_at: string;
 }
 
@@ -1759,14 +1761,20 @@ export const playgroundApi = {
   generate: (data: PlaygroundGenerateRequest) =>
     axios.post<PlaygroundGenerationResponse>(API_URL + "/playground/generate", data).then(r => r.data),
 
-  getHistory: (limit = 50, offset = 0) =>
-    axios.get<PlaygroundGenerationResponse[]>(API_URL + "/playground/history", { params: { limit, offset } }).then(r => r.data),
+  getHistory: (limit = 50, offset = 0, characterId?: string) =>
+    axios.get<PlaygroundGenerationResponse[]>(API_URL + "/playground/history", { params: { limit, offset, characterId } }).then(r => r.data),
+
+  getCharacterHistory: (characterId: string, limit = 50) =>
+    axios.get<PlaygroundGenerationResponse[]>(API_URL + "/playground/history", { params: { limit, characterId } }).then(r => r.data),
 
   getGeneration: (id: string) =>
     axios.get<PlaygroundGenerationResponse>(API_URL + "/playground/history/" + id).then(r => r.data),
 
   getGenerationStatus: (id: string) =>
-    axios.get<{ id: string; status: string; outputs: any[]; error?: string }>(API_URL + "/playground/history/" + id + "/status").then(r => r.data),
+    axios.get<{ id: string; status: string; outputs: any[]; error?: string; target_character_id?: string; attached_resource_ids?: string[] }>(API_URL + "/playground/history/" + id + "/status").then(r => r.data),
+
+  confirmCharacterGenerationResults: (id: string, resourceIds: string[]) =>
+    axios.post<PlaygroundGenerationResponse>(API_URL + "/playground/history/" + id + "/attach-character-assets", { resourceIds }).then(r => r.data),
 
   deleteGeneration: (id: string) =>
     axios.delete(API_URL + "/playground/history/" + id).then(r => r.data),

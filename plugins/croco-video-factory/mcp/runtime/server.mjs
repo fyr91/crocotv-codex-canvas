@@ -32915,6 +32915,16 @@ var init_server3 = __esm({
       inputSchema: { characterId: external_exports.string().min(1).max(80), resourceId: external_exports.string().min(1).max(80) },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
     }, async ({ characterId, resourceId }) => toolResult(await api(`/api/characters/${encodeURIComponent(characterId)}/primary-image`, { method: "PUT", body: { resourceId } })));
+    server.registerTool("canvas_list_character_generation_tasks", {
+      description: "List image-generation tasks created for one synchronized character, including pending, failed, completed, and individually attachable results.",
+      inputSchema: { characterId: external_exports.string().min(1).max(80), limit: external_exports.number().int().min(1).max(200).default(50) },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    }, async ({ characterId, limit }) => toolResult(await api(`/api/studio/playground/history?limit=${limit}&characterId=${encodeURIComponent(characterId)}`)));
+    server.registerTool("canvas_confirm_character_generation_results", {
+      description: "Confirm one or more completed image-generation results and attach those existing single-copy resources to the task's synchronized character.",
+      inputSchema: { generationId: external_exports.string().uuid(), resourceIds: external_exports.array(external_exports.string().min(1).max(80)).min(1).max(20) },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    }, async ({ generationId, resourceIds }) => toolResult(await api(`/api/studio/playground/history/${encodeURIComponent(generationId)}/attach-character-assets`, { method: "POST", body: { resourceIds } })));
     server.registerTool("canvas_import_resource", {
       description: "Copy a file from this repository into the unified local resource library. The source file must be inside the CrocoTV workspace.",
       inputSchema: { filePath: external_exports.string().min(1), title: external_exports.string().max(180).optional() },

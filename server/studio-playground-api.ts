@@ -11,14 +11,16 @@ import { createStudioProject, getStudioBackedProject, listStudioProjectResponses
 import { addResource, fileSize, readProject, resourceById, typeFromMime, writeGenerated } from "./storage";
 import { cancelStudioGenerationJob, createStudioGenerationJob, findStudioGenerationJob } from "./studio-generation-jobs";
 import { attachCharacterResources, listCharacters } from "./characters";
+import { resolveCharacterGenerationAttachment } from "./character-generation-results";
 
 export const studioPlaygroundRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
 
 studioPlaygroundRouter.post("/playground/generate", route(async (request, response) => response.status(202).json(await queueGeneration(request.body, clientId(request)))));
-studioPlaygroundRouter.get("/playground/history", route(async (request, response) => { const state = await playgroundState(); const offset = Math.max(0, Number(request.query.offset) || 0); const limit = Math.max(1, Math.min(200, Number(request.query.limit) || 50)); response.json(state.history.slice(offset, offset + limit)); }));
+studioPlaygroundRouter.get("/playground/history", route(async (request, response) => { const state = await playgroundState(); const offset = Math.max(0, Number(request.query.offset) || 0); const limit = Math.max(1, Math.min(200, Number(request.query.limit) || 50)); const characterId = optionalBoundedString(request.query.characterId, 80); const history = characterId ? state.history.filter((entry) => entry.target_character_id === characterId) : state.history; response.json(history.slice(offset, offset + limit)); }));
 studioPlaygroundRouter.get("/playground/history/:id", route(async (request, response) => response.json(requiredHistory(await playgroundState(), param(request.params.id)))));
-studioPlaygroundRouter.get("/playground/history/:id/status", route(async (request, response) => { const item = requiredHistory(await playgroundState(), param(request.params.id)); response.json({ id: item.id, status: item.status, outputs: item.outputs, error: item.error }); }));
+studioPlaygroundRouter.get("/playground/history/:id/status", route(async (request, response) => { const item = requiredHistory(await playgroundState(), param(request.params.id)); response.json({ id: item.id, status: item.status, outputs: item.outputs, error: item.error, target_character_id: item.target_character_id, attached_resource_ids: item.attached_resource_ids }); }));
+studioPlaygroundRouter.post("/playground/history/:id/attach-character-assets", route(async (request, response) => response.json(await confirmCharacterGenerationResults(param(request.params.id), request.body?.resourceIds, clientId(request)))));
 studioPlaygroundRouter.delete("/playground/history/:id", route(async (request, response) => { const id = param(request.params.id); const project = await playgroundProject(); const item = requiredHistory(readPlayground(project.studio.metadata), id); if (findStudioGenerationJob(id)) await cancelStudioGenerationJob(id); const current = await readProject(project.id) as any; const nodeIds = stringArray(item.canvas_node_ids).filter((nodeId) => current.nodes.some((node: any) => node.id === nodeId)); if (nodeIds.length) { const changed = await applyCanvasOperations(project.id, nodeIds.map((nodeId): CanvasOperation => ({ op: "delete_node", nodeId })), Number(current.version)); publishProjectUpdated(changed.project, clientId(request)); } await mutateStudioProject(project.id, (state) => ({ ...state, metadata: { ...state.metadata, playground: { ...readPlayground(state.metadata), history: readPlayground(state.metadata).history.filter((entry) => entry.id !== id) } } }), { originClientId: clientId(request) }); response.json({ removed: true }); }));
 studioPlaygroundRouter.get("/playground/templates", route(async (_request, response) => response.json((await playgroundState()).templates)));
 studioPlaygroundRouter.post("/playground/templates", route(async (request, response) => { const project = await playgroundProject(); const now = new Date().toISOString(); const template = { id: randomUUID(), name: String(request.body?.name || "未命名模板"), category: String(request.body?.category || "general"), prompt: String(request.body?.prompt || ""), negative_prompt: String(request.body?.negative_prompt || ""), default_mode: String(request.body?.default_mode || "t2i"), default_model_id: String(request.body?.default_model_id || ""), default_parameters: objectValue(request.body?.default_parameters), created_at: now, updated_at: now }; await mutateStudioProject(project.id, (state) => ({ ...state, metadata: { ...state.metadata, playground: { ...readPlayground(state.metadata), templates: [...readPlayground(state.metadata).templates, template] } } }), { originClientId: clientId(request) }); response.status(201).json(template); }));
@@ -36,7 +38,7 @@ async function queueGeneration(raw: any, originClientId: string) {
   if (targetCharacterId && !(await listCharacters()).some((character) => character.id === targetCharacterId)) throw new Error(`同步角色不存在：${targetCharacterId}`);
   const id = randomUUID(); const inputMedia = stringArray(raw?.input_media);
   for (const mediaUrl of inputMedia) if (!await resourceById(resourceIdFromUrl(mediaUrl))) throw new Error(`输入素材不在 Croco 本地资源库：${mediaUrl}`);
-  const history = { id, mode, model_id: String(raw?.model_id || (generationMode === "video" ? "minimax-h3" : models.image[0])), prompt: String(raw?.prompt || ""), negative_prompt: String(raw?.negative_prompt || ""), input_media: inputMedia, parameters: objectValue(raw?.parameters), batch_size: boundedCount(raw?.batch_size), outputs: [], status: "pending", created_at: new Date().toISOString(), canvas_project_id: project.id, canvas_node_ids: [], generation_job_id: id, ...(targetCharacterId ? { target_character_id: targetCharacterId } : {}) };
+  const history = { id, mode, model_id: String(raw?.model_id || (generationMode === "video" ? "minimax-h3" : models.image[0])), prompt: String(raw?.prompt || ""), negative_prompt: String(raw?.negative_prompt || ""), input_media: inputMedia, parameters: objectValue(raw?.parameters), batch_size: boundedCount(raw?.batch_size), outputs: [], status: "pending", created_at: new Date().toISOString(), canvas_project_id: project.id, canvas_node_ids: [], generation_job_id: id, ...(targetCharacterId ? { target_character_id: targetCharacterId, attached_resource_ids: [] } : {}) };
   await mutateStudioProject(project.id, (state) => ({ ...state, metadata: { ...state.metadata, playground: { ...readPlayground(state.metadata), history: [history, ...readPlayground(state.metadata).history].slice(0, 500) } } }), { originClientId });
   try {
     await createStudioGenerationJob({
@@ -78,11 +80,6 @@ async function processGeneration(projectId: string, id: string, raw: any, origin
   const result = await runCanvasConfigNodes({ projectId, configNodeIds: [configId], concurrency: 1, originClientId, signal }); const run = result.results[0];
   const final = await readProject(projectId) as any; const outputNodes = (run?.outputNodeIds || []).map((nodeId) => final.nodes.find((node: any) => node.id === nodeId)).filter(Boolean);
   const outputs = outputNodes.map((node: any) => ({ id: node.id, resource_id: String(node.metadata?.storageKey || ""), media_path: String(node.metadata?.content || ""), media_type: generationMode, thumbnail_path: generationMode === "video" ? undefined : String(node.metadata?.content || "") }));
-  if (run?.status === "success" && raw?.target_character_id) {
-    const resourceIds = outputs.map((output) => output.resource_id).filter(Boolean);
-    if (resourceIds.length !== outputs.length) throw new Error("生成结果缺少本地资源 ID，无法加入角色资产库");
-    await attachCharacterResources(String(raw.target_character_id), resourceIds, "generated");
-  }
   const patch = { outputs, status: run?.status === "success" ? "completed" : "failed", error: run?.error, canvas_node_ids: [configId, ...inputNodes, ...outputNodes.map((node: any) => node.id), ...(run?.toneNodeId ? [run.toneNodeId] : [])] };
   await updateHistory(projectId, id, patch, originClientId);
   if (run?.status !== "success") throw new Error(run?.error || "创作台生成失败");
@@ -94,6 +91,15 @@ async function processGeneration(projectId: string, id: string, raw: any, origin
 
 async function updateHistory(projectId: string, id: string, patch: Record<string, unknown>, originClientId: string) {
   return mutateStudioProject(projectId, (state) => ({ ...state, metadata: { ...state.metadata, playground: { ...readPlayground(state.metadata), history: readPlayground(state.metadata).history.map((entry) => entry.id === id ? { ...entry, ...patch } : entry) } } }), { originClientId });
+}
+
+async function confirmCharacterGenerationResults(id: string, requestedResourceIds: unknown, originClientId: string) {
+  const project = await playgroundProject();
+  const item = requiredHistory(readPlayground(project.studio.metadata), id);
+  const resolved = resolveCharacterGenerationAttachment(item, requestedResourceIds);
+  await attachCharacterResources(resolved.characterId, resolved.resourceIds, "generated");
+  await updateHistory(project.id, id, { attached_resource_ids: resolved.attachedResourceIds }, originClientId);
+  return requiredHistory(await playgroundState(), id);
 }
 
 async function playgroundProject() { const existing = (await listStudioProjectResponses({ kind: "playground" }))[0]; if (existing) return getStudioBackedProject(existing.id); const created = await createStudioProject({ title: "视频工坊 · 创作台", text: "", workflow_mode: "r2v" }, "studio-playground"); await mutateStudioProject(created.id, (state) => ({ ...state, projectKind: "playground", metadata: { ...state.metadata, playground: { history: [], templates: [] } } }), { originClientId: "studio-playground" }); return getStudioBackedProject(created.id); }
@@ -110,3 +116,4 @@ function clientId(request: Request) { return String(request.header("x-croco-clie
 function param(value: string | string[]) { return Array.isArray(value) ? value[0] : value; }
 function objectValue(value: unknown): Record<string, any> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {}; }
 function stringArray(value: unknown) { return Array.isArray(value) ? value.map(String) : []; }
+function optionalBoundedString(value: unknown, maxLength: number) { const text = String(Array.isArray(value) ? value[0] : value || "").trim(); if (text.length > maxLength) throw new Error(`参数长度不能超过 ${maxLength}`); return text; }

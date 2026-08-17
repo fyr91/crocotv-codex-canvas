@@ -328,3 +328,50 @@ final result: passed
 
 final result: passed
 
+---
+
+# Character Generation Task Cards — Design QA
+
+**Evidence**
+
+- Source inspector reference: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-1f1d8176-35e1-4ac0-82d6-0ce7f9e80be3.png`
+- Rendered implementation: `http://localhost:3014/#/library`
+- Generation modal: `/tmp/croco-character-generation-task-modal.png`
+- Compact result cards: `/tmp/croco-character-generation-result-cards.png`
+- Side-by-side comparison: `/tmp/croco-character-generation-task-comparison.png`
+- Browser viewport: 873 × 767 CSS px, dark theme, synchronized-character inspector.
+- Validation reused an existing completed character generation in isolated preview data; no paid generation was started.
+
+**Findings**
+
+- No actionable P0, P1, or P2 visual differences remain.
+- The modal preserves the existing creation-workbench controls while changing its primary action to task submission. Its supporting copy now explains that the dialog closes after task creation.
+- The inspector uses the same glass surface, border, model tag, prompt hierarchy, image crop, and bottom-gradient toolbar language as Playground result cards, reduced to a two-column layout suitable for the 340 px panel.
+- Completed outputs are independently actionable. Attached outputs receive a visible top-left success badge and a disabled checked toolbar action.
+- Pending/processing and failed task states use the existing status tokens and remain in the inspector after the modal closes.
+- Upload, video, audio, metadata, primary-image, and download sections remain unchanged.
+
+**Primary Interactions Tested**
+
+- Opened a synchronized character with an existing completed image task.
+- Verified three completed outputs render as independent compact cards.
+- Verified already-associated resources show “已加入素材” and cannot be added twice.
+- Opened and closed the image-generation modal without starting a paid generation.
+- Verified the modal exposes “开始生成” and the automatic-close/task-tracking explanation.
+- Verified the direct REST filter and idempotent confirmation endpoint.
+- Verified the equivalent MCP list and confirmation tools.
+
+**Implementation Checklist**
+
+- [x] Close the modal after the server accepts a generation task.
+- [x] Keep the modal open when task submission fails and allow manual closing while submitting.
+- [x] Track pending, processing, failed, and completed tasks in the character inspector.
+- [x] Confirm completed outputs one at a time before linking them to the character.
+- [x] Preserve single-copy resources and avoid automatic attachment.
+- [x] Keep image generation image-only.
+
+**Follow-up Polish**
+
+- No blocking follow-up polish identified.
+
+final result: passed

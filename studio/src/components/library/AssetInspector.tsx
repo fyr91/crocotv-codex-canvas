@@ -5,11 +5,12 @@ import { useTranslations } from "next-intl";
 import { X, Star, Download, Sparkles, Loader2, Upload, Trash2 } from "lucide-react";
 import type { Character, Scene, Prop, ImageAsset, ImageVariant } from "@/store/projectStore";
 import { characterImageAsset } from "@/lib/characterImage";
-import { api } from "@/lib/api";
+import { api, playgroundApi, type PlaygroundGenerationResponse } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { coverGradient, GRAIN_URL } from "@/lib/atelierCover";
 import { isPulledCharacterAsset, type PulledCharacterResource } from "@/lib/pulledCharacterAssets";
 import CharacterImageGenerationModal from "./CharacterImageGenerationModal";
+import CharacterGenerationCards from "./CharacterGenerationCards";
 
 type AssetTab = "characters" | "scenes" | "props";
 
@@ -131,6 +132,10 @@ export default function AssetInspector({
   const [generating, setGenerating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showCharacterGenerator, setShowCharacterGenerator] = useState(false);
+  const [characterGenerations, setCharacterGenerations] = useState<PlaygroundGenerationResponse[]>([]);
+  const [generationRefreshKey, setGenerationRefreshKey] = useState(0);
+  const [attachingResourceId, setAttachingResourceId] = useState<string>();
+  const [optimisticAttachedResourceIds, setOptimisticAttachedResourceIds] = useState<string[]>([]);
   const generatorOpenRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -139,6 +144,36 @@ export default function AssetInspector({
     setActiveVariantId(defaultId);
     setExtraVariants([]);
   }, [asset.id, defaultId]);
+  useEffect(() => {
+    setCharacterGenerations([]);
+    setOptimisticAttachedResourceIds([]);
+  }, [asset.id]);
+
+  useEffect(() => {
+    const characterId = pulledCharacter?.id;
+    if (!characterId) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const refresh = async () => {
+      try {
+        const generations = await playgroundApi.getCharacterHistory(characterId);
+        if (stopped) return;
+        setCharacterGenerations(generations);
+        if (generations.some((generation) => generation.status === "pending" || generation.status === "processing")) {
+          timer = setTimeout(() => void refresh(), POLL_INTERVAL_MS);
+        }
+      } catch {
+        if (!stopped) timer = setTimeout(() => void refresh(), POLL_INTERVAL_MS);
+      }
+    };
+
+    void refresh();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [pulledCharacter?.id, generationRefreshKey]);
 
   // 卸载/切换资产后避免异步轮询回写已失效的状态。
   const aliveRef = useRef(true);
@@ -181,6 +216,10 @@ export default function AssetInspector({
   const activePulledResource = pulledResources.find((resource) => resource.id === activeVariant?.id);
   const canDetachActiveImage = canDetachCharacterResource(activePulledResource);
   const isPrimaryImage = pulledCharacter?.reference_sheet?.selected_image_id === activeVariant?.id;
+  const attachedGenerationResourceIds = new Set([
+    ...pulledResources.map((resource) => resource.id),
+    ...optimisticAttachedResourceIds,
+  ]);
 
   // 元数据行（数据驱动）：先放现有四项，再在字段存在时追加 SEED/MODEL/SIZE。
   // 后端 TODO：当前 ImageVariant 仅 id/url/created_at/prompt_used，资产无 seed/model/size，
@@ -265,11 +304,35 @@ export default function AssetInspector({
     try {
       await api.detachPulledCharacterResource(pulledCharacter.id, resource.id);
       if (resource.type === "image" && activeVariant?.id === resource.id) setActiveVariantId(null);
+      setOptimisticAttachedResourceIds((current) => current.filter((resourceId) => resourceId !== resource.id));
       await onLibraryChanged();
       toast.success(t("characterAssetRemoved"));
     } catch (reason) {
       toast.error(t("characterAssetRemoveFailed"), { body: reason instanceof Error ? reason.message : String(reason) });
     }
+  };
+
+  const handleAttachGenerationResult = async (generation: PlaygroundGenerationResponse, resourceId: string) => {
+    if (!pulledCharacter || attachingResourceId) return;
+    if (!window.confirm(t("addGenerationConfirm", { name: pulledCharacter.name }))) return;
+    setAttachingResourceId(resourceId);
+    try {
+      const updated = await playgroundApi.confirmCharacterGenerationResults(generation.id, [resourceId]);
+      setCharacterGenerations((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setOptimisticAttachedResourceIds((current) => current.includes(resourceId) ? current : [...current, resourceId]);
+      await onLibraryChanged();
+      toast.success(t("generationAddedToCharacter"));
+    } catch (reason) {
+      toast.error(t("generationAddFailed"), { body: reason instanceof Error ? reason.message : String(reason) });
+    } finally {
+      setAttachingResourceId(undefined);
+    }
+  };
+
+  const handleCharacterGenerationCreated = (generation: PlaygroundGenerationResponse) => {
+    setCharacterGenerations((current) => [generation, ...current.filter((item) => item.id !== generation.id)]);
+    setGenerationRefreshKey((value) => value + 1);
+    toast.success(t("generationTaskCreated"));
   };
 
   // 轮询生成任务直到完成（mirror ConsistencyVault 的 task 轮询）；失败/超时抛错。
@@ -464,6 +527,28 @@ export default function AssetInspector({
           </div>
         )}
 
+        {pulledCharacter && characterGenerations.length > 0 && (
+          <div>
+            <div className="mb-2.5 flex items-center justify-between gap-3">
+              <div className="font-mono text-sm font-medium uppercase tracking-[0.16em] text-text-secondary">
+                {t("generationTasksSection", { count: characterGenerations.length })}
+              </div>
+              {characterGenerations.some((generation) => generation.status === "pending" || generation.status === "processing") && (
+                <span className="inline-flex items-center gap-1 text-sm text-text-muted">
+                  <Loader2 size={12} className="animate-spin text-primary" />
+                  {t("generationInProgress")}
+                </span>
+              )}
+            </div>
+            <CharacterGenerationCards
+              generations={characterGenerations}
+              attachedResourceIds={attachedGenerationResourceIds}
+              attachingResourceId={attachingResourceId}
+              onAttach={(generation, resourceId) => void handleAttachGenerationResult(generation, resourceId)}
+            />
+          </div>
+        )}
+
         {pulledVideos.length > 0 && (
           <div>
             <div className="font-mono text-sm font-medium uppercase tracking-[0.16em] text-text-secondary mb-2.5">
@@ -605,7 +690,7 @@ export default function AssetInspector({
         <CharacterImageGenerationModal
           character={pulledCharacter}
           onClose={() => setShowCharacterGenerator(false)}
-          onCompleted={onLibraryChanged}
+          onTaskCreated={handleCharacterGenerationCreated}
         />
       )}
     </aside>

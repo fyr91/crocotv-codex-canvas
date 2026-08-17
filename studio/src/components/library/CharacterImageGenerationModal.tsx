@@ -3,22 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ImagePlus, Loader2, Sparkles, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { playgroundApi } from "@/lib/api";
+import { playgroundApi, type PlaygroundGenerationResponse } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/apiError";
 import { getDefaultModelForMode, getModelsForMode } from "@/components/modules/playground/playgroundModels";
 import type { PulledCharacterAsset } from "@/lib/pulledCharacterAssets";
 
 const RATIOS = ["1:1", "3:4", "4:3", "16:9", "9:16"];
-const POLL_INTERVAL_MS = 2_000;
-const POLL_LIMIT = 150;
-
 interface CharacterImageGenerationModalProps {
   character: PulledCharacterAsset;
   onClose: () => void;
-  onCompleted: () => Promise<void> | void;
+  onTaskCreated: (generation: PlaygroundGenerationResponse) => void;
 }
 
-export default function CharacterImageGenerationModal({ character, onClose, onCompleted }: CharacterImageGenerationModalProps) {
+export default function CharacterImageGenerationModal({ character, onClose, onTaskCreated }: CharacterImageGenerationModalProps) {
   const t = useTranslations("library");
   const variants = character.reference_sheet?.image_variants ?? [];
   const defaultReferenceId = character.reference_sheet?.selected_image_id ?? variants[0]?.id;
@@ -34,9 +31,8 @@ export default function CharacterImageGenerationModal({ character, onClose, onCo
   const [ratio, setRatio] = useState("1:1");
   const [count, setCount] = useState(3);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [outputs, setOutputs] = useState<Array<{ id: string; media_path: string }>>([]);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const selectedModel = availableModels.find((model) => model.id === modelId) ?? availableModels[0];
@@ -49,11 +45,11 @@ export default function CharacterImageGenerationModal({ character, onClose, onCo
   useEffect(() => {
     dialogRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !generating) onClose();
+      if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [generating, onClose]);
+  }, [onClose]);
 
   const toggleReference = (id: string) => {
     setReferenceIds((current) => {
@@ -64,10 +60,9 @@ export default function CharacterImageGenerationModal({ character, onClose, onCo
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim() || !modelId || generating) return;
-    setGenerating(true);
+    if (!prompt.trim() || !modelId || submitting) return;
+    setSubmitting(true);
     setError("");
-    setOutputs([]);
     try {
       const references = variants.filter((variant) => referenceIds.includes(variant.id)).map((variant) => variant.url);
       const generation = await playgroundApi.generate({
@@ -80,21 +75,12 @@ export default function CharacterImageGenerationModal({ character, onClose, onCo
         batch_size: count,
         target_character_id: character.id,
       });
-      for (let attempt = 0; attempt < POLL_LIMIT; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-        const status = await playgroundApi.getGenerationStatus(generation.id);
-        if (status.status === "completed") {
-          setOutputs(status.outputs ?? []);
-          await onCompleted();
-          return;
-        }
-        if (status.status === "failed") throw new Error(status.error || t("variantsGenFailed"));
-      }
-      throw new Error(t("genTimeout"));
+      onTaskCreated(generation);
+      onClose();
     } catch (reason) {
       setError(apiErrorMessage(reason, t("variantsGenFailed")));
     } finally {
-      setGenerating(false);
+      setSubmitting(false);
     }
   };
 
@@ -115,7 +101,7 @@ export default function CharacterImageGenerationModal({ character, onClose, onCo
               {t("characterGenerateTitle", { name: character.name })}
             </h2>
           </div>
-          <button type="button" onClick={onClose} disabled={generating} aria-label={t("closeInspector")} className="grid h-9 w-9 place-items-center rounded-full bg-surface-inset text-text-secondary transition-colors hover:text-foreground disabled:opacity-40">
+          <button type="button" onClick={onClose} aria-label={t("closeInspector")} className="grid h-9 w-9 place-items-center rounded-full bg-surface-inset text-text-secondary transition-colors hover:text-foreground">
             <X size={17} />
           </button>
         </div>
@@ -152,15 +138,6 @@ export default function CharacterImageGenerationModal({ character, onClose, onCo
               )}
             </section>
 
-            {outputs.length > 0 && (
-              <section>
-                <div className="mb-2.5 font-mono text-sm font-medium uppercase tracking-[0.12em] text-text-secondary">{t("generatedResults", { count: outputs.length })}</div>
-                <div className="grid grid-cols-3 gap-2">
-                  {outputs.map((output) => <img key={output.id} src={output.media_path} alt={t("variantAlt")} className="aspect-square w-full rounded-lg border border-glass-border object-cover" />)}
-                </div>
-                <div className="mt-2 text-sm text-status-success-fg">{t("generatedAutoSaved")}</div>
-              </section>
-            )}
           </div>
 
           <div className="space-y-4">
@@ -189,11 +166,11 @@ export default function CharacterImageGenerationModal({ character, onClose, onCo
             {showAdvanced && <textarea value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} rows={4} placeholder={t("negativePromptPlaceholder")} className="w-full resize-y rounded-xl border border-border-subtle bg-surface-inset px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary" />}
 
             {error && <div role="alert" className="rounded-lg border border-status-error-border bg-status-error-bg px-3 py-2.5 text-sm text-status-error-fg">{error}</div>}
-            <button type="button" onClick={handleGenerate} disabled={generating || !prompt.trim() || !modelId} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-on-accent transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50">
-              {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              {generating ? t("generating") : t("generateAndSave")}
+            <button type="button" onClick={handleGenerate} disabled={submitting || !prompt.trim() || !modelId} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-on-accent transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50">
+              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {submitting ? t("creatingGenerationTask") : t("startGeneration")}
             </button>
-            <p className="text-sm leading-relaxed text-text-muted">{t("generationAutoSaveHint")}</p>
+            <p className="text-sm leading-relaxed text-text-muted">{t("generationTaskHint")}</p>
           </div>
         </div>
       </div>
