@@ -99,10 +99,12 @@ async function prepareStage2(id) {
 async function runStage(id, nodeIds) {
   requiredProjectId(id);
   const created = await request(`/api/canvas/projects/${id}/run-nodes`, { method: "POST", body: { nodeIds, concurrency: nodeIds.length, async: true } });
+  const runJobId = String(created.jobId || created.id || "");
+  if (!runJobId) throw new Error(`Canvas run response is missing jobId: ${JSON.stringify(created)}`);
   let job = created;
-  while (!["succeeded", "failed", "canceled"].includes(String(job.status))) {
+  while (!["completed", "failed", "cancelled", "succeeded", "canceled"].includes(String(job.status))) {
     await delay(3000);
-    job = await request(`/api/canvas/run-jobs/${created.id}`);
+    job = await request(`/api/canvas/run-jobs/${runJobId}`);
   }
   return { projectId: id, runJob: job, report: await report(id) };
 }
