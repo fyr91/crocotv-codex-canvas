@@ -31,10 +31,12 @@ const h3Settings = {
     supports: { promptEnhance: true },
 };
 const localModels: ProviderCatalogModel[] = [
-    { id: "volc-doubao-turbo", provider_id: "volcengine", capability: "llm", model_key: "doubao-seed-2-1-turbo-260628", display_name: "豆包 Seed 2.1 Turbo", is_default: true, config: { inputModalities: ["text", "image"] } },
-    { id: "volc-deepseek-flash", provider_id: "volcengine", capability: "llm", model_key: "deepseek-v4-flash-ga-260731", display_name: "DeepSeek V4 Flash GA", is_default: false, config: { inputModalities: ["text"] } },
-    { id: "volc-deepseek-pro", provider_id: "volcengine", capability: "llm", model_key: "deepseek-v4-pro-260425", display_name: "DeepSeek V4 Pro", is_default: false, config: { inputModalities: ["text"] } },
-    { id: "bigmodel-glm-52", provider_id: "bigmodel", capability: "llm", model_key: "glm-5.2", display_name: "GLM 5.2", is_default: false, config: { inputModalities: ["text"] } },
+    { id: "coding-plan-doubao-turbo", provider_id: "coding_plan", capability: "llm", model_key: "doubao-seed-2.1-turbo", display_name: "豆包 Seed 2.1 Turbo", is_default: true, config: { inputModalities: ["text", "image"] } },
+    { id: "coding-plan-deepseek-flash", provider_id: "coding_plan", capability: "llm", model_key: "deepseek-v4-flash", display_name: "DeepSeek V4 Flash", is_default: false, config: { inputModalities: ["text"] } },
+    { id: "coding-plan-deepseek-pro", provider_id: "coding_plan", capability: "llm", model_key: "deepseek-v4-pro", display_name: "DeepSeek V4 Pro", is_default: false, config: { inputModalities: ["text"] } },
+    { id: "coding-plan-minimax-m3", provider_id: "coding_plan", capability: "llm", model_key: "minimax-m3", display_name: "MiniMax M3", is_default: false, config: { inputModalities: ["text"] } },
+    { id: "coding-plan-kimi-k3", provider_id: "coding_plan", capability: "llm", model_key: "kimi-k3", display_name: "Kimi K3", is_default: false, config: { inputModalities: ["text"] } },
+    { id: "coding-plan-glm-53", provider_id: "coding_plan", capability: "llm", model_key: "glm-5.3", display_name: "GLM 5.3", is_default: false, config: { inputModalities: ["text"] } },
     { id: "bigmodel-glm-5v", provider_id: "bigmodel", capability: "llm", model_key: "glm-5v-turbo", display_name: "GLM 5V Turbo", is_default: false, config: { inputModalities: ["text", "image", "video"] } },
     { id: "runware-gemini-pro", provider_id: "runware", capability: "llm", model_key: "google:gemini@3.1-pro", display_name: "Runware · Gemini 3.1 Pro", is_default: false, config: { inputModalities: ["text", "image", "video", "audio"] } },
     { id: "runware-gemini-flash", provider_id: "runware", capability: "llm", model_key: "google:gemini@3-flash", display_name: "Runware · Gemini 3 Flash", is_default: false, config: { inputModalities: ["text", "image", "video", "audio"] } },

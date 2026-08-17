@@ -12,11 +12,10 @@ export { models };
 export type TextThinkingMode = "enabled" | "disabled" | "auto";
 
 export async function generateText(prompt: string, requestedModel?: string, inputResourceIds: string[] = [], inputDataUrls: string[] = [], systemPrompt = "", options: { thinking?: TextThinkingMode } = {}) {
-  const normalizedRequestedModel = requestedModel === "deepseek-v4-flash-260425" ? "deepseek-v4-flash-ga-260731" : requestedModel;
-  const logicalModel = normalizedRequestedModel && [...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm].includes(normalizedRequestedModel) ? normalizedRequestedModel : models.volcengineLlm[0];
-  const channel = models.runwareLlm.includes(logicalModel) ? "runware" : models.bigmodelLlm.includes(logicalModel) ? "bigmodel" : "volcengine";
-  const apiKey = required(channel === "runware" ? "RUNWARE_API_KEY" : channel === "bigmodel" ? "BIGMODEL_API_KEY" : "ARK_API_KEY");
-  const baseUrl = (channel === "runware" ? process.env.RUNWARE_BASE_URL || "https://api.runware.ai/v1" : channel === "bigmodel" ? process.env.BIGMODEL_BASE_URL || "https://open.bigmodel.cn/api/paas/v4" : process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
+  const normalizedRequestedModel = normalizeTextModel(requestedModel);
+  const availableModels = [...models.codingPlanLlm, ...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm];
+  const logicalModel = normalizedRequestedModel && availableModels.includes(normalizedRequestedModel) ? normalizedRequestedModel : "deepseek-v4-flash";
+  const channel = models.codingPlanLlm.includes(logicalModel) ? "coding-plan" : models.runwareLlm.includes(logicalModel) ? "runware" : models.bigmodelLlm.includes(logicalModel) ? "bigmodel" : "volcengine";
   const model = resolveLlmDeployment(logicalModel);
   const settledLeases = await Promise.allSettled(inputResourceIds.slice(0, 16).map(async (id) => {
     const resource = await resourceById(id);
@@ -36,13 +35,14 @@ export async function generateText(prompt: string, requestedModel?: string, inpu
       const match = dataUrl.match(/^data:(image\/(?:png|jpeg|webp));base64,/);
       if (match && modelAcceptsMimeType(logicalModel, match[1])) media.push({ mimeType: match[1], url: dataUrl });
     }
+    if (channel === "coding-plan") return requestCodingPlanText({ logicalModel, model, prompt, systemPrompt, media, thinking: options.thinking });
+    const apiKey = required(channel === "runware" ? "RUNWARE_API_KEY" : channel === "bigmodel" ? "BIGMODEL_API_KEY" : "ARK_API_KEY");
+    const baseUrl = (channel === "runware" ? process.env.RUNWARE_BASE_URL || "https://api.runware.ai/v1" : channel === "bigmodel" ? process.env.BIGMODEL_BASE_URL || "https://open.bigmodel.cn/api/paas/v4" : process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
     const content = media.length ? [{ type: "text", text: prompt }, ...media.map((item) => mediaContent(item.mimeType, item.url))] : prompt;
-    const messages = systemPrompt.length
-      ? [{ role: "system", content: systemPrompt }, { role: "user", content }]
-      : [{ role: "user", content }];
+    const messages = systemPrompt.length ? [{ role: "system", content: systemPrompt }, { role: "user", content }] : [{ role: "user", content }];
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages, ...(logicalModel === "deepseek-v4-flash-ga-260731" ? { thinking: { type: options.thinking || "enabled" } } : {}), stream: false }),
+      body: JSON.stringify({ model, messages, stream: false }),
       signal: AbortSignal.timeout(420_000),
     });
     const channelLabel = channel === "runware" ? "Runware" : channel === "bigmodel" ? "智谱 BigModel" : "火山引擎 Ark";
@@ -54,6 +54,35 @@ export async function generateText(prompt: string, requestedModel?: string, inpu
   } finally {
     await releaseModelAssetLeases(leases);
   }
+}
+
+async function requestCodingPlanText(input: { logicalModel: string; model: string; prompt: string; systemPrompt: string; media: Array<{ mimeType: string; url: string }>; thinking?: TextThinkingMode }) {
+  const apiKey = required("CODING_PLAN_API_KEY");
+  const baseUrl = String(process.env.CODING_PLAN_BASE_URL || "https://ark.cn-beijing.volces.com/api/plan").replace(/\/$/, "");
+  const endpoint = baseUrl.endsWith("/v1/messages") ? baseUrl : `${baseUrl}/v1/messages`;
+  const content = input.media.length
+    ? [{ type: "text", text: input.prompt }, ...input.media.map((item) => anthropicMediaContent(item.mimeType, item.url))]
+    : input.prompt;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: input.model,
+      max_tokens: Math.max(256, Math.min(32_768, Number(process.env.CODING_PLAN_MAX_TOKENS) || 8192)),
+      ...(input.systemPrompt.length ? { system: input.systemPrompt } : {}),
+      messages: [{ role: "user", content }],
+      ...(input.logicalModel === "deepseek-v4-flash" ? { thinking: { type: input.thinking || "enabled" } } : {}),
+      stream: false,
+    }),
+    signal: AbortSignal.timeout(420_000),
+  });
+  if (!response.ok) throw new Error(await responseError(response, `火山 Coding Plan 请求失败（${response.status}）`));
+  const payload = await response.json() as any;
+  const text = Array.isArray(payload?.content)
+    ? payload.content.filter((block: any) => block?.type === "text" && typeof block.text === "string").map((block: any) => block.text).join("")
+    : payload?.choices?.[0]?.message?.content;
+  if (typeof text !== "string" || !text.trim()) throw new Error("火山 Coding Plan 没有返回文本");
+  return text;
 }
 
 async function releaseModelAssetLeases(leases: ModelAssetLease[]) {
@@ -296,20 +325,32 @@ function mediaContent(mimeType: string, dataUrl: string) {
   if (mimeType.startsWith("audio/")) return { type: "audio_url", audio_url: { url: dataUrl } };
   return { type: "image_url", image_url: { url: dataUrl } };
 }
+function anthropicMediaContent(mimeType: string, url: string) {
+  const dataUrl = url.match(/^data:([^;,]+);base64,(.+)$/s);
+  if (dataUrl) return { type: "image", source: { type: "base64", media_type: dataUrl[1], data: dataUrl[2] } };
+  return { type: "image", source: { type: "url", url } };
+}
+function normalizeTextModel(model?: string) {
+  const aliases: Record<string, string> = {
+    "doubao-seed-2-1-turbo-260628": "doubao-seed-2.1-turbo",
+    "deepseek-v4-flash-ga-260731": "deepseek-v4-flash",
+    "deepseek-v4-flash-260425": "deepseek-v4-flash",
+    "deepseek-v4-pro-260425": "deepseek-v4-pro",
+    "glm-5.2": "glm-5.3",
+  };
+  const value = String(model || "").trim();
+  return aliases[value] || value;
+}
 function resolveLlmDeployment(model: string) {
   const envByModel: Record<string, string> = {
-    "doubao-seed-2-1-turbo-260628": "ARK_DOUBAO_TURBO_MODEL",
-    "deepseek-v4-flash-ga-260731": "ARK_DEEPSEEK_V4_FLASH_MODEL",
-    "deepseek-v4-pro-260425": "ARK_DEEPSEEK_V4_PRO_MODEL",
-    "glm-5.2": "BIGMODEL_GLM_52_MODEL",
     "glm-5v-turbo": "BIGMODEL_GLM_5V_MODEL",
   };
-  return String(process.env[envByModel[model]] || model).trim();
+  return String((envByModel[model] && process.env[envByModel[model]]) || model).trim();
 }
 function modelAcceptsMimeType(model: string, mimeType: string) {
   if (models.runwareLlm.includes(model)) return /^(image|video|audio)\//.test(mimeType);
   if (model === "glm-5v-turbo") return /^(image|video)\//.test(mimeType);
-  if (model === "doubao-seed-2-1-turbo-260628") return mimeType.startsWith("image/");
+  if (model === "doubao-seed-2.1-turbo") return mimeType.startsWith("image/");
   return false;
 }
 async function responseError(response: Response, fallback: string) {

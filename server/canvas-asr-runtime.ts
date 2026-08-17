@@ -34,18 +34,18 @@ export async function verifyCanvasVideoAsr(input: {
     sourceVideoNodeId: video.id,
     expectedText: input.expectedText,
     threshold: Math.max(0.5, Math.min(1, Number(input.threshold) || 0.88)),
-    content: "火山 ASR 正在识别视频音轨…",
+    content: "火山 Coding Plan · Seed-ASR 2.0 正在识别视频音轨…",
     status: "loading",
     generationState: "running",
     remoteOperationActive: input.remoteOperation,
     remoteOperationId: input.remoteOperation ? operationId : null,
-    remoteOperationLabel: input.remoteOperation ? "MCP · 火山 ASR 验收中" : "火山 ASR 验收中",
+    remoteOperationLabel: input.remoteOperation ? "MCP · Seed-ASR 2.0 验收中" : "Seed-ASR 2.0 验收中",
     commentColor: "green",
     errorDetails: "",
     ...shotLayout.child(91),
   };
   const operations: CanvasOperation[] = [
-    { op: "update_node", nodeId: video.id, patch: { metadata: { remoteOperationActive: input.remoteOperation, remoteOperationId: input.remoteOperation ? operationId : null, remoteOperationLabel: input.remoteOperation ? "MCP · 火山 ASR 验收中" : "火山 ASR 验收中" } } },
+    { op: "update_node", nodeId: video.id, patch: { metadata: { remoteOperationActive: input.remoteOperation, remoteOperationId: input.remoteOperation ? operationId : null, remoteOperationLabel: input.remoteOperation ? "MCP · Seed-ASR 2.0 验收中" : "Seed-ASR 2.0 验收中" } } },
   ];
   if (existing?.type === "comment") {
     operations.push({ op: "update_node", nodeId: resultNodeId, patch: { title: resultTitle, metadata: queuedMetadata } });
@@ -87,7 +87,7 @@ async function mutateAndPublish(projectId: string, operations: CanvasOperation[]
 }
 
 function safeError(error: unknown) {
-  return (error instanceof Error ? error.message : "火山 ASR 验收失败")
+  return (error instanceof Error ? error.message : "Seed-ASR 2.0 验收失败")
     .replace(/https?:\/\/\S+/gi, "[URL 已脱敏]")
     .slice(0, 500);
 }
@@ -109,7 +109,7 @@ export function verificationCommentContent(verification: {
 }) {
   const similarity = Number(verification.similarity.toFixed(4));
   return [
-    `## 火山 ASR 验收${verification.passed ? "通过" : "未通过"}`,
+    `## 火山 Coding Plan · Seed-ASR 2.0 验收${verification.passed ? "通过" : "未通过"}`,
     "",
     `- **状态**：${verification.passed ? "pass" : "fail"}`,
     `- **相似度**：${similarity}`,

@@ -139,7 +139,7 @@ function projectGraph(projectId: string, state: StudioProjectState) {
   }));
   edges.push({ fromNodeId: storyboardAnalysisId, toNodeId: globalVisualContextId });
   nodes.push(node(projectId, "frame", projectId, "prompt-revision-config", "config", "视频 Prompt 生成", 4560, frameY, 340, 390, {
-    groupId: groups.storyboard.id, artifactType: "studio-video-prompt-config", stage: "storyboard", generationMode: "text", model: "doubao-seed-2-1-turbo-260628", composerContent: state.originalText || "等待 Prompt 输入", count: 1, status: "idle", layoutSection: "prompt-revision", layoutOrder: 1,
+    groupId: groups.storyboard.id, artifactType: "studio-video-prompt-config", stage: "storyboard", generationMode: "text", model: "doubao-seed-2.1-turbo", composerContent: state.originalText || "等待 Prompt 输入", count: 1, status: "idle", layoutSection: "prompt-revision", layoutOrder: 1,
   }));
   edges.push({ fromNodeId: storyboardAnalysisId, toNodeId: globalPromptRevisionId }, { fromNodeId: globalVisualContextId, toNodeId: globalPromptRevisionId });
   frameY += 460;
@@ -210,7 +210,7 @@ function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNod
   edges.push({ fromNodeId: promptId, toNodeId: visualContextConfigId });
   const revisionConfigId = stableStudioNodeId(projectId, "frame", frame.id, "prompt-revision-config");
   nodes.push(node(projectId, "frame", frame.id, "prompt-revision-config", "config", `${frame.title} · Prompt 返修`, 4560, y, 340, 390, {
-    groupId, artifactType: "studio-shot-revision-config", stage: "storyboard", generationMode: "text", model: "glm-5.2", composerContent: frame.prompt || "等待返修输入", count: 1, status: "idle", shotId: frame.id, layoutSection: "prompt-revision", layoutOrder: frame.order * 10 + 2,
+    groupId, artifactType: "studio-shot-revision-config", stage: "storyboard", generationMode: "text", model: "glm-5.3", composerContent: frame.prompt || "等待返修输入", count: 1, status: "idle", shotId: frame.id, layoutSection: "prompt-revision", layoutOrder: frame.order * 10 + 2,
   }));
   edges.push({ fromNodeId: promptId, toNodeId: revisionConfigId });
   const imageVariants = frame.image_asset?.variants || [];

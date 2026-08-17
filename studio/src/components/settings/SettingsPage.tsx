@@ -30,6 +30,7 @@ const LS_KEY_MODEL = "lumenx_default_model_settings";
 const LEGACY_PROMPT_STORAGE_KEY = "lumenx_default_prompt_config";
 
 const PROVIDER_LABELS: Record<string, string> = {
+  CODING_PLAN_API_KEY: "火山 Coding Plan",
   ARK_API_KEY: "火山方舟 Ark",
   BIGMODEL_API_KEY: "BigModel",
   RUNWARE_API_KEY: "Runware",

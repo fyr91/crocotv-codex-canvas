@@ -13,7 +13,7 @@ const audioExtensions = new Set([".mp3", ".wav", ".m4a", ".aac", ".flac"]);
 export const h3PromptTemplate = Object.freeze({ file: "H3-Ref2VA-System-Prompt.txt", templateKey: "croco.h3.universal-ref2va", templateVersion: "2.0.0" });
 
 export function buildDoubaoPromptRequest({ model, systemPrompt, content }) {
-    return { model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content }], stream: false };
+    return { model, max_tokens: 8192, system: systemPrompt, messages: [{ role: "user", content: content.map(toAnthropicContent) }], stream: false };
 }
 
 export async function generateH3Prompt({ shotDir, config }, dependencies = {}) {
@@ -83,15 +83,16 @@ export async function generateH3Prompt({ shotDir, config }, dependencies = {}) {
     }
 
     const fetcher = dependencies.fetcher || fetch;
-    const response = await fetcher(`${config.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+    const baseUrl = config.baseUrl.replace(/\/+$/, "");
+    const response = await fetcher(baseUrl.endsWith("/v1/messages") ? baseUrl : `${baseUrl}/v1/messages`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json", Accept: "application/json" },
+        headers: { Authorization: `Bearer ${config.apiKey}`, "anthropic-version": "2023-06-01", "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(buildDoubaoPromptRequest({ model: config.model, systemPrompt, content })),
         signal: AbortSignal.timeout(420_000),
     });
     if (!response.ok) throw new Error(await responseError(response));
     const payload = await response.json();
-    const prompt = String(payload?.choices?.[0]?.message?.content || "").trim();
+    const prompt = Array.isArray(payload?.content) ? payload.content.filter((block) => block?.type === "text").map((block) => String(block.text || "")).join("").trim() : "";
     if (!prompt) throw new Error("豆包没有返回 H3 Prompt");
     if (prompt.length > 20000) throw new Error("豆包返回的 H3 Prompt 超过 20000 字符");
     const videoDir = path.join(directory, "视频生成");
@@ -290,13 +291,21 @@ async function readJson(filePath) {
 
 export function promptConfig(env = process.env) {
     const config = {
-        apiKey: String(env.ARK_API_KEY || "").trim(),
-        model: String(env.ARK_MODEL || "").trim(),
-        baseUrl: String(env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").trim(),
+        apiKey: String(env.CODING_PLAN_API_KEY || "").trim(),
+        model: String(env.CODING_PLAN_DOUBAO_TURBO_MODEL || "doubao-seed-2.1-turbo").trim(),
+        baseUrl: String(env.CODING_PLAN_BASE_URL || "https://ark.cn-beijing.volces.com/api/plan").trim(),
     };
-    const missing = [["ARK_API_KEY", config.apiKey], ["ARK_MODEL", config.model], ["ARK_BASE_URL", config.baseUrl]].filter(([, value]) => !value).map(([name]) => name);
+    const missing = [["CODING_PLAN_API_KEY", config.apiKey], ["CODING_PLAN_DOUBAO_TURBO_MODEL", config.model], ["CODING_PLAN_BASE_URL", config.baseUrl]].filter(([, value]) => !value).map(([name]) => name);
     if (missing.length) throw new Error(`请在 .codex/.env 中填写：${missing.join("、")}`);
     return config;
+}
+
+function toAnthropicContent(block) {
+    if (block?.type !== "image_url") return block;
+    const url = String(block.image_url?.url || "");
+    const match = url.match(/^data:([^;,]+);base64,(.+)$/su);
+    if (!match) return { type: "image", source: { type: "url", url } };
+    return { type: "image", source: { type: "base64", media_type: match[1], data: match[2] } };
 }
 
 async function responseError(response, operation = "豆包 H3 Prompt 生成") {

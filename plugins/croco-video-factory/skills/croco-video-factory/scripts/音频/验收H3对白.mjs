@@ -6,7 +6,7 @@ import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { loadAsrConfig, parseArgs, transcribeAudio } from "./火山ASR.mjs";
+import { loadAsrConfig, parseArgs, transcribeAudio } from "../../runtime/火山ASR.mjs";
 
 const numberMap = new Map([..."0123456789"].map((value, index) => [value, "零一二三四五六七八九"[index]]));
 
@@ -69,7 +69,7 @@ export async function validateProjectDialogue({ projectDir, planPath = null, ffm
                 passes.push(result);
                 if (pass === 1 && normalizeDialogue(result.text) === expectedNormalized) break;
             }
-        } else passes.push({ provider: "volcengine", engine: config.resourceId, durationMs: 0, text: "", utterances: [], noAudioStream: true });
+        } else passes.push({ provider: "coding-plan", engine: config.model, resourceId: config.resourceId, durationMs: 0, text: "", utterances: [], noAudioStream: true });
         const exactPasses = passes.filter((item) => normalizeDialogue(item.text) === expectedNormalized);
         const requiredVotes = passes.length === 1 ? 1 : Math.floor(passes.length / 2) + 1;
         const verdict = exactPasses.length >= requiredVotes ? "pass" : "fail";
@@ -102,9 +102,10 @@ export async function validateProjectDialogue({ projectDir, planPath = null, ffm
     const report = {
         schemaVersion: 2,
         validationStage: "generated-h3-shot-files",
-        provider: "volcengine",
-        engine: config.resourceId,
-        policy: "逐片段提取 16kHz 单声道 WAV 并调用火山录音文件极速版。首轮不匹配时自动执行三轮多数共识；必须与计划对白完整等价且无额外人声。",
+        provider: "coding-plan",
+        engine: config.model,
+        resourceId: config.resourceId,
+        policy: "逐片段提取 16kHz 单声道 WAV 并调用火山 Agent Plan 的 Seed-ASR 2.0 单流接口。首轮不匹配时自动执行三轮多数共识；必须与计划对白完整等价且无额外人声。",
         dialoguePlan: path.relative(root, dialoguePlanPath),
         shots,
         summary,

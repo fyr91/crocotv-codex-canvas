@@ -1,4 +1,4 @@
-import { modelOptionName } from "@/stores/use-config-store";
+import { modelOptionName, providerIdForModel } from "@/stores/use-config-store";
 import type { CloudAsset } from "./cloud-assets";
 
 export type GenerationCapability = "llm" | "image" | "video" | "speech" | "music";
@@ -12,7 +12,8 @@ export async function createGeneration(input: { capability: GenerationCapability
     }
     if (input.capability !== "llm") throw new Error(`本地模式未启用 ${input.capability} 通用任务入口`);
     const text = await localText(input.prompt, input.model, input.inputAssetIds, input.inputImageOverrides?.map((item) => item.dataUrl), input.signal);
-    return { job: { id: crypto.randomUUID(), provider_id: modelOptionName(input.model).startsWith("google:gemini@") ? "runware" : "volcengine", status: "succeeded" as const, output_text: text }, assets: [] };
+    const providerId = providerIdForModel(input.model);
+    return { job: { id: crypto.randomUUID(), provider_id: providerId === "runware" ? "runware" : providerId === "bigmodel" ? "bigmodel" : "coding_plan", status: "succeeded" as const, output_text: text }, assets: [] };
 }
 export async function requestTextGeneration(input: { model: string; prompt: string; params?: Record<string, unknown>; inputAssetIds?: string[]; inputImageOverrides?: Array<{ assetId: string; dataUrl: string }>; signal?: AbortSignal; onJobCreated?: (jobId: string) => void; onReasoning?: (value: string, jobId: string) => void }) {
     const id = crypto.randomUUID(); input.onJobCreated?.(id); return localText(input.prompt, input.model, input.inputAssetIds, input.inputImageOverrides?.map((item) => item.dataUrl), input.signal);

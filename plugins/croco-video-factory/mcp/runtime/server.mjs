@@ -33048,7 +33048,7 @@ var init_server3 = __esm({
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
     }, async ({ projectId, outputNodeIds, concurrency }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/rerun-outputs`, { method: "POST", body: { outputNodeIds, concurrency } })));
     server.registerTool("canvas_verify_video_asr", {
-      description: "Verify a generated Canvas video against its expected storyboard narration with Volcano Engine BigModel ASR. The video is temporarily MCP-locked and glows green without changing its normal video UI; a nearby unconnected Comment node records transcript, similarity, threshold, and pass/fail for visible review. Comment nodes never participate in Canvas connections.",
+      description: "Verify a generated Canvas video against its expected storyboard narration with Volcano Agent Plan Seed-ASR 2.0. The video is temporarily MCP-locked and glows green without changing its normal video UI; a nearby unconnected Comment node records transcript, similarity, threshold, and pass/fail for visible review. Comment nodes never participate in Canvas connections.",
       inputSchema: {
         projectId: external_exports.string().uuid(),
         videoNodeId: external_exports.string().min(1).max(80),

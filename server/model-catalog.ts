@@ -1,4 +1,5 @@
 export const providerModels: {
+  codingPlanLlm: string[];
   volcengineLlm: string[];
   bigmodelLlm: string[];
   runwareLlm: string[];
@@ -6,8 +7,9 @@ export const providerModels: {
   video: string[];
   music: string;
 } = {
-  volcengineLlm: ["doubao-seed-2-1-turbo-260628", "deepseek-v4-flash-ga-260731", "deepseek-v4-pro-260425"],
-  bigmodelLlm: ["glm-5.2", "glm-5v-turbo"],
+  codingPlanLlm: ["doubao-seed-2.1-turbo", "deepseek-v4-flash", "deepseek-v4-pro", "minimax-m3", "kimi-k3", "glm-5.3"],
+  volcengineLlm: [],
+  bigmodelLlm: ["glm-5v-turbo"],
   runwareLlm: ["google:gemini@3.1-pro", "google:gemini@3-flash", "google:gemini@3.1-flash-lite"],
   image: ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2"],
   video: ["MiniMax H3"],
@@ -31,11 +33,12 @@ export function getStudioModelCatalog() {
     generatedFrom: "server/model-catalog.ts",
     compat: { legacy_model_ids: {} },
     defaults: {
-      text_model: "deepseek-v4-flash-ga-260731",
+      text_model: "deepseek-v4-flash",
       canonical_model_settings: imageDefaults(),
       model_settings: imageDefaults(),
     },
     providers: {
+      coding_plan: { id: "coding_plan", display_name: "火山 Coding Plan", secret_keys: ["CODING_PLAN_API_KEY"] },
       ark: { id: "ark", display_name: "火山方舟 Ark", secret_keys: ["ARK_API_KEY"] },
       bigmodel: { id: "bigmodel", display_name: "BigModel", secret_keys: ["BIGMODEL_API_KEY"] },
       runware: { id: "runware", display_name: "Runware", secret_keys: ["RUNWARE_API_KEY"] },
@@ -45,6 +48,7 @@ export function getStudioModelCatalog() {
       tts: { id: "tts", display_name: "豆包 TTS", secret_keys: ["DOUBAO_TTS_API_KEY"] },
     },
     families: {
+      coding_plan: { family: "coding_plan", display_name: "火山 Coding Plan" },
       ark: { family: "ark", display_name: "火山方舟 Ark" },
       bigmodel: { family: "bigmodel", display_name: "BigModel" },
       runware: { family: "runware", display_name: "Runware" },
@@ -78,6 +82,7 @@ function imageDefaults() {
 
 function textModels() {
   return Object.fromEntries([
+    ...providerModels.codingPlanLlm.map((id) => [id, textModel(id, codingPlanDisplayName(id), "coding_plan")]),
     ...providerModels.volcengineLlm.map((id) => [id, textModel(id, id.startsWith("deepseek") ? "DeepSeek" : "Doubao Seed", "ark")]),
     ...providerModels.bigmodelLlm.map((id) => [id, textModel(id, id.toUpperCase(), "bigmodel")]),
     ...providerModels.runwareLlm.map((id) => [id, textModel(id, id.replace("google:", "").replace("@", " "), "runware")]),
@@ -85,7 +90,19 @@ function textModels() {
 }
 
 function textModel(id: string, displayName: string, family: string) {
-  return { id, display_name: displayName, description: "Croco 文本与多模态任务模型", family, status: "active", capabilities: id === "glm-5v-turbo" ? ["text", "vision"] : ["text"], duration: null, params: {}, inputs: {}, ui: { selection_group: "text", visible_in: ["global_settings"], recommended: id === "deepseek-v4-flash-ga-260731", order: 50, badges: ["Croco"] } };
+  return { id, display_name: displayName, description: "Croco 文本与多模态任务模型", family, status: "active", capabilities: id === "glm-5v-turbo" || id === "doubao-seed-2.1-turbo" ? ["text", "vision"] : ["text"], duration: null, params: {}, inputs: {}, ui: { selection_group: "text", visible_in: ["global_settings"], recommended: id === "deepseek-v4-flash", order: 50, badges: ["Croco"] } };
+}
+
+function codingPlanDisplayName(id: string) {
+  const names: Record<string, string> = {
+    "doubao-seed-2.1-turbo": "豆包 Seed 2.1 Turbo",
+    "deepseek-v4-flash": "DeepSeek V4 Flash",
+    "deepseek-v4-pro": "DeepSeek V4 Pro",
+    "minimax-m3": "MiniMax M3",
+    "kimi-k3": "Kimi K3",
+    "glm-5.3": "GLM 5.3",
+  };
+  return names[id] || id;
 }
 
 function imageModel(id: string, name: string, description: string, order: number, recommended: boolean) {

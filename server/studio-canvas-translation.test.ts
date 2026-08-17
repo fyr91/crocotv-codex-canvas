@@ -95,11 +95,11 @@ test("Canvas config choices persist as typed Studio node overrides", () => {
   const state = newStudioProjectState("第一幕");
   const project = mappedProject(projectId, state);
   const configNodeId = stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
-  const next = translateStudioCanvasEdits(state, project, [{ op: "update_node", nodeId: configNodeId, metadata: { model: "glm-5.2", count: 2, studioRole: "tampered" } }]);
-  assert.deepEqual(next.canvasNodeOverrides, [{ nodeId: configNodeId, metadata: { model: "glm-5.2", count: 2 } }]);
+  const next = translateStudioCanvasEdits(state, project, [{ op: "update_node", nodeId: configNodeId, metadata: { model: "glm-5.3", count: 2, studioRole: "tampered" } }]);
+  assert.deepEqual(next.canvasNodeOverrides, [{ nodeId: configNodeId, metadata: { model: "glm-5.3", count: 2 } }]);
   const mapped = studioMappingOperations({ projectId, state: next, nodes: project.nodes, connections: project.connections });
   const update = mapped.find((operation) => operation.op === "update_node" && operation.nodeId === configNodeId);
   assert.equal(update?.op, "update_node");
-  assert.equal(update.patch.metadata?.model, "glm-5.2");
+  assert.equal(update.patch.metadata?.model, "glm-5.3");
   assert.equal(update.patch.metadata?.studioRole, "entity-analysis-config");
 });

@@ -11,7 +11,9 @@
     "dev:studio": "npm --prefix studio run dev",
     "mcp": "tsx plugins/croco-video-factory/mcp/bootstrap.ts",
     "build:mcp": "esbuild plugins/croco-video-factory/mcp/bootstrap.ts --bundle --platform=node --format=esm --target=node20 --outfile=plugins/croco-video-factory/mcp/runtime/server.mjs",
-    "build:skills": "esbuild plugins/croco-video-factory/skills/character-speaking/scripts/generate-speech.mjs --bundle --platform=node --format=esm --target=node20 --outfile=plugins/croco-video-factory/skills/character-speaking/runtime/generate-speech.mjs",
+    "build:skills": "npm run build:skill-character-speaking && npm run build:skill-seed-asr",
+    "build:skill-character-speaking": "esbuild plugins/croco-video-factory/skills/character-speaking/scripts/generate-speech.mjs --bundle --platform=node --format=esm --target=node20 --outfile=plugins/croco-video-factory/skills/character-speaking/runtime/generate-speech.mjs",
+    "build:skill-seed-asr": "esbuild plugins/croco-video-factory/skills/croco-video-factory/scripts/音频/火山ASR.mjs --bundle --platform=node --format=esm --target=node20 --outfile=plugins/croco-video-factory/skills/croco-video-factory/runtime/火山ASR.mjs",
     "build:manifest": "node scripts/generate-bundle-manifest.mjs",
     "generate:model-catalog": "tsx scripts/generate-studio-model-catalog.ts",
     "build": "npm run generate:model-catalog && npm run build:mcp && npm run build:skills && npm run build:manifest && tsc --noEmit && npm --prefix web run build && npm --prefix studio run build",
@@ -26,6 +28,7 @@
     "express": "^5.1.0",
     "multer": "^2.0.2",
     "sharp": "^0.35.2",
+    "ws": "^8.18.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -33,6 +36,7 @@
     "@types/express": "^5.0.5",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.10.2",
+    "@types/ws": "^8.18.1",
     "concurrently": "^9.1.0",
     "esbuild": "^0.28.2",
     "tsx": "^4.19.2",

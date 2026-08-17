@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export const providerSecretKeys = [
+  "CODING_PLAN_API_KEY",
   "ARK_API_KEY",
   "BIGMODEL_API_KEY",
   "RUNWARE_API_KEY",

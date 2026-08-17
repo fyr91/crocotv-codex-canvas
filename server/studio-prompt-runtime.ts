@@ -175,7 +175,7 @@ async function resolveStudioPrompt(state: Awaited<ReturnType<typeof getStudioBac
     ? state.projectPromptVersions.find((version) => version.templateKey === binding.templateKey && version.templateVersion === binding.templateVersion)
     : undefined;
   const prompt = projectVersion || builtin;
-  const projectRequestedModel = String(requestedModel || state.modelSettings[`${operation}_model`] || state.modelSettings.polish_model || state.modelSettings.llm_model || state.modelSettings.text_model || "");
+  const projectRequestedModel = normalizeLegacyTextModel(String(requestedModel || state.modelSettings[`${operation}_model`] || state.modelSettings.polish_model || state.modelSettings.llm_model || state.modelSettings.text_model || ""));
   return {
     title: builtin.title,
     templateKey,
@@ -249,7 +249,11 @@ async function executeVisualContext(input: StudioGenerationRequest, project: any
 
 function objectValue(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function stringArray(value: unknown) { return Array.isArray(value) ? value.map(String).filter(Boolean).slice(0, 100) : []; }
-function textModels() { return [...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm]; }
+function textModels() { return [...models.codingPlanLlm, ...models.volcengineLlm, ...models.bigmodelLlm, ...models.runwareLlm]; }
+function normalizeLegacyTextModel(value: string) {
+  const aliases: Record<string, string> = { "doubao-seed-2-1-turbo-260628": "doubao-seed-2.1-turbo", "deepseek-v4-flash-ga-260731": "deepseek-v4-flash", "deepseek-v4-flash-260425": "deepseek-v4-flash", "deepseek-v4-pro-260425": "deepseek-v4-pro", "glm-5.2": "glm-5.3" };
+  return aliases[value] || value;
+}
 
 function studioPromptConfigNodeId(projectId: string, operation: StudioPromptOperation, frameId?: string) {
   if (operation === "entity_extraction") return stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");

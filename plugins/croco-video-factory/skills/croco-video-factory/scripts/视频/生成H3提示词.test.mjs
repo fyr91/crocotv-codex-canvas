@@ -7,12 +7,9 @@ test("sends the managed document byte-for-byte as the only system message", () =
     const systemPrompt = "最终系统提示词第一行\n\n最终系统提示词末行\n";
     const content = [{ type: "text", text: "runtime brief" }];
     const request = buildDoubaoPromptRequest({ model: "doubao", systemPrompt, content });
-    assert.deepEqual(request.messages, [
-        { role: "system", content: systemPrompt },
-        { role: "user", content },
-    ]);
-    assert.equal(request.messages[0].content, systemPrompt);
-    assert.equal(request.messages.filter((message) => message.role === "system").length, 1);
+    assert.deepEqual(request.messages, [{ role: "user", content }]);
+    assert.equal(request.system, systemPrompt);
+    assert.equal(request.messages.filter((message) => message.role === "system").length, 0);
     assert.equal(h3PromptTemplate.templateVersion, "2.0.0");
 });
 

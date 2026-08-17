@@ -15,7 +15,7 @@ import type { TextThinkingMode } from "./providers";
 import { findReusableEntityExtraction, parseStudioJson, type EntityExtractionPayload } from "./studio-entity-extraction-recovery";
 
 type EntityKind = "character" | "scene" | "prop";
-const ENTITY_EXTRACTION_MODEL = "deepseek-v4-flash-ga-260731";
+const ENTITY_EXTRACTION_MODEL = "deepseek-v4-flash";
 const ENTITY_EXTRACTION_THINKING: TextThinkingMode = "disabled";
 const entityExtractionRequests = new Map<string, Promise<EntityExtractionPayload>>();
 
