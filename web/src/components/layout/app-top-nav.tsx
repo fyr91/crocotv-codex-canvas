@@ -2,10 +2,11 @@ import { Clapperboard, Images, Maximize2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import { UserStatusActions } from "@/components/layout/user-status-actions";
+import { studioOrigin } from "@/lib/studio-origin";
 
 const navigationItems = [
     { to: "/canvas", label: "我的画布", icon: Maximize2 },
-    { to: import.meta.env.VITE_STUDIO_ORIGIN || "http://localhost:3010", matchPath: "/studio", label: "视频工坊", icon: Clapperboard, external: true },
+    { to: studioOrigin, matchPath: "/studio", label: "视频工坊", icon: Clapperboard, external: true },
     { to: "/assets", label: "本地素材", icon: Images },
 ];
 

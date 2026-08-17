@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AudioLines, Blocks, Copy, Home, ImageIcon, Images, List, Menu, Music2, Plus, Redo2, Send, Split, Trash2, Undo2, Upload, Video } from "lucide-react";
+import { AudioLines, Blocks, Clapperboard, Copy, Home, ImageIcon, Images, List, Menu, Music2, Plus, Redo2, Send, Split, Trash2, Undo2, Upload, Video } from "lucide-react";
 import { saveAs } from "file-saver";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -55,6 +55,7 @@ import { CanvasTemplateSubmitModal } from "@/components/canvas/canvas-template-s
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
+import { studioOrigin } from "@/lib/studio-origin";
 import { AudioSegmentationPanel } from "@/components/audio/audio-segmentation-panel";
 import { useCanvasStore, type CanvasProject, type CanvasSaveState } from "@/stores/canvas/use-canvas-store";
 import { applyStudioCanvasEdits, canvasClientId, readCanvasProject, subscribeCanvasProject, type StudioCanvasEdit } from "@/services/canvas-live-sync";
@@ -3552,6 +3553,7 @@ function CrocoCanvasPage() {
                     canRedo={historyState.canRedo}
                     onHome={() => navigate("/")}
                     onProjects={() => navigate("/canvas")}
+                    onStudio={() => window.location.assign(studioOrigin)}
                     onCreateProject={createAndOpenProject}
                     onDeleteProject={deleteCurrentProject}
                     onImportImage={() => handleUploadRequest()}
@@ -3988,6 +3990,7 @@ function CanvasTopBar({
     canRedo,
     onHome,
     onProjects,
+    onStudio,
     onCreateProject,
     onDeleteProject,
     onImportImage,
@@ -4010,6 +4013,7 @@ function CanvasTopBar({
     canRedo: boolean;
     onHome: () => void;
     onProjects: () => void;
+    onStudio: () => void;
     onCreateProject: () => void;
     onDeleteProject: () => void;
     onImportImage: () => void;
@@ -4036,10 +4040,12 @@ function CanvasTopBar({
         ? [
               { key: "home", icon: <Home className="size-4" />, label: "主页", onClick: onHome },
               { key: "projects", icon: <Images className="size-4" />, label: "我的画布", onClick: onProjects },
+              { key: "studio", icon: <Clapperboard className="size-4" />, label: "视频工坊", onClick: onStudio },
           ]
         : [
               { key: "home", icon: <Home className="size-4" />, label: "主页", onClick: onHome },
               { key: "projects", icon: <Images className="size-4" />, label: "我的画布", onClick: onProjects },
+              { key: "studio", icon: <Clapperboard className="size-4" />, label: "视频工坊", onClick: onStudio },
               { type: "divider" as const },
               { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
               { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },

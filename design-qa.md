@@ -50,8 +50,6 @@
 
 final result: passed
 
----
-
 # Entity Extraction Inline Edit — Design QA
 
 ## Evidence and state
@@ -218,5 +216,52 @@ final result: passed
 ## Follow-up Polish
 
 - No P3 polish item is required for acceptance.
+
+final result: passed
+
+---
+
+# Canvas Studio Navigation — Design QA
+
+## Evidence
+
+- Source visual truth: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-7e2601b2-0a45-44ca-a171-4b85271091a5.png`
+- Browser-rendered implementation: `/tmp/canvas-studio-nav-full.png`
+- Focused menu comparison: `/tmp/canvas-studio-nav-menu.png`
+- Browser viewport: 1280 × 720 CSS px
+- Density: devicePixelRatio 1; no density normalization required
+- Source pixels: 258 × 343 (focused menu crop)
+- Implementation pixels: 1280 × 720 full view; 236 × 391 focused menu crop
+- State: dark theme, editable infinite canvas, navigation menu open
+- Primary interaction tested: open canvas navigation; select “视频工坊”; arrive at `http://localhost:3010/`
+- Console errors: none
+
+## Findings
+
+No actionable P0, P1, or P2 differences were found.
+
+- Fonts and typography: existing menu family, size, weight, line height, and disabled-state hierarchy are preserved.
+- Spacing and layout rhythm: the existing item spacing, divider rhythm, radius, and elevation are preserved. The menu is intentionally one row taller to accommodate the requested entry.
+- Colors and visual tokens: dark surface, white foreground, muted disabled commands, and destructive red remain consistent with the source.
+- Image quality and asset fidelity: no raster imagery is introduced. The new entry uses the same Lucide icon system as the surrounding menu.
+- Copy and content: “视频工坊” appears directly below “我的画布” in both editable and read-only menu definitions.
+- Interaction: the complete row is actionable and navigates in the current window to the configured Studio origin.
+
+## Comparison Evidence
+
+- Full view: the menu remains anchored beneath the upper-left navigation trigger without covering persistent canvas controls beyond the expected additional row height.
+- Focused region: the new clapperboard icon and label align with the existing icon column and text baseline; dividers and all original actions remain unchanged.
+- Comparison history: first pass passed; no P0/P1/P2 fixes or repeat capture were required.
+
+## Implementation Checklist
+
+- [x] Add the entry to editable canvas menus.
+- [x] Add the entry to read-only canvas menus.
+- [x] Reuse the configured Studio origin shared with the top navigation.
+- [x] Verify the visible menu, navigation behavior, and browser console.
+
+## Follow-up Polish
+
+No P3 follow-up is required for this scoped change.
 
 final result: passed

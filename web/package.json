@@ -7,7 +7,7 @@
         "dev": "vite --host 0.0.0.0 --port 3000",
         "build": "vite build",
         "typecheck": "tsc --noEmit",
-    "test": "vitest run src/pages/assets/asset-upload-batch.test.ts src/components/layout/app-top-nav.test.tsx src/components/layout/page-shell.test.tsx src/pages/content/index.test.tsx src/components/canvas/managed-canvas-video.test.tsx src/lib/canvas/canvas-result-export.test.ts src/lib/canvas/canvas-connection-plan.test.ts src/lib/canvas/canvas-template.test.ts src/lib/canvas/canvas-comment.test.ts src/lib/canvas/canvas-viewport-virtualization.test.ts && node tests/workspace-library-layout-contract.test.ts && node tests/content-topic-create-copy-contract.test.ts && node tests/asset-batch-canvas-connect-contract.test.ts && node tests/canvas-video-frame-picker-contract.test.ts",
+    "test": "vitest run src/pages/assets/asset-upload-batch.test.ts src/components/layout/app-top-nav.test.tsx src/components/layout/page-shell.test.tsx src/pages/content/index.test.tsx src/components/canvas/managed-canvas-video.test.tsx src/lib/canvas/canvas-result-export.test.ts src/lib/canvas/canvas-connection-plan.test.ts src/lib/canvas/canvas-template.test.ts src/lib/canvas/canvas-comment.test.ts src/lib/canvas/canvas-viewport-virtualization.test.ts && node tests/workspace-library-layout-contract.test.ts && node tests/content-topic-create-copy-contract.test.ts && node tests/asset-batch-canvas-connect-contract.test.ts && node tests/canvas-video-frame-picker-contract.test.ts && node tests/canvas-studio-nav-contract.test.ts",
         "start": "vite preview --host 0.0.0.0 --port 3000",
         "format": "prettier --write .",
         "format:check": "prettier --check ."
