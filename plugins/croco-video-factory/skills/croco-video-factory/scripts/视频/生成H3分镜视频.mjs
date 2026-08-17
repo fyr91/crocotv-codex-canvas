@@ -133,20 +133,22 @@ async function processShot(input, dependencies) {
         await atomicJson(statePath, { status: "submitting", externalJobId });
         const [images, audios, prompt] = await Promise.all([assets(manifest.images, "images"), assets(manifest.audios, "audio"), readFile(path.resolve(directory, manifest.promptPath), "utf8")]);
         const response = await submitH3Job({ config: input.config, request: buildH3Request({ externalJobId, prompt, durationSeconds: manifest.durationSeconds, quality: manifest.quality, imageAssetIds: images, audioAssetIds: audios }), idempotencyKey: externalJobId }, dependencies);
-        jobId = response.items?.[0]?.job_id;
+        jobId = response.job_id;
         if (!jobId) throw new Error("H3 没有返回 Job ID");
-        await atomicJson(statePath, { status: "queued", externalJobId, jobId, batchId: response.batch_id });
+        await atomicJson(statePath, { status: "queued", externalJobId, jobId });
     }
     let job;
-    do { job = await getH3Job({ config: input.config, jobId }, dependencies); await atomicJson(statePath, { ...state, status: job.status, jobId, stage: job.stage, progress: job.progress }); if (["queued", "running"].includes(job.status)) await (dependencies.wait || ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(5000); } while (["queued", "running"].includes(job.status));
+    const activeStatuses = ["accepted", "preparing", "queued", "dispatching", "running", "canceling", "unknown"];
+    do { job = await getH3Job({ config: input.config, jobId }, dependencies); await atomicJson(statePath, { ...state, status: job.status, jobId, stage: job.stage, progress: job.progress }); if (activeStatuses.includes(job.status)) await (dependencies.wait || ((ms) => new Promise((resolve) => setTimeout(resolve, ms))))(5000); } while (activeStatuses.includes(job.status));
     if (job.status !== "succeeded") throw new Error(job.error || `H3 任务${job.status}`);
-    if (job.width !== manifest.expectedWidth || job.height !== manifest.expectedHeight || job.duration_seconds !== manifest.durationSeconds) throw new Error(`H3 输出规格与请求不一致：期望 ${manifest.expectedWidth}×${manifest.expectedHeight}`);
+    const parameters = job.parameters || {};
+    if (parameters.width !== manifest.expectedWidth || parameters.height !== manifest.expectedHeight || parameters.duration_seconds !== manifest.durationSeconds) throw new Error(`H3 输出规格与请求不一致：期望 ${manifest.expectedWidth}×${manifest.expectedHeight}`);
     const [video, poster] = await Promise.all([downloadH3({ config: input.config, jobId }, dependencies), downloadH3({ config: input.config, jobId, kind: "poster" }, dependencies)]);
     if (!video.length || !poster.length) throw new Error("H3 输出文件为空");
     const videoPath = path.join(directory, "分镜视频.mp4");
     await writeFile(videoPath, video); await writeFile(path.join(directory, "分镜视频封面.jpg"), poster);
     const actualDurationSeconds = dependencies.probeDuration ? await dependencies.probeDuration(videoPath) : await probeDuration(input.ffprobePath, videoPath);
-    const pointer = { status: "succeeded", jobId, path: "分镜视频.mp4", posterPath: "分镜视频封面.jpg", shotId: manifest.shotId, generationSegmentId: manifest.generationSegmentId, seed: job.seed, width: job.width, height: job.height, aspectRatio: manifest.aspectRatio, quality: manifest.quality, targetDurationSeconds: manifest.targetDurationSeconds ?? manifest.durationSeconds, actualDurationSeconds, durationSeconds: actualDurationSeconds, ...(manifest.continuity ? { continuity: manifest.continuity } : {}) };
+    const pointer = { status: "succeeded", jobId, path: "分镜视频.mp4", posterPath: "分镜视频封面.jpg", shotId: manifest.shotId, generationSegmentId: manifest.generationSegmentId, seed: parameters.seed, width: parameters.width, height: parameters.height, aspectRatio: manifest.aspectRatio, quality: manifest.quality, targetDurationSeconds: manifest.targetDurationSeconds ?? manifest.durationSeconds, actualDurationSeconds, durationSeconds: actualDurationSeconds, ...(manifest.continuity ? { continuity: manifest.continuity } : {}) };
     await atomicJson(path.join(directory, "当前视频.json"), pointer); await atomicJson(statePath, pointer); return pointer;
 }
 
