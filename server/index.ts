@@ -6,7 +6,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rename } from "node:fs/promises";
 import { addResource, createProject, dataDir, ensureStorage, fileSize, listProjects, listResources, readProject, renameProject, resourceById, resourcesDir, safeResourcePath, saveProject, trashProject, trashResource, typeFromMime, updateResource } from "./storage";
 import { resourceThumbnail, thumbnailSize } from "./thumbnails";
-import { generateH3Video, generateImage, generateMusic, generateText, models } from "./providers";
+import { createFlashVsrEnhancement, generateImage, generateMusic, generateText, generateVideo, getFlashVsrEnhancement, models } from "./providers";
+import { gpuApiConfigured } from "./gpu-orchestrator";
 import { prepareH3Prompt } from "./h3-prompt";
 import { generateSpeech, type SpeechGenerationProgress } from "./speech";
 import { listCharacters, syncCharacters } from "./characters";
@@ -50,7 +51,8 @@ app.get("/api/status", (_request, response) => response.json({
     bigmodel: Boolean(process.env.BIGMODEL_API_KEY),
     runware: Boolean(process.env.RUNWARE_API_KEY),
     speech: Boolean(process.env.ARK_API_KEY && process.env.DOUBAO_TTS_API_KEY && process.env.DOUBAO_TTS_RESOURCE_ID),
-    h3: Boolean(process.env.H3_BASE_URL && process.env.H3_API_KEY),
+    gpu: gpuApiConfigured(),
+    h3: gpuApiConfigured(),
     asr: Boolean(process.env.DOUBAO_ASR_API_KEY || process.env.DOUBAO_TTS_API_KEY),
     suno: Boolean(process.env.SUNO_API_KEY && sunoCallbackState() !== "error"),
   },
@@ -195,22 +197,28 @@ app.post("/api/generate/speech", asyncHandler(async (request, response) => {
 app.post("/api/generate/video", asyncHandler(async (request, response) => {
   const requestedModel = String(request.body?.model || "minimax-h3").trim().toLowerCase();
   const model = requestedModel === "minimax-h3-r2v" ? "minimax-h3" : requestedModel;
-  if (model !== "minimax-h3") throw new Error(`不支持的视频模型：${model}`);
-  const prompt = requiredText(request.body?.prompt, "H3 Prompt");
+  if (!models.video.includes(model)) throw new Error(`不支持的视频模型：${model}`);
+  const prompt = requiredText(request.body?.prompt, "视频 Prompt");
   const duration = Number(request.body?.duration);
-  if (Array.isArray(request.body?.videoResourceIds) && request.body.videoResourceIds.length) throw new Error("MiniMax H3 暂不支持视频参考或视频编辑；请改用图片、音频参考");
-  const prepared = await prepareH3Prompt({
-    draftPrompt: prompt,
-    durationSeconds: duration,
-    inputMode: request.body?.inputMode,
-    imageResourceIds: Array.isArray(request.body?.imageResourceIds) ? request.body.imageResourceIds : [],
-    audioResourceIds: Array.isArray(request.body?.audioResourceIds) ? request.body.audioResourceIds : [],
-    resourceRoles: Array.isArray(request.body?.resourceRoles) ? request.body.resourceRoles : [],
-    optimize: request.body?.optimizePrompt !== false,
-  });
-  const resources = await generateH3Video({ ...request.body, prompt: prepared.prompt, duration, videoResourceIds: [] });
-  response.json({ resources, promptPreparation: prepared });
+  if (model === "minimax-h3") {
+    if (Array.isArray(request.body?.videoResourceIds) && request.body.videoResourceIds.length) throw new Error("MiniMax H3 暂不支持视频参考或视频编辑；请改用图片、音频参考");
+    const prepared = await prepareH3Prompt({
+      draftPrompt: prompt,
+      durationSeconds: duration,
+      inputMode: request.body?.inputMode,
+      imageResourceIds: Array.isArray(request.body?.imageResourceIds) ? request.body.imageResourceIds : [],
+      audioResourceIds: Array.isArray(request.body?.audioResourceIds) ? request.body.audioResourceIds : [],
+      resourceRoles: Array.isArray(request.body?.resourceRoles) ? request.body.resourceRoles : [],
+      optimize: request.body?.optimizePrompt !== false,
+    });
+    const resources = await generateVideo({ ...request.body, model, prompt: prepared.prompt, duration, videoResourceIds: [] });
+    return response.json({ resources, promptPreparation: prepared });
+  }
+  const resources = await generateVideo({ ...request.body, model, prompt, duration, size: request.body?.ratio || request.body?.size });
+  response.json({ resources });
 }));
+app.post("/api/gpu/enhancements", asyncHandler(async (request, response) => response.status(202).json({ enhancement: await createFlashVsrEnhancement(requiredText(request.body?.sourceResourceId, "源视频资源 ID")) })));
+app.get("/api/gpu/enhancements/:sourceResourceId", asyncHandler(async (request, response) => response.json({ enhancement: await getFlashVsrEnhancement(param(request.params.sourceResourceId)) })));
 app.post("/api/generate/music", asyncHandler(async (request, response) => response.json({ resources: await generateMusic({ prompt: String(request.body?.prompt || ""), model: String(request.body?.model || ""), params: request.body?.params }) })));
 
 app.use((error: Error & { statusCode?: number }, _request: express.Request, response: express.Response, _next: express.NextFunction) => {

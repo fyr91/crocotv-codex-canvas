@@ -7,7 +7,7 @@ export type StoredResource = {
   fileName: string;
   url: string;
   createdAt: string;
-  source: "upload" | "canvas" | "runware" | "h3" | "happyhorse" | "speech" | "suno" | "character";
+  source: "upload" | "canvas" | "runware" | "h3" | "ltx" | "ernie" | "flashvsr" | "happyhorse" | "speech" | "suno" | "character";
   metadata?: Record<string, unknown>;
 };
 

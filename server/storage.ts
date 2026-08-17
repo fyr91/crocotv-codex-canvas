@@ -25,6 +25,9 @@ export async function ensureStorage() {
     mkdir(path.join(resourcesDir, "generated", "canvas"), { recursive: true }),
     mkdir(path.join(resourcesDir, "generated", "speech"), { recursive: true }),
     mkdir(path.join(resourcesDir, "generated", "h3"), { recursive: true }),
+    mkdir(path.join(resourcesDir, "generated", "ltx"), { recursive: true }),
+    mkdir(path.join(resourcesDir, "generated", "ernie"), { recursive: true }),
+    mkdir(path.join(resourcesDir, "generated", "flashvsr"), { recursive: true }),
     mkdir(path.join(resourcesDir, "generated", "happyhorse"), { recursive: true }),
     mkdir(path.join(resourcesDir, "generated", "suno"), { recursive: true }),
     mkdir(path.join(resourcesDir, "characters"), { recursive: true }),
@@ -227,7 +230,7 @@ export function safeResourcePath(fileName: string) {
   return target;
 }
 
-export async function writeGenerated(provider: "canvas" | "runware" | "speech" | "h3" | "happyhorse" | "suno", extension: string, bytes: Uint8Array) {
+export async function writeGenerated(provider: "canvas" | "runware" | "speech" | "h3" | "ltx" | "ernie" | "flashvsr" | "happyhorse" | "suno", extension: string, bytes: Uint8Array) {
   const id = randomUUID();
   const fileName = path.posix.join("generated", provider, `${id}.${extension.replace(/^\./, "")}`);
   const target = safeResourcePath(fileName);
