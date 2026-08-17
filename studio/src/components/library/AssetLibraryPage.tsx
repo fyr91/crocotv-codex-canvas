@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Search, Star, ArrowDownUp, ChevronDown, Check } from "lucide-react";
 import { api } from "@/lib/api";
@@ -9,6 +9,13 @@ import { toast } from "@/store/toastStore";
 import { characterImageUrl, characterVariants } from "@/lib/characterImage";
 import { coverGradient, GRAIN_URL } from "@/lib/atelierCover";
 import { rovingKeyDown } from "@/lib/a11y";
+import {
+  buildPulledCharacterAssets,
+  isPulledCharacterAsset,
+  pulledResourceCount,
+  type PulledCharacterCatalogEntry,
+  type PulledCharacterResource,
+} from "@/lib/pulledCharacterAssets";
 import AssetInspector from "./AssetInspector";
 
 type AssetTab = "characters" | "scenes" | "props";
@@ -22,7 +29,7 @@ interface AssetSource {
   id: string;
   rawId: string;
   name: string;
-  kind: "series" | "project" | "episode";
+  kind: "series" | "project" | "episode" | "character-library";
   characters: Character[];
   scenes: Scene[];
   props: Prop[];
@@ -96,22 +103,26 @@ export default function AssetLibraryPage() {
   const [starredOnly, setStarredOnly] = useState(false);
   const [selected, setSelected] = useState<{ sourceId: string; assetId: string; type: AssetTab } | null>(null);
 
-  useEffect(() => {
-    loadAssets();
-  }, []);
-
-  const loadAssets = async () => {
+  const loadAssets = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await api.listStudioAssetSources() as Array<{
-        source_id: string;
-        source_kind: AssetSource["kind"];
-        title: string;
-        characters?: Character[];
-        scenes?: Scene[];
-        props?: Prop[];
-      }>;
-      setSources(result.map((source) => ({
+      const [result, characterCatalog, localResources] = await Promise.all([
+        api.listStudioAssetSources(),
+        api.listPulledCharacters(),
+        api.listLocalResources(),
+      ]) as [
+        Array<{
+          source_id: string;
+          source_kind: "series" | "project" | "episode";
+          title: string;
+          characters?: Character[];
+          scenes?: Scene[];
+          props?: Prop[];
+        }>,
+        PulledCharacterCatalogEntry[],
+        PulledCharacterResource[],
+      ];
+      const studioSources: AssetSource[] = result.map((source) => ({
         id: `${source.source_kind}-${source.source_id}`,
         rawId: source.source_id,
         name: source.title,
@@ -119,14 +130,30 @@ export default function AssetLibraryPage() {
         characters: source.characters || [],
         scenes: source.scenes || [],
         props: source.props || [],
-      })));
+      }));
+      setSources([
+        ...studioSources,
+        {
+          id: "character-library-pulled",
+          rawId: "pulled-characters",
+          name: t("characterLibrary"),
+          kind: "character-library",
+          characters: buildPulledCharacterAssets(characterCatalog, localResources),
+          scenes: [],
+          props: [],
+        },
+      ]);
     } catch (error) {
       console.error("Failed to load asset library:", error);
       toast.error(t("loadFailed"), { body: t("loadFailedBody") });
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    void loadAssets();
+  }, [loadAssets]);
 
   // 全局计数（facet 总览；不受搜索/星标过滤影响，与分组标题里的计数互补）。
   const counts = useMemo(() => {
@@ -183,7 +210,11 @@ export default function AssetLibraryPage() {
     const q = searchQuery.trim().toLowerCase();
     const match = (a: Character | Scene | Prop) =>
       (!starredOnly || !!a.starred) &&
-      (!q || a.name.toLowerCase().includes(q) || (a.description?.toLowerCase().includes(q) ?? false));
+      (!q ||
+        a.name.toLowerCase().includes(q) ||
+        (a.description?.toLowerCase().includes(q) ?? false) ||
+        (isPulledCharacterAsset(a) &&
+          (!!a.voice_id?.toLowerCase().includes(q) || !!a.english_name?.toLowerCase().includes(q))));
     const sortItems = (items: RenderItem[]) => {
       if (sortMode === "name") items.sort((x, y) => x.asset.name.localeCompare(y.asset.name, "zh"));
       else if (sortMode === "recent") items.sort((x, y) => recencyOf(y.asset, y.type) - recencyOf(x.asset, x.type));
@@ -206,7 +237,13 @@ export default function AssetLibraryPage() {
     }
 
     const kindLabel = (k: AssetSource["kind"]) =>
-      k === "series" ? t("series") : k === "episode" ? t("episode") : t("project");
+      k === "series"
+        ? t("series")
+        : k === "episode"
+          ? t("episode")
+          : k === "character-library"
+            ? t("readOnlySource")
+            : t("project");
     return sources
       .map((src): RenderGroup => {
         const items: RenderItem[] = [];
@@ -233,7 +270,7 @@ export default function AssetLibraryPage() {
 
   const toggleStar = async (sourceId: string, assetId: string, type: AssetTab) => {
     const src = sources.find((s) => s.id === sourceId);
-    if (!src) return;
+    if (!src || src.kind === "character-library") return;
     const cur = (src[type] as (Character | Scene | Prop)[]).find((a) => a.id === assetId);
     const prevStarred = !!cur?.starred;
     const setStarredTo = (val: boolean) => (prev: AssetSource[]) =>
@@ -476,9 +513,11 @@ export default function AssetLibraryPage() {
                     {grp.items.map(({ asset, type, src }, i) => {
                       const url = getImageUrl(asset, type);
                       const vc = variantCount(asset, type);
+                      const resourceCount = type === "characters" ? pulledResourceCount(asset as Character) : undefined;
                       const isSel = selected?.sourceId === src.id && selected?.assetId === asset.id && selected?.type === type;
                       const isStar = !!asset.starred;
                       const isChar = type === "characters";
+                      const isReadOnly = src.kind === "character-library";
                       return (
                         <div
                           key={`${type}-${asset.id}`}
@@ -539,31 +578,40 @@ export default function AssetLibraryPage() {
                               <div className="pointer-events-none absolute inset-0 shadow-none" aria-hidden="true" />
                             )}
                             {/* top row: star chip + variant chip */}
-                            <div className="absolute top-2 left-2 right-2 flex items-center justify-between">
-                              <button
-                                type="button"
-                                aria-label={isStar ? t("unstar") : t("star")}
-                                aria-pressed={isStar}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleStar(src.id, asset.id, type);
-                                }}
-                                onKeyDown={(e) => e.stopPropagation()}
-                                className={`w-7 h-7 rounded-full grid place-items-center backdrop-blur-md transition-colors cursor-pointer ${
-                                  isStar ? "text-status-starred-fg bg-status-starred-bg" : "text-white bg-black/45 hover:text-status-starred-fg"
-                                }`}
-                              >
-                                <Star size={13} className={isStar ? "fill-current" : ""} />
-                              </button>
-                              {vc > 0 && (
-                                <span className="px-2 py-[3px] rounded-full font-mono text-sm font-medium text-white bg-black/55 backdrop-blur-md tracking-wide">
-                                  {t("variantCount", { count: vc })}
+                            <div className={`absolute top-2 left-2 right-2 flex items-center ${isReadOnly ? "justify-end" : "justify-between"}`}>
+                              {!isReadOnly && (
+                                <button
+                                  type="button"
+                                  aria-label={isStar ? t("unstar") : t("star")}
+                                  aria-pressed={isStar}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleStar(src.id, asset.id, type);
+                                  }}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                  className={`w-7 h-7 rounded-full grid place-items-center backdrop-blur-md transition-colors cursor-pointer ${
+                                    isStar ? "text-status-starred-fg bg-status-starred-bg" : "text-white bg-black/45 hover:text-status-starred-fg"
+                                  }`}
+                                >
+                                  <Star size={13} className={isStar ? "fill-current" : ""} />
+                                </button>
+                              )}
+                              {(resourceCount ?? vc) > 0 && (
+                                <span className="whitespace-nowrap px-2 py-[3px] rounded-full font-mono text-sm font-medium text-white bg-black/55 backdrop-blur-md tracking-wide">
+                                  {resourceCount != null
+                                    ? t("resourceCount", { count: resourceCount })
+                                    : t("variantCount", { count: vc })}
                                 </span>
                               )}
                             </div>
+                            {isReadOnly && (
+                              <span className="absolute bottom-2 left-2 whitespace-nowrap px-2 py-[3px] rounded-full font-mono text-sm font-medium text-white bg-black/55 backdrop-blur-md tracking-wide">
+                                {t("readOnlyBadge")}
+                              </span>
+                            )}
                             {/* kind chip（仅「按项目」视图 + 「全部」类型下显示，告知卡片类型） */}
                             {viewAxis === "source" && activeType === "all" && (
-                              <span className="absolute bottom-2 left-2 px-2 py-[3px] rounded-full font-mono text-sm font-medium uppercase tracking-[0.06em] text-white bg-black/55 backdrop-blur-md">
+                              <span className="absolute bottom-2 right-2 px-2 py-[3px] rounded-full font-mono text-sm font-medium uppercase tracking-[0.06em] text-white bg-black/55 backdrop-blur-md">
                                 {TYPE_LABEL[type]}
                               </span>
                             )}

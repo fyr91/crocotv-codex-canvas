@@ -8,6 +8,7 @@ import { characterImageAsset } from "@/lib/characterImage";
 import { api } from "@/lib/api";
 import { toast } from "@/store/toastStore";
 import { coverGradient, GRAIN_URL } from "@/lib/atelierCover";
+import { isPulledCharacterAsset } from "@/lib/pulledCharacterAssets";
 
 type AssetTab = "characters" | "scenes" | "props";
 
@@ -29,8 +30,8 @@ interface AssetInspectorProps {
   sourceName: string;
   /** 裸 series/project id（调生成/刷新 API 用）。 */
   sourceId: string;
-  /** 系列资产无生成端点；独立项目和剧集资产均走项目生成端点。 */
-  sourceKind: "series" | "project" | "episode";
+  /** 同步角色库只读；系列资产无生成端点；独立项目和剧集资产均走项目生成端点。 */
+  sourceKind: "series" | "project" | "episode" | "character-library";
   starred: boolean;
   onClose: () => void;
   onToggleStar: () => void;
@@ -91,6 +92,10 @@ export default function AssetInspector({
   onToggleStar,
 }: AssetInspectorProps) {
   const t = useTranslations("library");
+  const pulledCharacter = isPulledCharacterAsset(asset) ? asset : undefined;
+  const pulledResources = pulledCharacter?.pulled_resources ?? [];
+  const pulledVideos = pulledResources.filter((resource) => resource.type === "video");
+  const pulledAudio = pulledResources.filter((resource) => resource.type === "audio");
   const TYPE_LABEL: Record<AssetTab, string> = {
     characters: t("characterLabel"),
     scenes: t("sceneLabel"),
@@ -167,9 +172,18 @@ export default function AssetInspector({
   const metaRows: { label: string; value: string }[] = [
     { label: t("metaType"), value: TYPE_LABEL[type] },
     { label: t("metaSource"), value: sourceName },
-    { label: t("metaVariant"), value: `${variants.length}` },
+    {
+      label: pulledCharacter ? t("metaResource") : t("metaVariant"),
+      value: `${pulledCharacter ? pulledResources.length : variants.length}`,
+    },
     { label: t("metaCreated"), value: timeAgo(activeVariant?.created_at) },
   ];
+  if (pulledCharacter?.english_name) {
+    metaRows.push({ label: t("metaEnglishName"), value: pulledCharacter.english_name });
+  }
+  if (pulledCharacter?.voice_id) {
+    metaRows.push({ label: t("metaVoiceId"), value: pulledCharacter.voice_id });
+  }
   if (assetMeta.seed != null) metaRows.push({ label: "SEED", value: String(assetMeta.seed) });
   if (assetMeta.model) metaRows.push({ label: "MODEL", value: assetMeta.model });
   if (assetMeta.size) metaRows.push({ label: "SIZE", value: assetMeta.size });
@@ -216,7 +230,7 @@ export default function AssetInspector({
   // 生成更多变体：独立项目和剧集资产可用（series 无生成端点）。复用按项目 batch 生成管线，
   // 完成后 re-fetch 该项目，把新变体并入本地展示并高亮最新一张。
   const handleGenerateVariants = async () => {
-    if (sourceKind === "series" || generating) return;
+    if (sourceKind === "series" || sourceKind === "character-library" || generating) return;
     const assetId = asset.id;
     const projectId = sourceId;
     setGenerating(true);
@@ -307,20 +321,26 @@ export default function AssetInspector({
             aria-hidden="true"
           />
         )}
-        <button
-          type="button"
-          onClick={onToggleStar}
-          aria-pressed={starred}
-          aria-label={starred ? t("unstar") : t("star")}
-          className={`absolute top-3 left-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-mono text-sm font-medium uppercase tracking-[0.1em] backdrop-blur-md border transition-colors ${
-            starred
-              ? "text-status-starred-fg bg-status-starred-bg border-status-starred-border"
-              : "text-text-secondary bg-black/40 border-transparent hover:text-foreground"
-          }`}
-        >
-          <Star size={12} className={starred ? "fill-current" : ""} />
-          {starred ? t("starred") : t("star")}
-        </button>
+        {pulledCharacter ? (
+          <span className="absolute top-3 left-3 inline-flex items-center px-3 py-1.5 rounded-full font-mono text-sm font-medium uppercase tracking-[0.1em] text-white bg-black/50 backdrop-blur-md border border-white/10">
+            {t("readOnlyBadge")}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onToggleStar}
+            aria-pressed={starred}
+            aria-label={starred ? t("unstar") : t("star")}
+            className={`absolute top-3 left-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-mono text-sm font-medium uppercase tracking-[0.1em] backdrop-blur-md border transition-colors ${
+              starred
+                ? "text-status-starred-fg bg-status-starred-bg border-status-starred-border"
+                : "text-text-secondary bg-black/40 border-transparent hover:text-foreground"
+            }`}
+          >
+            <Star size={12} className={starred ? "fill-current" : ""} />
+            {starred ? t("starred") : t("star")}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
@@ -337,15 +357,17 @@ export default function AssetInspector({
             {asset.name}
           </div>
           <div className="font-mono text-sm text-text-muted tracking-[0.06em] uppercase mt-1.5">
-            {TYPE_LABEL[type]} · {sourceName} · {t("variantCount", { count: variants.length })}
+            {TYPE_LABEL[type]} · {sourceName} · {pulledCharacter
+              ? t("resourceCount", { count: pulledResources.length })
+              : t("variantCount", { count: variants.length })}
           </div>
         </div>
 
         {/* Variant strip */}
-        {variants.length > 1 && (
+        {variants.length > (pulledCharacter ? 0 : 1) && (
           <div>
             <div className="font-mono text-sm font-medium uppercase tracking-[0.16em] text-text-secondary mb-2.5">
-              {t("variantsSection")}
+              {pulledCharacter ? t("imagesSection", { count: variants.length }) : t("variantsSection")}
             </div>
             <div className="grid grid-cols-4 gap-2">
               {variants.map((v) => {
@@ -364,6 +386,44 @@ export default function AssetInspector({
                   </button>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {pulledVideos.length > 0 && (
+          <div>
+            <div className="font-mono text-sm font-medium uppercase tracking-[0.16em] text-text-secondary mb-2.5">
+              {t("videosSection", { count: pulledVideos.length })}
+            </div>
+            <div className="flex flex-col gap-2.5">
+              {pulledVideos.map((resource) => (
+                <div key={resource.id} className="rounded-lg overflow-hidden border border-glass-border bg-surface-inset">
+                  <video
+                    src={resource.url}
+                    controls
+                    preload="none"
+                    className="w-full aspect-video bg-black object-contain"
+                    aria-label={resource.name}
+                  />
+                  <div className="px-3 py-2 text-sm text-text-secondary truncate">{resource.name}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {pulledAudio.length > 0 && (
+          <div>
+            <div className="font-mono text-sm font-medium uppercase tracking-[0.16em] text-text-secondary mb-2.5">
+              {t("audioSection", { count: pulledAudio.length })}
+            </div>
+            <div className="flex flex-col gap-2.5">
+              {pulledAudio.map((resource) => (
+                <div key={resource.id} className="rounded-lg border border-glass-border bg-surface-inset px-3 py-2.5">
+                  <div className="text-sm text-text-secondary truncate mb-2">{resource.name}</div>
+                  <audio src={resource.url} controls preload="none" className="w-full h-8" aria-label={resource.name} />
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -405,7 +465,11 @@ export default function AssetInspector({
           项目内进行），故置灰并提示在剧集内生成。「用于分镜」按钮已移除（占位、无落地路径）。
         */}
         <div className="flex flex-col gap-2">
-          {sourceKind !== "series" ? (
+          {sourceKind === "character-library" ? (
+            <div className="rounded-lg border border-glass-border bg-surface-inset px-3.5 py-3 text-sm leading-relaxed text-text-secondary">
+              {t("readOnlyHint")}
+            </div>
+          ) : sourceKind !== "series" ? (
             <button
               type="button"
               onClick={handleGenerateVariants}

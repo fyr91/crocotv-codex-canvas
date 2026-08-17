@@ -1380,6 +1380,16 @@ export const api = {
         const response = await axios.get(`${API_URL}/asset-sources`);
         return response.data;
     },
+    /** 统一资源库中的已同步角色目录（只读）。 */
+    listPulledCharacters: async () => {
+        const response = await axios.get("/api/characters");
+        return response.data;
+    },
+    /** Canvas 与 Studio 共用的本地资源索引（只读）。 */
+    listLocalResources: async () => {
+        const response = await axios.get("/api/resources");
+        return response.data;
+    },
     getSeries: async (seriesId: string) => {
         const response = await axios.get(`${API_URL}/series/${seriesId}`);
         return response.data;
