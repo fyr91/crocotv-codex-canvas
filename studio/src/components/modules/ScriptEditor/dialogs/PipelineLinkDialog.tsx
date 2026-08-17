@@ -6,6 +6,7 @@ import { X, FolderPlus, Link2, Search, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useProjectStore } from '@/store/projectStore';
 import { useEditorStore } from '@/store/editorStore';
+import ProjectCreationFields, { BASIC_WORKFLOW_MODE } from '@/components/project/ProjectCreationFields';
 
 export interface PipelineLinkDialogProps {
   open: boolean;
@@ -42,7 +43,7 @@ export default function PipelineLinkDialog({ open, onClose, onLink }: PipelineLi
     if (!newProjectName.trim()) return;
     setIsCreating(true);
     try {
-      await createProject(newProjectName.trim(), '', true);
+      await createProject(newProjectName.trim(), '', true, BASIC_WORKFLOW_MODE);
       // After creation, the new project will be currentProject.
       const current = useProjectStore.getState().currentProject;
       if (current) {
@@ -175,16 +176,11 @@ export default function PipelineLinkDialog({ open, onClose, onLink }: PipelineLi
                       exit={{ opacity: 0, x: -10 }}
                       transition={{ duration: 0.15 }}
                     >
-                      <label className="block text-sm text-text-secondary mb-2">
-                        {t('dialogs.pipeline.projectName')}
-                      </label>
-                      <input
-                        type="text"
-                        value={newProjectName}
-                        onChange={(e) => setNewProjectName(e.target.value)}
-                        placeholder={t('dialogs.pipeline.projectNamePlaceholder')}
-                        className="w-full rounded-lg border border-foreground/10 bg-elevated px-3 py-2.5 text-sm text-foreground placeholder:text-text-muted focus:border-primary/50 focus:outline-none transition-colors"
-                        autoFocus
+                      <ProjectCreationFields
+                        title={newProjectName}
+                        onTitleChange={setNewProjectName}
+                        showScriptInput={false}
+                        autoFocusTitle
                       />
                       <p className="mt-2 text-sm text-text-muted">
                         {t('dialogs.pipeline.createHint')}

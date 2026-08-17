@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useProjectStore } from "@/store/projectStore";
-import BasicWorkflowSelection from "@/components/project/BasicWorkflowSelection";
+import ProjectCreationFields, { BASIC_WORKFLOW_MODE } from "@/components/project/ProjectCreationFields";
 
 
 interface CreateProjectDialogProps {
@@ -32,7 +32,7 @@ export default function CreateProjectDialog({ isOpen, onClose, seriesId, seriesT
 
         setIsCreating(true);
         try {
-            await createProject(title, text, true, "r2v", seriesId);
+            await createProject(title, text, true, BASIC_WORKFLOW_MODE, seriesId);
             // Get the newly created project
             const currentProject = useProjectStore.getState().currentProject;
             if (currentProject) {
@@ -83,33 +83,12 @@ export default function CreateProjectDialog({ isOpen, onClose, seriesId, seriesT
                         </div>
 
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-foreground mb-2">
-                                    {t("projectTitle")}
-                                </label>
-                                <input
-                                    type="text"
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    placeholder={t("projectTitlePlaceholder")}
-                                    className="glass-input w-full"
-                                />
-                            </div>
-
-                            <BasicWorkflowSelection />
-
-                            <div>
-                                <label className="block text-sm font-medium text-foreground mb-2">
-                                    {t("scriptContent")}
-                                </label>
-                                <textarea
-                                    value={text}
-                                    onChange={(e) => setText(e.target.value)}
-                                    placeholder={t("scriptPlaceholder")}
-                                    rows={8}
-                                    className="glass-input w-full resize-none font-mono text-sm"
-                                />
-                            </div>
+                            <ProjectCreationFields
+                                title={title}
+                                onTitleChange={setTitle}
+                                script={text}
+                                onScriptChange={setText}
+                            />
 
                             <div className="flex gap-3 pt-4">
                                 <button

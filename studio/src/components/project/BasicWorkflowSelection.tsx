@@ -40,7 +40,7 @@ export default function BasicWorkflowSelection() {
                     type="button"
                     disabled
                     aria-disabled="true"
-                    className="relative p-4 rounded-xl border-2 border-border bg-surface/60 text-left opacity-60 cursor-not-allowed"
+                    className="relative p-4 rounded-xl border border-foreground/10 bg-foreground/[0.02] text-left opacity-50 cursor-not-allowed"
                 >
                     <div className="flex items-center gap-2 mb-1.5">
                         <Sparkles size={16} className="text-text-secondary" />

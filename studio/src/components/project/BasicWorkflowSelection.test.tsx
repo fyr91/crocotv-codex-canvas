@@ -28,7 +28,13 @@ describe('BasicWorkflowSelection', () => {
   it('keeps the basic workflow selected and disables the coming-soon card', () => {
     render(<BasicWorkflowSelection />);
 
-    expect(screen.getByRole('button', { name: /基础流程/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /更多流程正在开发中/ })).toBeDisabled();
+    const selected = screen.getByRole('button', { name: /基础流程/ });
+    const comingSoon = screen.getByRole('button', { name: /更多流程正在开发中/ });
+
+    expect(selected).toHaveAttribute('aria-pressed', 'true');
+    expect(selected).toHaveClass('border-2', 'border-primary');
+    expect(comingSoon).toBeDisabled();
+    expect(comingSoon).toHaveClass('border', 'border-foreground/10', 'opacity-50');
+    expect(comingSoon).not.toHaveClass('border-2', 'border-border');
   });
 });
