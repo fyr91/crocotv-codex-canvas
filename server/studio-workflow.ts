@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { applyCanvasOperations, type CanvasOperation } from "./canvas-commands";
 import { publishProjectUpdated } from "./canvas-events";
 import { runCanvasConfigNodes } from "./canvas-node-runtime";
@@ -12,10 +12,12 @@ import { readProject, resourceById } from "./storage";
 import { executeStudioPrompt, type StudioPromptOperation } from "./studio-prompt-runtime";
 import { createStudioGenerationJob } from "./studio-generation-jobs";
 import type { TextThinkingMode } from "./providers";
+import { findReusableEntityExtraction, parseStudioJson, type EntityExtractionPayload } from "./studio-entity-extraction-recovery";
 
 type EntityKind = "character" | "scene" | "prop";
 const ENTITY_EXTRACTION_MODEL = "deepseek-v4-flash-ga-260731";
 const ENTITY_EXTRACTION_THINKING: TextThinkingMode = "disabled";
+const entityExtractionRequests = new Map<string, Promise<EntityExtractionPayload>>();
 
 export async function recoverInterruptedStudioGenerations() {
   for (const summary of await listStudioProjectResponses()) {
@@ -52,8 +54,7 @@ export async function recoverInterruptedStudioGenerations() {
 
 export async function extractStudioEntities(projectId: string, text: string, originClientId: string) {
   await mutateStudioProject(projectId, (state) => ({ ...state, originalText: text }), { originClientId });
-  const configId = stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
-  const parsed = await runStudioPromptJson({ projectId, configId, operation: "entity_extraction", draftPrompt: text, requestedModel: ENTITY_EXTRACTION_MODEL, thinking: ENTITY_EXTRACTION_THINKING, originClientId });
+  const parsed = await resolveEntityExtractionPreview(projectId, text, originClientId);
   return mutateStudioProject(projectId, (state) => ({
     ...state,
     characters: normalizeEntities(parsed.characters),
@@ -63,9 +64,43 @@ export async function extractStudioEntities(projectId: string, text: string, ori
 }
 
 export async function previewStudioEntities(projectId: string, text: string, originClientId: string) {
-  const configId = stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
-  const parsed = await runStudioPromptJson({ projectId, configId, operation: "entity_extraction", draftPrompt: text, requestedModel: ENTITY_EXTRACTION_MODEL, thinking: ENTITY_EXTRACTION_THINKING, originClientId });
+  const parsed = await resolveEntityExtractionPreview(projectId, text, originClientId);
   return { characters: normalizeEntities(parsed.characters), scenes: normalizeEntities(parsed.scenes), props: normalizeEntities(parsed.props) };
+}
+
+async function resolveEntityExtractionPreview(projectId: string, text: string, originClientId: string): Promise<EntityExtractionPayload> {
+  const current = await getStudioBackedProject(projectId);
+  const reusable = findReusableEntityExtraction({
+    text,
+    nodes: current.nodes,
+    executions: current.studio.generationExecutions,
+  });
+  if (reusable) return reusable;
+
+  const requestKey = `${projectId}:${createHash("sha256").update(text).digest("hex")}`;
+  const inFlight = entityExtractionRequests.get(requestKey);
+  if (inFlight) return inFlight;
+
+  const configId = stableStudioNodeId(projectId, "script", projectId, "entity-analysis-config");
+  const request = runStudioPromptJson({
+    projectId,
+    configId,
+    operation: "entity_extraction",
+    draftPrompt: text,
+    requestedModel: ENTITY_EXTRACTION_MODEL,
+    thinking: ENTITY_EXTRACTION_THINKING,
+    originClientId,
+  }).then((parsed) => {
+    if (!Array.isArray(parsed.characters) || !Array.isArray(parsed.scenes) || !Array.isArray(parsed.props)) {
+      throw new Error("实体提取结果必须包含 characters、scenes 和 props 数组");
+    }
+    return parsed as EntityExtractionPayload;
+  });
+  entityExtractionRequests.set(requestKey, request);
+  try { return await request; }
+  finally {
+    if (entityExtractionRequests.get(requestKey) === request) entityExtractionRequests.delete(requestKey);
+  }
 }
 
 export async function applyStudioEntityExtraction(projectId: string, text: string, extraction: unknown, originClientId: string) {
@@ -548,7 +583,7 @@ export async function polishStudioText(projectId: string, prompt: string, origin
   if (operation === "video_polish" || operation === "r2v_polish") {
     return { prompt_cn: options.prevCn || prompt, prompt_en: result.text.trim(), execution: result.execution };
   }
-  const parsed = parseJson(result.text);
+  const parsed = parseStudioJson(result.text);
   const promptCn = String(parsed.revisedDescriptionCn || parsed.prompt_cn || prompt);
   const promptEn = String(parsed.revisedDescriptionEn || parsed.prompt_en || promptCn);
   return { prompt_cn: promptCn, prompt_en: promptEn, execution: result.execution };
@@ -585,7 +620,7 @@ export async function previewStudioVoice(projectId: string, voiceId: string, tex
 
 async function runStudioPromptJson(input: { projectId: string; configId: string; operation: StudioPromptOperation; draftPrompt: string; requestedModel?: string; thinking?: TextThinkingMode; originClientId: string }) {
   const result = await executeStudioPrompt({ projectId: input.projectId, operation: input.operation, draftPrompt: input.draftPrompt, requestedModel: input.requestedModel, thinking: input.thinking, configNodeId: input.configId, originClientId: input.originClientId });
-  return parseJson(result.text);
+  return parseStudioJson(result.text);
 }
 
 async function configureNode(projectId: string, nodeId: string, metadata: Record<string, unknown>, originClientId: string) {
@@ -678,4 +713,3 @@ function resolveImageModel(value: unknown) { const requested = String(value || "
 function aspectSize(value: string) { return ({ "16:9": "1344x768", "9:16": "768x1344", "4:3": "1184x896", "3:4": "896x1184", "1:1": "1024x1024" } as Record<string, string>)[value] || "1024x1024"; }
 function objectValue(value: unknown): Record<string, any> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {}; }
 function arrayRecords(value: unknown) { return Array.isArray(value) ? value.map(objectValue) : []; }
-function parseJson(text: string): Record<string, any> { const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""); try { const parsed = JSON.parse(cleaned); return objectValue(parsed); } catch { const match = cleaned.match(/\{[\s\S]*\}/); if (match) return objectValue(JSON.parse(match[0])); throw new Error("模型返回的 Studio JSON 无法解析"); } }

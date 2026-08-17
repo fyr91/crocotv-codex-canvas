@@ -40,6 +40,7 @@ const getApiUrl = (): string => {
 };
 
 export const API_URL = getApiUrl();
+const extractionPreviewRequests = new Map<string, Promise<ExtractionPreview>>();
 
 export type ProviderMode = "dashscope" | "vendor";
 
@@ -309,9 +310,19 @@ export const api = {
         return { ...res.data, originalText: res.data.original_text };
     },
 
-    extractPreview: async (scriptId: string, text: string) => {
-        const res = await axios.post(`${API_URL}/projects/${scriptId}/extract_preview`, { text });
-        return res.data as ExtractionPreview;
+    extractPreview: (scriptId: string, text: string) => {
+        const requestKey = `${scriptId}\0${text}`;
+        const existing = extractionPreviewRequests.get(requestKey);
+        if (existing) return existing;
+        let request!: Promise<ExtractionPreview>;
+        request = axios
+            .post(`${API_URL}/projects/${scriptId}/extract_preview`, { text })
+            .then((res) => res.data as ExtractionPreview)
+            .finally(() => {
+                if (extractionPreviewRequests.get(requestKey) === request) extractionPreviewRequests.delete(requestKey);
+            });
+        extractionPreviewRequests.set(requestKey, request);
+        return request;
     },
 
     applyExtraction: async (scriptId: string, text: string, extraction: ExtractionPreview) => {

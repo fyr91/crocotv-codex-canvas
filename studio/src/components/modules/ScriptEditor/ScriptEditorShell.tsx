@@ -28,6 +28,7 @@ import { api } from '@/lib/api';
 import { useProjectStore } from '@/store/projectStore';
 import { toast } from '@/store/toastStore';
 import ScriptEntityExtractionConfirm from './components/ScriptEntityExtractionConfirm';
+import { apiErrorMessage } from '@/lib/apiError';
 
 export interface ScriptEditorShellProps {
   mode?: 'full' | 'embedded' | 'focus';
@@ -209,7 +210,7 @@ export default function ScriptEditorShell({
       toast.update(toastId, {
         kind: 'error',
         title: tScript('analysisFailedShort'),
-        body: error instanceof Error ? error.message : String(error),
+        body: apiErrorMessage(error),
       });
     }
   }, [currentProject?.id, currentProject?.title, editor, projectId, save, tScript]);

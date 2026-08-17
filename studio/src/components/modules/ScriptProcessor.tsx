@@ -10,6 +10,7 @@ import { toast } from "@/store/toastStore";
 import StepPageHeader, { StepPill } from "@/components/shared/StepPageHeader";
 import PreviousEpisodeSummary from "@/components/modules/PreviousEpisodeSummary";
 import ReconcileModal from "@/components/modules/ReconcileModal";
+import { apiErrorMessage } from "@/lib/apiError";
 
 interface ScriptNode {
     type: "character" | "scene" | "prop";
@@ -134,7 +135,7 @@ export default function ScriptProcessor() {
         } catch (error: any) {
             useProjectStore.setState({ isAnalyzing: false });
             console.error("Failed to analyze script:", error);
-            const errorMessage = error?.response?.data?.detail || error?.message || "未知错误";
+            const errorMessage = apiErrorMessage(error);
             toast.update(toastId, {
                 kind: "error",
                 title: ts("analysisFailedShort"),
