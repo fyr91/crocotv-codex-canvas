@@ -197,10 +197,11 @@ export default function Cast() {
                 ) : null}
                 trailing={totalCast > 0 ? (
                     <WorkflowActionButton
-                        variant="secondary"
+                        variant="primary"
                         size="sm"
                         disabled={isAnalyzing}
-                        leftIcon={isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                        loading={isAnalyzing}
+                        leftIcon={<Wand2 />}
                         onClick={() => void handleExtractEntities()}
                     >
                         {isAnalyzing ? t("extracting") : t("updateEntities")}
@@ -226,7 +227,8 @@ export default function Cast() {
                                 variant="primary"
                                 size="sm"
                                 disabled={isAnalyzing}
-                                leftIcon={isAnalyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                                loading={isAnalyzing}
+                                leftIcon={<Wand2 />}
                                 onClick={() => void handleExtractEntities()}
                             >
                                 {isAnalyzing ? t("extracting") : t("extractEntities")}

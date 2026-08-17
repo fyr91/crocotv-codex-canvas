@@ -160,9 +160,9 @@ export default function StoryboardGenerateDialog({
 
                             {/* Incremental update explanation when shots already exist */}
                             {allPass && existingShotCount > 0 && (
-                                <div className="flex items-start gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2">
-                                    <AlertTriangle size={13} className="text-accent mt-0.5 shrink-0" />
-                                    <p className="text-sm text-accent">
+                                <div className="flex items-start gap-2 rounded-md border border-status-starred-border bg-status-starred-bg px-3 py-2">
+                                    <AlertTriangle size={13} className="text-status-starred-fg mt-0.5 shrink-0" />
+                                    <p className="text-sm text-status-starred-fg">
                                         {t("incrementalUpdateHint", { count: existingShotCount })}
                                     </p>
                                 </div>

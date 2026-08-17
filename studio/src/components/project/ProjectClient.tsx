@@ -32,12 +32,12 @@ const ScriptEditorShell = dynamic(() => import("@/components/modules/ScriptEdito
 //   - Export → Assembly Export phase tab (PR-3k)
 // Both legacy and unified projects now share the 6-step shape.
 const LEGACY_STEPS = [
-    { id: "script", labelKey: "stepScript", icon: BookOpen },
-    { id: "art_direction", labelKey: "stepArtDirection", icon: Palette },
-    { id: "assets", labelKey: "stepAssets", icon: Users },
-    { id: "storyboard", labelKey: "stepStoryboard", icon: Layout },
-    { id: "motion", labelKey: "stepMotion", icon: Video },
-    { id: "assembly", labelKey: "stepAssembly", icon: Film },
+    { id: "script", labelKey: "stepScript", englishLabel: "SCRIPT", icon: BookOpen },
+    { id: "art_direction", labelKey: "stepArtDirection", englishLabel: "ART DIRECTION", icon: Palette },
+    { id: "assets", labelKey: "stepAssets", englishLabel: "ASSETS", icon: Users },
+    { id: "storyboard", labelKey: "stepStoryboard", englishLabel: "STORYBOARD", icon: Layout },
+    { id: "motion", labelKey: "stepMotion", englishLabel: "MOTION", icon: Video },
+    { id: "assembly", labelKey: "stepAssembly", englishLabel: "ASSEMBLY", icon: Film },
 ];
 
 // PR-3f (r2v-workflow-v3) — Unified workflow: 5 steps including Cast.
@@ -47,11 +47,11 @@ const LEGACY_STEPS = [
 // Legacy `assets` step is dropped — Cast supersedes ConsistencyVault
 // for unified projects (ConsistencyVault stays only for legacy workflow).
 const UNIFIED_STEPS = [
-    { id: "script", labelKey: "stepScript", icon: BookOpen },
-    { id: "art_direction", labelKey: "stepArtDirection", icon: Palette },
-    { id: "cast", labelKey: "stepCast", icon: Users },
-    { id: "storyboard_r2v", labelKey: "stepStoryboard", icon: Clapperboard },
-    { id: "assembly", labelKey: "stepAssembly", icon: Film },
+    { id: "script", labelKey: "stepScript", englishLabel: "SCRIPT", icon: BookOpen },
+    { id: "art_direction", labelKey: "stepArtDirection", englishLabel: "ART DIRECTION", icon: Palette },
+    { id: "cast", labelKey: "stepCast", englishLabel: "CAST & ASSETS", icon: Users },
+    { id: "storyboard_r2v", labelKey: "stepStoryboard", englishLabel: "STORYBOARD", icon: Clapperboard },
+    { id: "assembly", labelKey: "stepAssembly", englishLabel: "ASSEMBLY", icon: Film },
 ];
 
 export default function ProjectClient({ id, breadcrumbSegments }: { id: string; breadcrumbSegments?: BreadcrumbSegment[] }) {

@@ -95,8 +95,11 @@ export default function RightPanelContainer({
     };
   }, [editor, panelLocked, isEmbedded, setActivePanel]);
 
-  const primaryTabs = tabs.filter((t) => t.group === 'primary');
-  const secondaryTabs = tabs.filter((t) => t.group === 'secondary');
+  // In the embedded project editor, characters, locations, and props are
+  // peer entity types. Keep them on one tab row; the larger standalone
+  // editor can still separate Notes/AI as its secondary tool group.
+  const primaryTabs = isEmbedded ? tabs : tabs.filter((t) => t.group === 'primary');
+  const secondaryTabs = isEmbedded ? [] : tabs.filter((t) => t.group === 'secondary');
 
   return (
     <div className="flex h-full flex-col">

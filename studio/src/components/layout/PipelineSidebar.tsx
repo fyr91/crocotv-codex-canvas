@@ -15,6 +15,7 @@ import ThemeToggle from "./ThemeToggle";
 interface Step {
     id: string;
     label: string;
+    englishLabel: string;
     icon: any;
     comingSoon?: boolean;
     /** Per-step status for the rail's stage model (not a wizard done-check).
@@ -151,13 +152,13 @@ export default function PipelineSidebar({ activeStep, onStepChange, steps, bread
                                         </span>
                                     )}
                                 </div>
-                                {/* rsub — single line: STEP 0N · status (mock pattern) */}
-                                <span className="flex items-center gap-1.5 font-mono text-sm tracking-[0.12em] text-text-muted">
-                                    <span className="opacity-70">{tp("stepIndex", { number: index + 1 })}</span>
+                                {/* Compact bilingual subtitle: ENGLISH · status. */}
+                                <span className="flex w-full min-w-0 items-center gap-1 font-mono text-[11px] leading-4 tracking-[0.06em] text-text-muted whitespace-nowrap overflow-hidden">
+                                    <span className="shrink-0 text-text-secondary">{step.englishLabel}</span>
                                     {step.statusLabel ? (
                                         <>
-                                            <span className="opacity-50">·</span>
-                                            <span className="truncate">{step.statusLabel}</span>
+                                            <span className="shrink-0 opacity-50">·</span>
+                                            <span className="min-w-0 truncate">{step.statusLabel}</span>
                                         </>
                                     ) : null}
                                 </span>

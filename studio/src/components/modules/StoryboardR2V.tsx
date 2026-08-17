@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
-import { Plus, Loader2, Sparkles, PanelBottomOpen, PanelBottomClose } from "lucide-react";
+import { Plus, Loader2, Sparkles, PanelBottomOpen, PanelBottomClose, Wand2, AlertTriangle } from "lucide-react";
 import StepPageHeader, { StepPill } from "@/components/shared/StepPageHeader";
 import { useTranslations } from "next-intl";
 import { useProjectStore } from "@/store/projectStore";
@@ -17,7 +17,6 @@ import { buildAssembledPrompt } from "./storyboard-r2v/buildAssembledPrompt";
 import DialogueAudioRow from "./storyboard-r2v/DialogueAudioRow";
 import StoryboardGenerateDialog from "./storyboard-r2v/StoryboardGenerateDialog";
 import { toast } from "@/store/toastStore";
-import { Wand2 } from "lucide-react";
 import AssetDrawer from "./storyboard-r2v/AssetDrawer";
 import { type VideoConfig, DEFAULT_VIDEO_CONFIG } from "./storyboard-r2v/VideoConfigModal";
 import {
@@ -1788,10 +1787,13 @@ export default function StoryboardR2V() {
                 )}
             />
             {currentProject?.storyboard_stale ? (
-                <div className="mx-4 mt-3 flex shrink-0 items-center justify-between gap-4 rounded-lg border border-accent/35 bg-accent/10 px-4 py-3 sm:mx-6">
-                    <div>
-                        <p className="text-sm font-medium text-foreground">{t("scriptChangedTitle")}</p>
-                        <p className="mt-0.5 text-sm text-text-secondary">{t("scriptChangedBody")}</p>
+                <div className="mx-4 mt-3 flex shrink-0 items-center justify-between gap-4 rounded-lg border border-status-starred-border bg-status-starred-bg px-4 py-3 sm:mx-6">
+                    <div className="flex min-w-0 items-start gap-3">
+                        <AlertTriangle size={16} className="mt-0.5 shrink-0 text-status-starred-fg" />
+                        <div>
+                            <p className="text-sm font-medium text-status-starred-fg">{t("scriptChangedTitle")}</p>
+                            <p className="mt-0.5 text-sm text-foreground/80">{t("scriptChangedBody")}</p>
+                        </div>
                     </div>
                     <button type="button" onClick={() => setGenDialogOpen(true)} disabled={generating} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-accent hover:bg-primary-hover disabled:opacity-50">
                         {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}

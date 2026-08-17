@@ -8,12 +8,14 @@ interface AiToolsMenuProps {
   extracting: boolean;
   extractDisabled?: boolean;
   onExtractEntities: () => void | Promise<void>;
+  showExtraction?: boolean;
 }
 
 export default function AiToolsMenu({
   extracting,
   extractDisabled = false,
   onExtractEntities,
+  showExtraction = true,
 }: AiToolsMenuProps) {
   const t = useTranslations('scriptEditor');
   const tScript = useTranslations('script');
@@ -27,6 +29,7 @@ export default function AiToolsMenu({
     { id: 'polish-text', label: t('aiTools.polishText'), available: false },
     { id: 'generate-script', label: t('aiTools.generateScript'), available: false },
   ] as const;
+  const visibleTools = showExtraction ? tools : tools.filter((tool) => tool.id !== 'extract');
 
   useEffect(() => {
     if (!open) return;
@@ -71,7 +74,7 @@ export default function AiToolsMenu({
           role="menu"
           className="absolute right-0 top-[calc(100%+8px)] z-40 w-64 overflow-hidden rounded-xl border border-foreground/10 bg-elevated/95 p-1.5 shadow-2xl backdrop-blur-xl"
         >
-          {tools.map((tool) => {
+          {visibleTools.map((tool) => {
             const executionDisabled = !tool.available || extractDisabled || extracting;
             return (
               <div
