@@ -28,6 +28,7 @@ export async function requestMusicGeneration(config: AiConfig, music: MusicGener
             ...(music.vocalGender && !music.instrumental ? { vocalGender: music.vocalGender } : {}),
             styleWeight: music.styleWeight,
             weirdnessConstraint: music.weirdnessConstraint,
+            maxDuration: music.maxDuration,
         },
         signal: options?.signal,
     });

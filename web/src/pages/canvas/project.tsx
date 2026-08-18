@@ -2701,10 +2701,10 @@ function CrocoCanvasPage() {
                     try {
                         const requestOptions = {
                             signal: controller.signal,
-                            onJobCreated: (generationJobId: string) => setNodes((prev) => prev.map((item) => {
-                                const imageOutputIndex = targetIds.indexOf(item.id);
-                                if (imageOutputIndex >= 0) return { ...item, metadata: { ...item.metadata, generationJobId, imageOutputIndex } };
-                                if (count > 1 && item.id === rootId) return { ...item, metadata: { ...item.metadata, generationJobId, imageOutputIndex: 0 } };
+                            onJobCreated: (generationJobId: string, outputIndex = 0) => setNodes((prev) => prev.map((item) => {
+                                const targetId = targetIds[outputIndex];
+                                if (item.id === targetId) return { ...item, metadata: { ...item.metadata, generationJobId, imageOutputIndex: outputIndex } };
+                                if (outputIndex === 0 && count > 1 && item.id === rootId) return { ...item, metadata: { ...item.metadata, generationJobId, imageOutputIndex: 0 } };
                                 return item;
                             })),
                         };
@@ -2849,9 +2849,9 @@ function CrocoCanvasPage() {
                         const results = await requestVideoGeneration(videoConfig, effectivePrompt, videoGenerationContext.referenceImages, videoGenerationContext.referenceVideos, videoGenerationContext.referenceAudios, {
                             ltxFrames: videoContextResult?.ltxFrames,
                             signal: controller.signal,
-                            onJobCreated: (generationJobId) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === rootId ? { ...item, metadata: { ...item.metadata, generationJobId, generationState: "queued" } } : item)),
-                            onStatusChange: (generationState) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === rootId ? { ...item, metadata: { ...item.metadata, generationState: generationState === "queued" ? "queued" : "running" } } : item)),
-                            onProgress: (generationProgress, generationStage) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === rootId ? { ...item, metadata: { ...item.metadata, generationProgress, generationStage } } : item)),
+                            onJobCreated: (generationJobId, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === rootId) ? { ...item, metadata: { ...item.metadata, generationJobId, generationState: "queued" } } : item)),
+                            onStatusChange: (generationState, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === rootId) ? { ...item, metadata: { ...item.metadata, generationState: generationState === "queued" ? "queued" : "running" } } : item)),
+                            onProgress: (generationProgress, generationStage, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === rootId) ? { ...item, metadata: { ...item.metadata, generationProgress, generationStage } } : item)),
                             onResult: applyDeliveredVideo,
                             onArchived: applyDeliveredVideo,
                             onReviewReady: applyStage1Review,
@@ -2929,7 +2929,8 @@ function CrocoCanvasPage() {
                     const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Music];
                     const isEmptyMusicNode = sourceNode?.type === CanvasNodeType.Music && !sourceNode.metadata?.content && !workflow;
                     const musicBatchId = nanoid();
-                    const musicIds = [isEmptyMusicNode ? nodeId : nanoid(), nanoid()];
+                    const musicCount = generationConfig.model === "minimax-music-3" ? 1 : 2;
+                    const musicIds = Array.from({ length: musicCount }, (_, index) => index === 0 && isEmptyMusicNode ? nodeId : nanoid());
                     const parent = sourceNode?.position || { x: 0, y: 0 };
                     const parentWidth = sourceNode?.width || spec.width;
                     const parentHeight = sourceNode?.height || spec.height;
@@ -2946,7 +2947,7 @@ function CrocoCanvasPage() {
                         metadata: { ...(isEmptyMusicNode && index === 0 ? sourceNode!.metadata : {}), status: NODE_STATUS_LOADING, errorDetails: undefined, ...buildMusicGenerationMetadata(generationConfig, musicConfig, musicBatchId, index), ...workflowMetadata },
                     }));
                     pendingChildIds = musicIds;
-                    setNodes((prev) => isEmptyMusicNode ? [...prev.map((node) => node.id === nodeId ? musicNodes[0] : node), musicNodes[1]] : [...prev, ...musicNodes]);
+                    setNodes((prev) => isEmptyMusicNode ? [...prev.map((node) => node.id === nodeId ? musicNodes[0] : node), ...musicNodes.slice(1)] : [...prev, ...musicNodes]);
                     if (!isEmptyMusicNode) setConnections((prev) => [...prev, ...musicIds.map((musicId) => ({ id: nanoid(), fromNodeId: nodeId, toNodeId: musicId }))]);
                     musicIds.filter((id) => id !== nodeId).forEach((id) => startGenerationRequest(id, nodeId, runningId, runController));
                     let musicFailure = false;
@@ -3339,9 +3340,9 @@ function CrocoCanvasPage() {
                     const results = await requestVideoGeneration(videoGenerationConfig, prompt, retryImages, context?.referenceVideos || [], context?.referenceAudios || [], {
                         ltxFrames: videoContextResult?.ltxFrames,
                         signal: controller.signal,
-                        onJobCreated: (generationJobId) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === node.id ? { ...item, metadata: { ...item.metadata, generationJobId, generationState: "queued" } } : item)),
-                        onStatusChange: (generationState) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === node.id ? { ...item, metadata: { ...item.metadata, generationState: generationState === "queued" ? "queued" : "running" } } : item)),
-                        onProgress: (generationProgress, generationStage) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === node.id ? { ...item, metadata: { ...item.metadata, generationProgress, generationStage } } : item)),
+                        onJobCreated: (generationJobId, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === node.id) ? { ...item, metadata: { ...item.metadata, generationJobId, generationState: "queued" } } : item)),
+                        onStatusChange: (generationState, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === node.id) ? { ...item, metadata: { ...item.metadata, generationState: generationState === "queued" ? "queued" : "running" } } : item)),
+                        onProgress: (generationProgress, generationStage, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === node.id) ? { ...item, metadata: { ...item.metadata, generationProgress, generationStage } } : item)),
                         onResult: applyDeliveredVideo,
                         onArchived: applyDeliveredVideo,
                         onReviewReady: applyStage1Review,
@@ -4233,6 +4234,10 @@ function buildMusicGenerationMetadata(config: AiConfig, music: MusicGenerationCo
         musicVocalGender: music.vocalGender,
         musicStyleWeight: music.styleWeight,
         musicWeirdnessConstraint: music.weirdnessConstraint,
+        musicMaxDuration: music.maxDuration,
+        musicSeed: music.seed,
+        musicTiledDecode: music.tiledDecode,
+        musicOutputFormat: music.outputFormat,
         musicBatchId,
         musicOutputIndex,
     };

@@ -3,6 +3,7 @@ import { Select } from "antd";
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { VideoInputMode } from "@/lib/video-input-mode";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { videoFrameFieldVisibility } from "./canvas-video-frame-visibility";
 
 export type VideoFrameReference = { nodeId: string; label: string; title: string };
 
@@ -18,8 +19,8 @@ type CanvasVideoFrameFieldsProps = {
 
 export function CanvasVideoFrameFields({ mode, allowMultimodalFrames = false, images, firstFrameNodeId, lastFrameNodeId, onFirstFrameChange, onLastFrameChange }: CanvasVideoFrameFieldsProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    if (!["firstFrame", "firstLastFrame"].includes(mode) && !(mode === "multimodal" && allowMultimodalFrames)) return null;
-    const showLastFrame = mode === "firstLastFrame" || mode === "multimodal";
+    const { showFields, showLastFrame } = videoFrameFieldVisibility(mode, allowMultimodalFrames);
+    if (!showFields) return null;
     const options = images.map((reference) => ({ value: reference.nodeId, label: `@${reference.label} · ${reference.title}` }));
     return (
         <div className={`mb-2 grid gap-2 ${showLastFrame ? "grid-cols-2" : "grid-cols-1"}`}>

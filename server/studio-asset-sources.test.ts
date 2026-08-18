@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -69,4 +69,9 @@ test("Studio assets are grouped by series, standalone project, and episode witho
   assert.equal(sources[2]?.episode_number, 1);
   assert.equal(sources.some((source) => source.title === "创作台"), false);
   assert.equal((await storage.listResources()).some((resource) => resource.id === stored.id), true);
+});
+
+test("generated providers create their resource directory lazily", async () => {
+  const stored = await storage.writeGenerated("minimax-music3", "mp3", Uint8Array.from([73, 68, 51]));
+  assert.deepEqual([...await readFile(stored.target)], [73, 68, 51]);
 });

@@ -2,10 +2,11 @@ import { nanoid } from "nanoid";
 
 import { modelOptionName, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
+import { watchDirectGenerationProgress } from "./direct-generation-progress";
 
 export type AiTextContent = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } } | { type: "video_url"; video_url: { url: string } } | { type: "audio_url"; audio_url: { url: string } };
 export type AiTextMessage = { role: "system" | "user" | "assistant"; content: string | AiTextContent[] };
-type RequestOptions = { signal?: AbortSignal; webSearch?: boolean; clientRequestId?: string; systemPrompt?: string; systemPromptId?: string; systemPromptVersion?: number; onJobCreated?: (jobId: string) => void; onReasoning?: (value: string, jobId: string) => void };
+type RequestOptions = { signal?: AbortSignal; webSearch?: boolean; clientRequestId?: string; systemPrompt?: string; systemPromptId?: string; systemPromptVersion?: number; onJobCreated?: (jobId: string, outputIndex?: number) => void; onReasoning?: (value: string, jobId: string) => void };
 
 export function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) { return generateImages(config, prompt, [], options); }
 export function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], _mask?: ReferenceImage, options?: RequestOptions) { return generateImages(config, prompt, references.map((item) => item.storageKey).filter(Boolean) as string[], options); }
@@ -13,10 +14,19 @@ export function requestEdit(config: AiConfig, prompt: string, references: Refere
 async function generateImages(config: AiConfig, prompt: string, referenceResourceIds: string[], options?: RequestOptions) {
     const count = Math.max(1, Math.min(15, Number(config.count) || 1));
     return Promise.all(Array.from({ length: count }, async (_, outputIndex) => {
-        const jobId = crypto.randomUUID(); options?.onJobCreated?.(jobId);
+        const clientRequestId = options?.clientRequestId ? count === 1 ? options.clientRequestId : `${options.clientRequestId}:${outputIndex}` : crypto.randomUUID();
+        const progress = watchDirectGenerationProgress(clientRequestId, {
+            onJobCreated: (jobId) => options?.onJobCreated?.(jobId, outputIndex),
+        });
         const [width, height] = imageDimensions(config.size);
-        const payload = await localRequest<{ resource: { id: string; url: string } }>("/api/generate/image", { prompt, model: modelOptionName(config.model || config.imageModel), width, height, referenceResourceIds }, options?.signal);
-        return { id: payload.resource.id || nanoid(), dataUrl: payload.resource.url, storageKey: payload.resource.id, outputIndex };
+        try {
+            const payload = await localRequest<{ resource: { id: string; url: string } }>("/api/generate/image", { prompt, model: modelOptionName(config.model || config.imageModel), width, height, referenceResourceIds, clientRequestId }, options?.signal);
+            await progress.finish();
+            return { id: payload.resource.id || nanoid(), dataUrl: payload.resource.url, storageKey: payload.resource.id, outputIndex };
+        } catch (error) {
+            progress.stop();
+            throw error;
+        }
     }));
 }
 
@@ -31,7 +41,7 @@ export async function requestImageQuestion(_config: AiConfig, messages: AiTextMe
     const jobId = crypto.randomUUID(); options?.onJobCreated?.(jobId);
     return (await localRequest<{ text: string }>("/api/generate/text", { prompt, model: modelOptionName(_config.textModel || _config.model), inputResourceIds }, options?.signal)).text;
 }
-export async function fetchImageModels() { return ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2"]; }
+export async function fetchImageModels() { return ["google:nano-banana@2-lite", "google:4@1", "openai:gpt-image@2", "ernie-image-turbo"]; }
 export async function fetchChannelModels(_channel: ModelChannel) { return fetchImageModels(); }
 async function localRequest<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> { const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "本地生成失败"); return payload; }
 function imageDimensions(size: string): [number, number] { const match = String(size || "").match(/^(\d+)x(\d+)$/i); return match ? [Number(match[1]), Number(match[2])] : [1024, 1024]; }

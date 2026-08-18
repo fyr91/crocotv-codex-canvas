@@ -43,6 +43,25 @@ npm run setup
 
 `npm run setup` 会将当前仓库和共享环境文件的位置写入 `~/.config/crocotv/config.json`。该配置不保存密钥，安装到 Codex 全局缓存中的 MCP 和 Skills 通过它找到本地 CrocoTV。
 
+#### GPU 调度中心最小配置
+
+Canvas、Studio、MCP 和 Croco Video Factory Skill 共用 `.codex/.env` 中的同一组调度中心配置。使用 ERNIE、MiniMax H3、LTX 2.5、FlashVSR 或 MiniMax Music 3 时，只需填写：
+
+```dotenv
+GPU_API_BASE_URL=https://your-gpu-orchestrator.example
+GPU_API_TOKEN=your-token
+```
+
+`GPU_API_BASE_URL` 指向统一 GPU 调度中心，不是任一模型服务器；客户端只会调用该地址下的 `/api/v2` 任务、素材和产物接口。不要在 URL 末尾填写 `/api/v2`，也不要把 Token 写入前端设置、项目 JSON 或 Git。
+
+配置后可执行不产生生成费用的连接检查：
+
+```bash
+npm run check:gpu
+```
+
+检查通过会列出调度中心当前公开的模型合同；模型暂时关闭路由时不会被误报为本地配置失败。旧的 `H3_BASE_URL` / `H3_API_KEY` 仅为迁移兼容，新安装统一使用上面的两个 `GPU_API_*` 变量。
+
 ### 2. 安装 Codex Plugin
 
 本仓库是名为 `croco` 的非默认 Marketplace，因此必须先显式添加，再安装其中的 Plugin：

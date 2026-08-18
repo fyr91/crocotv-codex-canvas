@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { GRID_COLS_CLASS, I2V_MODELS } from '@/store/projectStore';
 
-describe('Croco H3 video parameters', () => {
-    it('exposes H3 as the only executable Studio video model', () => {
-        expect(I2V_MODELS.map((model) => model.id)).toEqual(['minimax-h3']);
+describe('Croco GPU video parameters', () => {
+    it('exposes both executable Chengdu video models', () => {
+        expect(I2V_MODELS.map((model) => model.id)).toEqual(['minimax-h3', 'ltx-2.5']);
     });
 
     it('keeps the duration and output controls supported by the Canvas runtime', () => {

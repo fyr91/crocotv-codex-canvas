@@ -1,11 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { addResource, fileSize, resourceById, safeResourcePath, writeGenerated } from "./storage";
+import { addResource, fileSize, resourceById, safeResourcePath, updateResource, writeGenerated } from "./storage";
 import type { StoredResource } from "./types";
 import { getSunoCallbackUrl } from "./suno-callback";
 import { createModelAssetLease, type ModelAssetLease } from "./model-asset-url";
 import { providerModels as models } from "./model-catalog";
+import {
+  cancelUnifiedGpuJob,
+  downloadUnifiedGpuOutput,
+  getUnifiedGpuJob,
+  listUnifiedGpuOutputs,
+  submitUnifiedGpuJob,
+  uploadGpuResource,
+  waitForUnifiedGpuJob,
+  type GpuJobProgress,
+} from "./gpu-orchestrator";
 
 export { models };
 
@@ -116,7 +125,8 @@ async function releaseModelAssetLeases(leases: ModelAssetLease[]) {
   await Promise.allSettled(leases.map((lease) => lease.release()));
 }
 
-export async function generateMusic(input: { prompt: string; model?: string; params?: Record<string, unknown> }) {
+export async function generateMusic(input: { prompt: string; model?: string; params?: Record<string, unknown>; signal?: AbortSignal; onProgress?: (progress: GpuJobProgress) => void | Promise<void> }) {
+  if (input.model === "minimax-music-3") return generateMiniMaxMusic3(input);
   const baseUrl = (process.env.SUNO_BASE_URL || "https://api.sunoapi.org").replace(/\/$/, "");
   const apiKey = required("SUNO_API_KEY");
   const params = input.params || {};
@@ -125,7 +135,7 @@ export async function generateMusic(input: { prompt: string; model?: string; par
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       prompt: input.prompt,
-      model: input.model || models.music,
+      model: input.model || models.music[0],
       customMode: Boolean(params.customMode),
       instrumental: Boolean(params.instrumental),
       callBackUrl: await getSunoCallbackUrl(),
@@ -173,8 +183,90 @@ export async function generateMusic(input: { prompt: string; model?: string; par
   return resources;
 }
 
-export async function generateImage(input: { prompt: string; model: string; width?: number; height?: number; referenceResourceIds?: string[] }) {
-  if (!models.image.includes(input.model)) throw new Error("只支持已配置的 Runware 图片模型");
+export function buildMusic3JobPayload(input: { prompt: string; params?: Record<string, unknown> }) {
+  const params = input.params || {};
+  const caption = String(params.style || params.caption || params.title || "").trim();
+  if (!caption) throw new Error("MiniMax Music 3 需要音乐描述");
+  const instrumental = Boolean(params.instrumental);
+  const lyrics = instrumental ? "" : String(params.lyrics ?? input.prompt ?? "").trim();
+  const maxDuration = Number(params.maxDuration ?? params.max_duration ?? 120);
+  if (!Number.isFinite(maxDuration) || maxDuration < 0.04 || maxDuration > 360) throw new Error("MiniMax Music 3 时长必须为 0.04–360 秒");
+  const seed = Number(params.seed ?? 0);
+  if (!Number.isSafeInteger(seed) || seed < 0) throw new Error("MiniMax Music 3 Seed 必须为非负整数");
+  const outputFormat = String(params.outputFormat || params.output_format || "mp3").toLowerCase();
+  if (!["mp3", "wav"].includes(outputFormat)) throw new Error("MiniMax Music 3 输出格式只支持 mp3 或 wav");
+  return {
+    caption,
+    lyrics,
+    max_duration: maxDuration,
+    seed,
+    tiled_decode: Boolean(params.tiledDecode ?? params.tiled_decode),
+    output_format: outputFormat,
+  };
+}
+
+async function generateMiniMaxMusic3(input: { prompt: string; params?: Record<string, unknown>; signal?: AbortSignal; onProgress?: (progress: GpuJobProgress) => void | Promise<void> }) {
+  const parameters = buildMusic3JobPayload(input);
+  const created = await submitUnifiedGpuJob({
+    modelId: "minimax-music-3",
+    operation: "audio.generate",
+    contractVersion: "1",
+    parameters,
+    signal: input.signal,
+  });
+  await input.onProgress?.({ stage: "submitted", jobId: created.job_id, outputIndex: 0, progress: 0, label: "MiniMax Music 3 任务已提交" });
+  try {
+    await waitForUnifiedGpuJob({ job: created, signal: input.signal, onProgress: input.onProgress });
+  } catch (error) {
+    if (input.signal?.aborted) await cancelUnifiedGpuJob(created.job_id).catch(() => undefined);
+    throw error;
+  }
+  const outputs = await listUnifiedGpuOutputs(created.job_id, input.signal);
+  const output = outputs.find((item) => item.output_type === "audio" && item.delivery_state === "ready");
+  if (!output) throw new Error("MiniMax Music 3 任务成功，但没有返回音频");
+  const audio = await downloadUnifiedGpuOutput(created.job_id, output.output_id, input.signal);
+  const extension = extensionForMime(audio.mimeType, parameters.output_format);
+  const stored = await writeGenerated("minimax-music3", extension, audio.bytes);
+  const title = String(input.params?.title || "MiniMax Music 3").trim() || "MiniMax Music 3";
+  const resource = await addResource({
+    id: stored.id,
+    name: `${title}.${extension}`,
+    type: "audio",
+    mimeType: audio.mimeType,
+    size: await fileSize(stored.target),
+    fileName: stored.fileName,
+    createdAt: new Date().toISOString(),
+    source: "minimax-music3",
+    metadata: {
+      model: "minimax-music-3",
+      jobId: created.job_id,
+      duration: parameters.max_duration,
+      caption: parameters.caption,
+      lyrics: parameters.lyrics,
+      instrumental: !parameters.lyrics,
+      seed: parameters.seed,
+      tiledDecode: parameters.tiled_decode,
+      outputFormat: parameters.output_format,
+    },
+  });
+  return [resource];
+}
+
+type ImageGenerationInput = {
+  prompt: string;
+  model: string;
+  width?: number;
+  height?: number;
+  seed?: number;
+  referenceResourceIds?: string[];
+  clientJobId?: string;
+  signal?: AbortSignal;
+  onProgress?: (progress: GpuJobProgress) => void | Promise<void>;
+};
+
+export async function generateImage(input: ImageGenerationInput) {
+  if (input.model === "ernie-image-turbo") return generateErnieImage(input);
+  if (!models.image.includes(input.model)) throw new Error("只支持已配置的图片模型");
   const taskUUID = randomUUID();
   const references = await Promise.all((input.referenceResourceIds || []).slice(0, 8).map(resourceDataUri));
   const request = {
@@ -205,59 +297,304 @@ export async function generateImage(input: { prompt: string; model: string; widt
   return addResource({ id: stored.id, name: `Runware-${new Date().toLocaleString("zh-CN")}.png`, type: "image", mimeType: "image/png", size: await fileSize(stored.target), fileName: stored.fileName, createdAt: new Date().toISOString(), source: "runware", metadata: { model: input.model, taskUUID, imageUUID: result.imageUUID, seed: result.seed, cost: result.cost } });
 }
 
-export type H3GenerationProgress = {
-  stage: "submitted" | "queued" | "running" | "completed";
-  jobId: string;
-  outputIndex: number;
-  progress?: number;
-  label: string;
+const ERNIE_IMAGE_SIZES = new Set(["1024x1024", "848x1264", "1264x848", "768x1376", "1376x768", "896x1200", "1200x896"]);
+
+async function generateErnieImage(input: ImageGenerationInput) {
+  if (input.referenceResourceIds?.length) throw new Error("ERNIE Image Turbo 当前只支持文生图，不接受参考图片");
+  const width = Math.floor(Number(input.width) || 1024);
+  const height = Math.floor(Number(input.height) || 1024);
+  if (!ERNIE_IMAGE_SIZES.has(`${width}x${height}`)) throw new Error(`ERNIE Image Turbo 不支持尺寸 ${width}x${height}`);
+  if (input.seed != null && (!Number.isSafeInteger(input.seed) || input.seed < 0)) throw new Error("ERNIE Image Turbo Seed 必须为非负整数");
+  const parameters = { prompt: input.prompt, width, height, ...(input.seed == null ? {} : { seed: input.seed }) };
+  const created = await submitUnifiedGpuJob({
+    modelId: "ernie-image-turbo",
+    operation: "image.generate",
+    contractVersion: "1",
+    parameters,
+    clientJobId: input.clientJobId,
+    signal: input.signal,
+  });
+  await input.onProgress?.({ stage: "submitted", jobId: created.job_id, outputIndex: 0, progress: 0, label: "ERNIE Image Turbo 任务已提交" });
+  const job = await waitForUnifiedGpuJob({ job: created, signal: input.signal, onProgress: input.onProgress });
+  const outputs = await listUnifiedGpuOutputs(job.job_id, input.signal);
+  const output = outputs.find((item) => item.output_type === "image" && item.delivery_state === "ready");
+  if (!output) throw new Error("ERNIE Image Turbo 任务成功，但没有返回图片");
+  const image = await downloadUnifiedGpuOutput(job.job_id, output.output_id, input.signal);
+  const stored = await writeGenerated("ernie", extensionForMime(image.mimeType, "png"), image.bytes);
+  return addResource({
+    id: stored.id,
+    name: `ERNIE-${new Date().toLocaleString("zh-CN")}.png`,
+    type: "image",
+    mimeType: image.mimeType,
+    size: await fileSize(stored.target),
+    fileName: stored.fileName,
+    createdAt: new Date().toISOString(),
+    source: "ernie",
+    metadata: { model: input.model, jobId: job.job_id, width, height, seed: job.parameters?.seed ?? input.seed },
+  });
+}
+
+export type H3GenerationProgress = GpuJobProgress;
+
+export type VideoGenerationInput = {
+  model: string;
+  prompt: string;
+  duration: number;
+  quality?: string;
+  size?: string;
+  count?: number;
+  inputMode?: string;
+  optimizePrompt?: boolean;
+  imageResourceIds?: string[];
+  videoResourceIds?: string[];
+  audioResourceIds?: string[];
+  referenceStrength?: number;
+  seed?: number;
+  clientJobId?: string;
+  signal?: AbortSignal;
+  onProgress?: (progress: H3GenerationProgress) => void | Promise<void>;
 };
+
+export async function generateVideo(input: VideoGenerationInput) {
+  const model = input.model === "minimax-h3-r2v" ? "minimax-h3" : input.model;
+  if (model === "minimax-h3") return generateH3Video(input);
+  if (model === "ltx-2.5") return generateLtxVideo(input);
+  throw new Error(`不支持的视频模型：${model}`);
+}
 
 export function h3JobProgressState(status: unknown): { pending: boolean; stage: H3GenerationProgress["stage"]; label: string } {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "dispatching") return { pending: true, stage: "queued", label: "MiniMax H3 任务分发中" };
-  if (normalized === "queued") return { pending: true, stage: "queued", label: "MiniMax H3 排队中" };
-  if (normalized === "running") return { pending: true, stage: "running", label: "MiniMax H3 生成中" };
+  if (["queued", "queued_remote"].includes(normalized)) return { pending: true, stage: "queued", label: "MiniMax H3 排队中" };
+  if (["running", "cancel_requested", "unknown"].includes(normalized)) return { pending: true, stage: "running", label: "MiniMax H3 生成中" };
   return { pending: false, stage: "completed", label: "MiniMax H3 正在保存结果" };
 }
 
-export async function generateH3Video(input: { prompt: string; duration: number; quality?: string; count?: number; imageResourceIds?: string[]; videoResourceIds?: string[]; audioResourceIds?: string[]; onProgress?: (progress: H3GenerationProgress) => void | Promise<void> }) {
-  const config = { baseUrl: required("H3_BASE_URL").replace(/\/$/, ""), apiKey: required("H3_API_KEY") };
+export async function generateH3Video(input: Omit<VideoGenerationInput, "model"> & { model?: string }) {
   if (!Number.isInteger(input.duration) || input.duration < 3 || input.duration > 15) throw new Error("H3 时长必须为 3–15 秒整数");
   if (input.videoResourceIds?.length) throw new Error("当前 H3 Runtime 不支持参考视频；请仅连接图片或音频参考");
-  const images = await Promise.all((input.imageResourceIds || []).slice(0, 9).map((id) => uploadH3Asset(config, id, "images")));
-  const audios = await Promise.all((input.audioResourceIds || []).slice(0, 3).map((id) => uploadH3Asset(config, id, "audio")));
-  await ensureH3Runtime(config);
-  const externalJobId = randomUUID();
-  const qualities = ["preview", "base_768p", "standard_480p", "standard_768p", "portrait_preview", "portrait_768p", "standard_portrait_480p", "standard_portrait_768p"];
+  const images = await Promise.all((input.imageResourceIds || []).slice(0, 9).map((id) => uploadGpuResource(id, "images", input.signal)));
+  const audios = await Promise.all((input.audioResourceIds || []).slice(0, 3).map((id) => uploadGpuResource(id, "audio", input.signal)));
+  const qualities = ["preview", "base_0_7mp", "base_768p", "standard_480p", "standard_0_7mp", "standard_768p", "portrait_preview", "portrait_0_7mp", "portrait_768p", "standard_portrait_480p", "standard_portrait_0_7mp", "standard_portrait_768p"];
   const quality = qualities.includes(String(input.quality)) ? String(input.quality) : "preview";
   const count = Math.max(1, Math.min(3, Number(input.count) || 1));
-  const payload = buildH3JobPayload({ externalJobId, count, prompt: input.prompt, quality, duration: input.duration, images, videos: [], audios });
-  const response = await h3Json(config, "/api/v1/h3/jobs/batch", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": externalJobId }, body: JSON.stringify(payload) });
-  const jobIds = (response.items || []).map((item: any) => String(item.job_id || "")).filter(Boolean);
-  if (!jobIds.length) throw new Error("H3 没有返回 Job ID");
-  await Promise.allSettled(jobIds.map((jobId: string, outputIndex: number) => input.onProgress?.({ stage: "submitted", jobId, outputIndex, progress: 0, label: "MiniMax H3 任务已提交" })));
-  return Promise.all(jobIds.map(async (jobId: string, outputIndex: number) => {
-    let job: any;
-    let previousProgressSignature = "";
-    do {
-      await wait(5000);
-      job = await h3Json(config, `/api/v1/h3/jobs/${encodeURIComponent(jobId)}`);
-      const state = h3JobProgressState(job.status);
-      const stage = state.stage;
-      const progress = Number.isFinite(Number(job.progress)) ? Math.max(0, Math.min(100, Number(job.progress))) : undefined;
-      const signature = `${stage}:${progress ?? ""}`;
-      if (signature !== previousProgressSignature) {
-        previousProgressSignature = signature;
-        await input.onProgress?.({ stage, jobId, outputIndex, ...(progress != null ? { progress } : {}), label: state.label });
-      }
-    } while (h3JobProgressState(job.status).pending);
-    if (job.status !== "succeeded") throw new Error(job.error || `H3 任务状态：${job.status}`);
-    const videoResponse = await fetch(`${config.baseUrl}/api/v1/h3/jobs/${encodeURIComponent(jobId)}/content`, { headers: auth(config) });
-    if (!videoResponse.ok) throw new Error(`H3 视频下载失败（${videoResponse.status}）`);
-    const stored = await writeGenerated("h3", "mp4", new Uint8Array(await videoResponse.arrayBuffer()));
-    return addResource({ id: stored.id, name: `H3-${new Date().toLocaleString("zh-CN")}-${outputIndex + 1}.mp4`, type: "video", mimeType: "video/mp4", size: await fileSize(stored.target), fileName: stored.fileName, createdAt: new Date().toISOString(), source: "h3", metadata: { jobId, outputIndex, quality, duration: input.duration, width: job.width, height: job.height, seed: job.seed } });
+  return Promise.all(Array.from({ length: count }, async (_, outputIndex) => {
+    const clientJobId = randomUUID();
+    const request = buildH3JobPayload({ externalJobId: clientJobId, count: 1, prompt: input.prompt, quality, duration: input.duration, inputMode: input.inputMode, images, videos: [], audios });
+    const created = await submitUnifiedGpuJob({
+      modelId: "minimax-h3",
+      operation: "video.generate",
+      contractVersion: "2",
+      clientJobId: input.clientJobId ? `${input.clientJobId}:${outputIndex}` : clientJobId,
+      parameters: request.parameters,
+      inputs: request.inputs,
+      signal: input.signal,
+    });
+    await input.onProgress?.({ stage: "submitted", jobId: created.job_id, outputIndex, progress: 0, label: "MiniMax H3 任务已提交" });
+    try {
+      await waitForUnifiedGpuJob({ job: created, outputIndex, signal: input.signal, onProgress: input.onProgress });
+    } catch (error) {
+      if (input.signal?.aborted) await cancelUnifiedGpuJob(created.job_id).catch(() => undefined);
+      throw error;
+    }
+    const outputs = await listUnifiedGpuOutputs(created.job_id, input.signal);
+    const output = outputs.find((item) => item.output_type === "video" && item.delivery_state === "ready");
+    if (!output) throw new Error("MiniMax H3 任务成功，但没有返回视频");
+    const video = await downloadUnifiedGpuOutput(created.job_id, output.output_id, input.signal);
+    const stored = await writeGenerated("h3", extensionForMime(video.mimeType, "mp4"), video.bytes);
+    const completed = await getUnifiedGpuJob(created.job_id, input.signal);
+    const parameters = completed.parameters || {};
+    return addResource({ id: stored.id, name: `H3-${new Date().toLocaleString("zh-CN")}-${outputIndex + 1}.mp4`, type: "video", mimeType: video.mimeType, size: await fileSize(stored.target), fileName: stored.fileName, createdAt: new Date().toISOString(), source: "h3", metadata: { model: "minimax-h3", jobId: created.job_id, outputIndex, quality, duration: input.duration, width: parameters.width, height: parameters.height, seed: parameters.seed } });
   }));
+}
+
+async function generateLtxVideo(input: VideoGenerationInput) {
+  if (input.videoResourceIds?.length || input.audioResourceIds?.length) throw new Error("LTX 2.5 当前不接受视频或音频参考");
+  const imageIds = input.imageResourceIds || [];
+  if (imageIds.length > 1) throw new Error("LTX 2.5 每次只接受一张首帧或 Ingredients 参考图");
+  const count = Math.max(1, Math.min(3, Math.floor(Number(input.count) || 1)));
+  const uploadedImageId = imageIds[0] ? await uploadGpuResource(imageIds[0], "images", input.signal) : undefined;
+  return Promise.all(Array.from({ length: count }, async (_, outputIndex) => {
+    const seed = Number.isInteger(input.seed) ? Number(input.seed) + outputIndex : Math.floor(Math.random() * 2_147_483_647);
+    const request = buildLtxGenerationRequest({ ...input, hasImage: Boolean(uploadedImageId), seed });
+    const created = await submitUnifiedGpuJob({
+      modelId: "ltx-2.5",
+      operation: "video.generate",
+      contractVersion: "2",
+      parameters: request.parameters,
+      inputs: request.inputRole && uploadedImageId ? [{ role: request.inputRole, asset_id: uploadedImageId }] : [],
+      clientJobId: input.clientJobId ? `${input.clientJobId}:${outputIndex}` : undefined,
+      signal: input.signal,
+    });
+    await input.onProgress?.({ stage: "submitted", jobId: created.job_id, outputIndex, progress: 0, label: "LTX 2.5 任务已提交" });
+    try {
+      await waitForUnifiedGpuJob({ job: created, outputIndex, signal: input.signal, onProgress: input.onProgress });
+    } catch (error) {
+      if (input.signal?.aborted) await cancelUnifiedGpuJob(created.job_id).catch(() => undefined);
+      throw error;
+    }
+    const outputs = await listUnifiedGpuOutputs(created.job_id, input.signal);
+    const output = outputs.find((item) => item.output_type === "video" && item.delivery_state === "ready");
+    if (!output) throw new Error("LTX 2.5 任务成功，但没有返回视频");
+    const video = await downloadUnifiedGpuOutput(created.job_id, output.output_id, input.signal);
+    const stored = await writeGenerated("ltx", extensionForMime(video.mimeType, "mp4"), video.bytes);
+    return addResource({
+      id: stored.id,
+      name: `LTX-2.5-${new Date().toLocaleString("zh-CN")}-${outputIndex + 1}.mp4`,
+      type: "video",
+      mimeType: video.mimeType,
+      size: await fileSize(stored.target),
+      fileName: stored.fileName,
+      createdAt: new Date().toISOString(),
+      source: "ltx",
+      metadata: { model: "ltx-2.5", jobId: created.job_id, outputIndex, width: request.width, height: request.height, duration: request.duration, fps: 24, numFrames: request.numFrames, seed, workflowId: request.workflowId },
+    });
+  }));
+}
+
+export function buildLtxGenerationRequest(input: Pick<VideoGenerationInput, "prompt" | "size" | "duration" | "inputMode" | "optimizePrompt" | "referenceStrength"> & { hasImage: boolean; seed: number }) {
+  const prompt = input.prompt.trim();
+  if (prompt.length < 3 || prompt.length > 4000) throw new Error("LTX 2.5 Prompt 必须为 3–4000 个字符");
+  const [width, height] = ltxDimensions(input.size || "1280x704");
+  const duration = Number(input.duration);
+  if (!Number.isInteger(duration) || duration < 3 || duration > 20) throw new Error("LTX 2.5 时长必须为 3–20 秒整数");
+  const numFrames = duration * 24 + 1;
+  if (width * height * numFrames > 1_200_000_000) throw new Error("LTX 2.5 分辨率和时长超过 GPU 像素帧预算");
+  if (input.inputMode === "firstFrame" && !input.hasImage) throw new Error("LTX 2.5 首帧生视频缺少首帧图片");
+  if (input.inputMode === "multimodal" && !input.hasImage) throw new Error("LTX 2.5 Ingredients 缺少参考图");
+  const workflowId = !input.hasImage
+    ? "ltx25_distilled_t2v_v1"
+    : input.inputMode === "firstFrame"
+      ? "ltx25_distilled_i2v_v1"
+      : "ltx25_ic_lora_ingredients_v1";
+  const inputRole = workflowId === "ltx25_distilled_i2v_v1" ? "first_frame" : workflowId === "ltx25_ic_lora_ingredients_v1" ? "reference_sheet" : undefined;
+  return {
+    workflowId,
+    inputRole,
+    width,
+    height,
+    duration,
+    numFrames,
+    parameters: {
+      workflow_id: workflowId,
+      prompt,
+      width,
+      height,
+      num_frames: numFrames,
+      fps: 24,
+      seed: input.seed,
+      enhance_prompt: input.optimizePrompt !== false,
+      reference_strength: Math.max(0.1, Math.min(1.5, Number(input.referenceStrength) || 1)),
+    },
+  };
+}
+
+export function ltxDimensions(size: string): [number, number] {
+  const match = String(size || "").match(/^(\d+)x(\d+)$/);
+  const width = Number(match?.[1] || 1024);
+  const height = Number(match?.[2] || 576);
+  if (width < 320 || height < 320 || width > 4096 || height > 4096 || width % 64 || height % 64) throw new Error(`LTX 2.5 不支持尺寸 ${width}x${height}`);
+  if (width * height > 4096 * 2304) throw new Error("LTX 2.5 分辨率超过 GPU 像素预算");
+  return [width, height];
+}
+
+export type FlashVsrEnhancement = {
+  id: string;
+  source_resource_id: string;
+  status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+  stage: string;
+  progress: number;
+  output_resource_id?: string | null;
+  error_message?: string | null;
+};
+
+const flashVsrFinalizers = new Map<string, Promise<FlashVsrEnhancement>>();
+
+export async function createFlashVsrEnhancement(sourceResourceId: string) {
+  const source = await requiredH3Source(sourceResourceId);
+  const existingJobId = String(source.metadata?.flashVsrJobId || "");
+  if (existingJobId) {
+    const existing = await getFlashVsrEnhancement(sourceResourceId);
+    if (existing && !["failed", "canceled"].includes(existing.status)) return existing;
+  }
+  const sourceJobId = String(source.metadata?.jobId || "");
+  const created = await submitUnifiedGpuJob({
+    modelId: "flashvsr",
+    operation: "video.enhance",
+    contractVersion: "1",
+    parameters: { source_job_id: sourceJobId, profile: "flashvsr_v1_1_tiny_long_native2x_hevc_crf26" },
+  });
+  await updateResource(source.id, { metadata: { ...(source.metadata || {}), flashVsrJobId: created.job_id, flashVsrOutputResourceId: "" } });
+  return normalizedFlashVsrJob(source.id, created);
+}
+
+export async function getFlashVsrEnhancement(sourceResourceId: string): Promise<FlashVsrEnhancement | null> {
+  const source = await requiredH3Source(sourceResourceId);
+  const outputResourceId = String(source.metadata?.flashVsrOutputResourceId || "");
+  const jobId = String(source.metadata?.flashVsrJobId || "");
+  if (outputResourceId && jobId) return { id: jobId, source_resource_id: source.id, status: "succeeded", stage: "completed", progress: 100, output_resource_id: outputResourceId };
+  if (!jobId) return null;
+  const job = await getUnifiedGpuJob(jobId);
+  if (job.status !== "succeeded") return normalizedFlashVsrJob(source.id, job);
+  const current = flashVsrFinalizers.get(source.id);
+  if (current) return current;
+  const finalize = finalizeFlashVsrEnhancement(source, jobId).finally(() => flashVsrFinalizers.delete(source.id));
+  flashVsrFinalizers.set(source.id, finalize);
+  return finalize;
+}
+
+async function finalizeFlashVsrEnhancement(source: StoredResource, jobId: string): Promise<FlashVsrEnhancement> {
+  const outputs = await listUnifiedGpuOutputs(jobId);
+  const output = outputs.find((item) => item.output_type === "video" && item.delivery_state === "ready");
+  if (!output) throw new Error("FlashVSR 任务成功，但没有返回增强视频");
+  const video = await downloadUnifiedGpuOutput(jobId, output.output_id);
+  const stored = await writeGenerated("flashvsr", extensionForMime(video.mimeType, "mp4"), video.bytes);
+  const resource = await addResource({
+    id: stored.id,
+    name: `FlashVSR-${new Date().toLocaleString("zh-CN")}.mp4`,
+    type: "video",
+    mimeType: video.mimeType,
+    size: await fileSize(stored.target),
+    fileName: stored.fileName,
+    createdAt: new Date().toISOString(),
+    source: "flashvsr",
+    metadata: {
+      model: "flashvsr",
+      jobId,
+      sourceResourceId: source.id,
+      sourceJobId: source.metadata?.jobId,
+      width: Number(source.metadata?.width) ? Number(source.metadata?.width) * 2 : undefined,
+      height: Number(source.metadata?.height) ? Number(source.metadata?.height) * 2 : undefined,
+      duration: source.metadata?.duration,
+    },
+  });
+  await updateResource(source.id, { metadata: { ...(source.metadata || {}), flashVsrJobId: jobId, flashVsrOutputResourceId: resource.id } });
+  return { id: jobId, source_resource_id: source.id, status: "succeeded", stage: "completed", progress: 100, output_resource_id: resource.id };
+}
+
+async function requiredH3Source(sourceResourceId: string) {
+  const source = await resourceById(sourceResourceId);
+  if (!source || source.type !== "video") throw new Error("FlashVSR 源视频不存在");
+  if (source.metadata?.model !== "minimax-h3" && source.source !== "h3") throw new Error("FlashVSR 当前只支持 MiniMax H3 生成的视频");
+  if (!source.metadata?.jobId) throw new Error("源视频缺少成都调度任务 ID，无法启动 FlashVSR");
+  return source;
+}
+
+function normalizedFlashVsrJob(sourceResourceId: string, job: { job_id: string; status: string; stage?: string | null; progress?: number | null; error?: string | null }): FlashVsrEnhancement {
+  const status = String(job.status || "");
+  const normalizedStatus: FlashVsrEnhancement["status"] = status === "succeeded" || status === "failed" || status === "canceled"
+    ? status
+    : ["accepted", "preparing", "queued", "dispatching"].includes(status)
+      ? "queued"
+      : "running";
+  return {
+    id: job.job_id,
+    source_resource_id: sourceResourceId,
+    status: normalizedStatus,
+    stage: String(job.stage || status || "queued"),
+    progress: Math.max(0, Math.min(100, Number(job.progress) || 0)),
+    error_message: job.error || null,
+  };
 }
 
 async function resourceDataUri(id: string) {
@@ -266,55 +603,26 @@ async function resourceDataUri(id: string) {
   return `data:${resource.mimeType};base64,${(await readFile(safeResourcePath(resource.fileName))).toString("base64")}`;
 }
 
-async function uploadH3Asset(config: { baseUrl: string; apiKey: string }, id: string, kind: "images" | "videos" | "audio") {
-  const resource = await resourceById(id);
-  if (!resource) throw new Error(`H3 参考资源不存在：${id}`);
-  const form = new FormData();
-  form.append("file", new Blob([await readFile(safeResourcePath(resource.fileName))], { type: resource.mimeType }), path.basename(resource.fileName));
-  const response = await fetch(`${config.baseUrl}/api/v1/h3/assets/${kind}`, { method: "POST", headers: auth(config), body: form });
-  if (!response.ok) throw await h3ResponseError(response, "H3 素材上传失败");
-  return ((await response.json()) as any).asset_id as string;
-}
-
-export function buildH3JobPayload(input: { externalJobId: string; count: number; prompt: string; quality: string; duration: number; images: string[]; videos: string[]; audios: string[] }) {
+export function buildH3JobPayload(input: { externalJobId: string; count: number; prompt: string; quality: string; duration: number; inputMode?: string; images: string[]; videos: string[]; audios: string[] }) {
   if (input.videos.length) throw new Error("当前 H3 Runtime 不支持参考视频；请仅连接图片或音频参考");
-  const mode = input.images.length || input.audios.length ? "r2v" : "t2v";
+  const inputMode = String(input.inputMode || "text");
+  if (inputMode === "text" && (input.images.length || input.audios.length)) throw new Error("H3 文生视频模式不接受参考图片或音频");
+  if (inputMode === "firstFrame" && (input.images.length !== 1 || input.audios.length)) throw new Error("H3 首帧生视频需要且只接受一张首帧图片");
+  if (inputMode === "firstLastFrame" && input.images.length !== 2) throw new Error("H3 首尾帧生视频需要按顺序连接两张图片");
+  if (inputMode === "multimodal" && !input.images.length && !input.audios.length) throw new Error("H3 多模态参考至少需要一张图片或一段音频");
+  const mode = inputMode === "firstFrame" ? "i2v" : inputMode === "text" ? "t2v" : "r2v";
   return {
-    external_job_id: input.externalJobId,
-    count: input.count,
-    request: {
+    parameters: {
       mode,
       prompt: input.prompt,
       quality: input.quality,
       duration_seconds: input.duration,
-      steps: 20,
-      ...(mode === "r2v" && input.images.length ? { reference_image_asset_ids: input.images } : {}),
-      ...(mode === "r2v" && input.audios.length ? { reference_audio_asset_ids: input.audios } : {}),
-      ref_image_size: "match",
     },
+    inputs: [
+      ...input.images.map((asset_id) => ({ role: mode === "i2v" ? "first_frame" : "reference_image", asset_id })),
+      ...input.audios.map((asset_id) => ({ role: "reference_audio", asset_id })),
+    ],
   };
-}
-
-async function ensureH3Runtime(config: { baseUrl: string; apiKey: string }) {
-  const current = await h3Json(config, "/api/v1/gpu/runtime");
-  if (current.active_runtime === "h3" && current.runtime_ready !== false && current.runtime_phase !== "warming") return;
-  const response = await fetch(`${config.baseUrl}/api/v1/gpu/runtime/h3`, { method: "POST", headers: auth(config) });
-  if (response.status === 409) throw new Error("GPU Runtime 忙碌，请等待活动任务结束后重试");
-  if (!response.ok) throw await h3ResponseError(response, "H3 Runtime 切换失败");
-  const result = await response.json() as any;
-  if (result.active_runtime !== "h3" || result.runtime_ready === false) throw new Error("H3 Runtime 尚未就绪");
-}
-
-async function h3Json(config: { baseUrl: string; apiKey: string }, endpoint: string, init: RequestInit = {}) {
-  const response = await fetch(`${config.baseUrl}${endpoint}`, { ...init, headers: { ...auth(config), ...init.headers } });
-  if (!response.ok) throw await h3ResponseError(response, "H3 服务请求失败");
-  return response.json() as Promise<any>;
-}
-
-async function h3ResponseError(response: Response, label: string) {
-  const payload = await response.json().catch(() => undefined);
-  const detail = formatH3ErrorDetail(payload);
-  return new Error(`${label}（${response.status}）${detail ? `：${detail}` : ""}`);
 }
 
 export function formatH3ErrorDetail(payload: unknown) {
@@ -334,9 +642,15 @@ export function formatH3ErrorDetail(payload: unknown) {
   return safe ? safe.slice(0, 500) : undefined;
 }
 
-function auth(config: { apiKey: string }) { return { Authorization: `Bearer ${config.apiKey}` }; }
 function required(name: string) { const value = String(process.env[name] || "").trim(); if (!value) throw new Error(`请在 .env 中填写 ${name}`); return value; }
-function wait(ms: number) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function wait(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError"));
+    const onAbort = () => { clearTimeout(timer); reject(signal?.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError")); };
+    const timer = setTimeout(() => { signal?.removeEventListener("abort", onAbort); resolve(); }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 async function downloadBinary(url: string, label: string) {
   const response = await fetch(url, { signal: AbortSignal.timeout(180_000) });
   if (!response.ok) throw new Error(`${label}下载失败（${response.status}）`);
