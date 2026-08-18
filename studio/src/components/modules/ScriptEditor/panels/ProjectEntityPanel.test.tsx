@@ -13,7 +13,7 @@ const project = {
   id: 'project-1',
   title: '测试项目',
   originalText: '小林进入森林。',
-  characters: [{ id: 'character-1', name: '小林', description: '小鹿' }],
+  characters: [{ id: 'character-1', name: '小林', description: '小鹿', image_url: '/files/by-id/xiaolin-image' }],
   scenes: [{ id: 'scene-1', name: '森林', description: '黄昏' }],
   props: [],
   frames: [],
@@ -39,7 +39,8 @@ describe('ProjectEntityPanel character binding', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '绑定角色素材' }));
+    expect(screen.getByRole('img', { name: '小林' })).toHaveAttribute('src', '/files/by-id/xiaolin-image');
+    fireEvent.click(screen.getAllByRole('button', { name: '绑定角色素材' })[0]);
     expect(screen.getByRole('dialog', { name: '绑定 小林' })).toBeInTheDocument();
   });
 

@@ -7,6 +7,7 @@ import { api, crudApi } from '@/lib/api';
 import { useProjectStore, type Project } from '@/store/projectStore';
 import { toast } from '@/store/toastStore';
 import CharacterResourceBindingModal from '../../cast/CharacterResourceBindingModal';
+import { getAssetUrl } from '@/lib/utils';
 
 export type ProjectEntityKind = 'character' | 'scene' | 'prop';
 
@@ -28,6 +29,20 @@ interface ProjectEntityPanelProps {
 
 function normalizeName(value: string) {
   return value.trim().toLocaleLowerCase();
+}
+
+function characterPreviewUrl(entity: ProjectEntity) {
+  const character = entity as Project['characters'][number];
+  const selectedSheet = character.reference_sheet?.image_variants?.find(
+    (variant) => variant.id === character.reference_sheet?.selected_image_id,
+  )?.url;
+  return getAssetUrl(
+    character.image_url
+      || character.reference_image_url
+      || selectedSheet
+      || character.avatar_url
+      || character.full_body_image_url,
+  );
 }
 
 export default function ProjectEntityPanel({
@@ -175,6 +190,17 @@ export default function ProjectEntityPanel({
           {entities.map((entity) => (
             <article key={entity.id} className="rounded-lg border border-foreground/10 bg-elevated/80 p-3">
               <div className="flex items-start gap-2">
+                {kind === 'character' && characterPreviewUrl(entity) ? (
+                  <button
+                    type="button"
+                    onClick={() => setBindingCharacterId(entity.id)}
+                    className="size-11 shrink-0 overflow-hidden rounded-md border border-foreground/10 bg-black/20 transition-colors hover:border-primary/50"
+                    aria-label={t('panels.bindCharacterAssets')}
+                    title={t('panels.bindCharacterAssets')}
+                  >
+                    <img src={characterPreviewUrl(entity)} alt={entity.name} className="size-full object-cover" />
+                  </button>
+                ) : null}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="truncate text-sm font-medium text-foreground">{entity.name}</h3>

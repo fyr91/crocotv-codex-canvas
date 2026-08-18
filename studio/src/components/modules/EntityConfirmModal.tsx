@@ -42,6 +42,75 @@ function renameEntity(
     return { ...preview, [editingEntity.kind]: items };
 }
 
+function normalizeName(value: unknown) {
+    return String(value || "").trim().toLocaleLowerCase();
+}
+
+function matchedCharacter(
+    item: Record<string, unknown>,
+    catalog: PulledCharacterCatalogEntry[],
+) {
+    const boundId = String(item.system_character_id || "");
+    if (boundId) return catalog.find((character) => character.id === boundId);
+    const name = normalizeName(item.name);
+    const matches = catalog.filter((character) => (
+        [character.name, character.chineseName].some((candidate) => normalizeName(candidate) === name)
+    ));
+    return matches.length === 1 ? matches[0] : undefined;
+}
+
+function resourcesForCharacter(
+    resources: PulledCharacterResource[],
+    characterId: string,
+    type: PulledCharacterResource["type"],
+) {
+    return resources.filter((resource) => (
+        resource.type === type && (
+            resource.metadata?.characterId === characterId
+            || resource.metadata?.characterLibraryCharacterIds?.includes(characterId)
+        )
+    ));
+}
+
+function defaultCharacterBinding(
+    character: PulledCharacterCatalogEntry,
+    resources: PulledCharacterResource[],
+) {
+    const images = resourcesForCharacter(resources, character.id, "image");
+    const audios = resourcesForCharacter(resources, character.id, "audio");
+    const preferredImage = images.find((resource) => resource.metadata?.assetKey === "fullBodyImageUrl")
+        || images.find((resource) => resource.id === character.primaryResourceId)
+        || images[0];
+    return {
+        system_character_id: character.id,
+        reference_image_resource_id: preferredImage?.id,
+        voice_id: character.voiceId || undefined,
+        voice_reference_resource_id: audios[0]?.id,
+    };
+}
+
+function bindMatchedCharacters(
+    preview: ExtractionPreview,
+    catalog: PulledCharacterCatalogEntry[],
+    resources: PulledCharacterResource[],
+): ExtractionPreview {
+    return {
+        ...preview,
+        characters: preview.characters.map((item) => {
+            const character = matchedCharacter(item, catalog);
+            if (!character) return item;
+            const defaults = defaultCharacterBinding(character, resources);
+            return {
+                ...item,
+                ...defaults,
+                reference_image_resource_id: item.reference_image_resource_id || defaults.reference_image_resource_id,
+                voice_id: item.voice_id || defaults.voice_id,
+                voice_reference_resource_id: item.voice_reference_resource_id || defaults.voice_reference_resource_id,
+            };
+        }),
+    };
+}
+
 export default function EntityConfirmModal({
     isOpen,
     preview,
@@ -66,8 +135,13 @@ export default function EntityConfirmModal({
         setBindingIndex(null);
         void Promise.all([api.listPulledCharacters(), api.listLocalResources()])
             .then(([nextCatalog, nextResources]) => {
-                setCatalog(nextCatalog as PulledCharacterCatalogEntry[]);
-                setResources(nextResources as PulledCharacterResource[]);
+                const typedCatalog = nextCatalog as PulledCharacterCatalogEntry[];
+                const typedResources = nextResources as PulledCharacterResource[];
+                setCatalog(typedCatalog);
+                setResources(typedResources);
+                setDraft((current) => current
+                    ? bindMatchedCharacters(current, typedCatalog, typedResources)
+                    : current);
             })
             .catch(() => {
                 setCatalog([]);
@@ -133,17 +207,12 @@ export default function EntityConfirmModal({
         if (kind === "characters" && bindingIndex === index) setBindingIndex(null);
     };
 
-    const normalizeName = (value: unknown) => String(value || "").trim().toLocaleLowerCase();
-    const characterForItem = (item: Record<string, unknown>) => {
-        const boundId = String(item.system_character_id || "");
-        if (boundId) return catalog.find((character) => character.id === boundId);
-        const name = normalizeName(item.name);
-        const matches = catalog.filter((character) => [character.name, character.chineseName].some((candidate) => normalizeName(candidate) === name));
-        return matches.length === 1 ? matches[0] : undefined;
+    const characterForItem = (item: Record<string, unknown>) => matchedCharacter(item, catalog);
+    const itemPreviewUrl = (item: Record<string, unknown>) => {
+        const selectedResourceId = String(item.reference_image_resource_id || "");
+        return resources.find((resource) => resource.id === selectedResourceId)?.url
+            || characterForItem(item)?.avatarUrl;
     };
-    const resourcesForCharacter = (characterId: string, type: PulledCharacterResource["type"]) => resources.filter((resource) => (
-        resource.type === type && resource.metadata?.characterId === characterId
-    ));
     const updateCharacter = (index: number, patch: Record<string, unknown>) => {
         setDraft((current) => current ? {
             ...current,
@@ -153,17 +222,7 @@ export default function EntityConfirmModal({
     const bindCharacter = (index: number, characterId: string) => {
         const character = catalog.find((item) => item.id === characterId);
         if (!character) return;
-        const images = resourcesForCharacter(character.id, "image");
-        const audios = resourcesForCharacter(character.id, "audio");
-        const preferredImage = images.find((resource) => resource.metadata?.assetKey === "fullBodyImageUrl")
-            || images.find((resource) => resource.id === character.primaryResourceId)
-            || images[0];
-        updateCharacter(index, {
-            system_character_id: character.id,
-            reference_image_resource_id: preferredImage?.id,
-            voice_id: character.voiceId || undefined,
-            voice_reference_resource_id: audios[0]?.id,
-        });
+        updateCharacter(index, defaultCharacterBinding(character, resources));
         setBindingIndex(index);
     };
     const unbindCharacter = (index: number) => {
@@ -228,17 +287,13 @@ export default function EntityConfirmModal({
                                                     {key === "characters" && characterForItem(item) ? (
                                                         <button
                                                             type="button"
-                                                            className="ml-1 grid size-5 shrink-0 place-items-center overflow-hidden rounded-full border border-primary/40 bg-primary/10"
+                                                            className="ml-1 grid size-8 shrink-0 place-items-center overflow-hidden rounded-md border border-primary/40 bg-primary/10"
                                                             title={t("openCharacterBinding")}
-                                                            onClick={() => {
-                                                                const matched = characterForItem(item);
-                                                                if (!item.system_character_id && matched) bindCharacter(index, matched.id);
-                                                                else setBindingIndex(index);
-                                                            }}
+                                                            onClick={() => setBindingIndex(index)}
                                                         >
-                                                            {characterForItem(item)?.avatarUrl ? (
-                                                                <img src={characterForItem(item)?.avatarUrl} alt="" className="size-full object-cover" />
-                                                            ) : <Users size={11} />}
+                                                            {itemPreviewUrl(item) ? (
+                                                                <img src={itemPreviewUrl(item)} alt={String(item.name || "")} className="size-full object-cover" />
+                                                            ) : <Users size={14} />}
                                                         </button>
                                                     ) : null}
                                                     {editingEntity?.kind === key && editingEntity.index === index ? (
@@ -290,8 +345,8 @@ export default function EntityConfirmModal({
                             {bindingIndex !== null && draft.characters[bindingIndex] ? (() => {
                                 const item = draft.characters[bindingIndex];
                                 const character = characterForItem(item);
-                                const images = character ? resourcesForCharacter(character.id, "image") : [];
-                                const audios = character ? resourcesForCharacter(character.id, "audio") : [];
+                                const images = character ? resourcesForCharacter(resources, character.id, "image") : [];
+                                const audios = character ? resourcesForCharacter(resources, character.id, "audio") : [];
                                 const selectedImage = images.find((resource) => resource.id === item.reference_image_resource_id);
                                 const selectedAudio = audios.find((resource) => resource.id === item.voice_reference_resource_id);
                                 return (

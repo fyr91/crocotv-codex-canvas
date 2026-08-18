@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link2, Link2Off, Loader2, Volume2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
@@ -35,6 +36,7 @@ export default function CharacterResourceBindingModal({
   const t = useTranslations("cast");
   const currentProject = useProjectStore((state) => state.currentProject);
   const updateProject = useProjectStore((state) => state.updateProject);
+  const bindingLoadFailedMessage = t("bindingLoadFailed");
   const [catalog, setCatalog] = useState<PulledCharacterCatalogEntry[]>([]);
   const [resources, setResources] = useState<PulledCharacterResource[]>([]);
   const [draft, setDraft] = useState<BindingDraft>(emptyDraft);
@@ -55,9 +57,9 @@ export default function CharacterResourceBindingModal({
         setCatalog(nextCatalog as PulledCharacterCatalogEntry[]);
         setResources(nextResources as PulledCharacterResource[]);
       })
-      .catch((error) => toast.error(t("bindingLoadFailed"), { body: apiErrorMessage(error) }))
+      .catch((error) => toast.error(bindingLoadFailedMessage, { body: apiErrorMessage(error) }))
       .finally(() => setLoading(false));
-  }, [character, t]);
+  }, [bindingLoadFailedMessage, character]);
 
   const selectedCharacter = catalog.find((item) => item.id === draft.system_character_id);
   const selectedResources = useMemo(() => resources.filter((resource) => (
@@ -69,11 +71,14 @@ export default function CharacterResourceBindingModal({
   const selectedImage = images.find((resource) => resource.id === draft.reference_image_resource_id);
   const selectedAudio = audios.find((resource) => resource.id === draft.voice_reference_resource_id);
 
-  if (!character || !currentProject) return null;
+  if (!character || !currentProject || typeof document === "undefined") return null;
 
   const selectCharacter = (characterId: string) => {
     const nextCharacter = catalog.find((item) => item.id === characterId);
-    const nextResources = resources.filter((resource) => resource.metadata?.characterId === characterId);
+    const nextResources = resources.filter((resource) => (
+      resource.metadata?.characterId === characterId
+      || resource.metadata?.characterLibraryCharacterIds?.includes(characterId)
+    ));
     const nextImages = nextResources.filter((resource) => resource.type === "image");
     const nextAudios = nextResources.filter((resource) => resource.type === "audio");
     const preferredImage = nextImages.find((resource) => resource.metadata?.assetKey === "fullBodyImageUrl")
@@ -101,9 +106,9 @@ export default function CharacterResourceBindingModal({
     }
   };
 
-  return (
+  return createPortal((
     <div className="fixed inset-0 z-[110] grid place-items-center bg-overlay p-4 backdrop-blur-sm" onClick={onClose}>
-      <section className="w-full max-w-3xl rounded-2xl border border-glass-border bg-elevated shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      <section role="dialog" aria-modal="true" className="w-full max-w-3xl rounded-2xl border border-glass-border bg-elevated shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <header className="flex items-start justify-between gap-4 border-b border-glass-border px-6 py-5">
           <div>
             <h2 className="font-display text-display font-medium text-foreground">{t("bindingTitle", { name: character.name })}</h2>
@@ -181,5 +186,5 @@ export default function CharacterResourceBindingModal({
         </footer>
       </section>
     </div>
-  );
+  ), document.body);
 }
