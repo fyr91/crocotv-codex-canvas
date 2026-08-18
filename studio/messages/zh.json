@@ -2304,7 +2304,6 @@
   },
   "scriptEditor": {
     "shell": {
-      "toggleLeftSidebar": "切换左侧栏",
       "toggleRightSidebar": "切换右侧栏",
       "title": "剧本编辑器",
       "loading": "编辑器加载中..."
@@ -2403,30 +2402,6 @@
       "aiReject": "忽略",
       "aiConfidence": "置信度"
     },
-    "sidebar": {
-      "scenes": "场景",
-      "outline": "大纲",
-      "search": "搜索",
-      "noScenes": "暂无场景",
-      "untitled": "无标题",
-      "filterAll": "全部",
-      "nodeSceneHeading": "场景标题",
-      "nodeCharacter": "角色",
-      "nodeDialogue": "对白",
-      "nodeAction": "动作",
-      "nodeNote": "笔记",
-      "labelScene": "场景",
-      "labelParagraph": "段落",
-      "unknownScene": "未知场景",
-      "untitledScene": "未命名场景",
-      "searchPlaceholder": "搜索内容...",
-      "searchHint": "输入关键词搜索",
-      "noResults": "无匹配结果",
-      "resultsCount": "{count} 个结果",
-      "actLabel": "幕 {number}",
-      "sceneLabel": "场景 {number}",
-      "noOutline": "暂无大纲结构"
-    },
     "views": {
       "edit": "编辑",
       "storyboard": "分镜",
@@ -2457,9 +2432,6 @@
       "localCacheFound": "发现本地缓存的更新版本",
       "restore": "恢复",
       "wordCount": "{count} 字",
-      "sceneCount": "{count} 个场景",
-      "allExpanded": "全展开",
-      "smartFolding": "智能折叠",
       "offlineShort": "🟠 离线模式",
       "unsavedDot": "● 未保存"
     },

@@ -2304,7 +2304,6 @@
   },
   "scriptEditor": {
     "shell": {
-      "toggleLeftSidebar": "Toggle left sidebar",
       "toggleRightSidebar": "Toggle right sidebar",
       "title": "Script Editor",
       "loading": "Loading editor..."
@@ -2403,30 +2402,6 @@
       "aiReject": "Dismiss",
       "aiConfidence": "Confidence"
     },
-    "sidebar": {
-      "scenes": "Scenes",
-      "outline": "Outline",
-      "search": "Search",
-      "noScenes": "No scenes yet",
-      "untitled": "Untitled",
-      "filterAll": "All",
-      "nodeSceneHeading": "Scene Heading",
-      "nodeCharacter": "Character",
-      "nodeDialogue": "Dialogue",
-      "nodeAction": "Action",
-      "nodeNote": "Note",
-      "labelScene": "Scene",
-      "labelParagraph": "Paragraph",
-      "unknownScene": "Unknown scene",
-      "untitledScene": "Untitled scene",
-      "searchPlaceholder": "Search content...",
-      "searchHint": "Enter keywords to search",
-      "noResults": "No results",
-      "resultsCount": "{count} results",
-      "actLabel": "Act {number}",
-      "sceneLabel": "Scene {number}",
-      "noOutline": "No outline structure yet"
-    },
     "views": {
       "edit": "Edit",
       "storyboard": "Storyboard",
@@ -2457,9 +2432,6 @@
       "localCacheFound": "A newer local version was found",
       "restore": "Restore",
       "wordCount": "{count} words",
-      "sceneCount": "{count} scenes",
-      "allExpanded": "All expanded",
-      "smartFolding": "Smart folding",
       "offlineShort": "🟠 Offline",
       "unsavedDot": "● Unsaved"
     },

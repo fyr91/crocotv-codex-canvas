@@ -43,7 +43,6 @@ interface EditorState {
   // 视图状态
   viewMode: ViewMode;
   editorMode: EditorMode;
-  leftSidebarCollapsed: boolean;
   rightSidebarCollapsed: boolean;
   activeRightPanel: 'characters' | 'locations' | 'props' | 'notes' | 'ai';
   rightPanelLocked: boolean;
@@ -67,7 +66,6 @@ interface EditorState {
   setLoading: (loading: boolean) => void;
   setViewMode: (mode: ViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
-  toggleLeftSidebar: () => void;
   toggleRightSidebar: () => void;
   setActiveRightPanel: (panel: EditorState['activeRightPanel']) => void;
   setRightPanelLocked: (locked: boolean) => void;
@@ -98,7 +96,6 @@ const initialState = {
 
   viewMode: 'edit' as ViewMode,
   editorMode: 'full' as EditorMode,
-  leftSidebarCollapsed: false,
   rightSidebarCollapsed: false,
   activeRightPanel: 'characters' as const,
   rightPanelLocked: false,
@@ -124,7 +121,6 @@ export const useEditorStore = create<EditorState>((set) => ({
   setLoading: (loading) => set({ isLoading: loading }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setEditorMode: (mode) => set({ editorMode: mode }),
-  toggleLeftSidebar: () => set((state) => ({ leftSidebarCollapsed: !state.leftSidebarCollapsed })),
   toggleRightSidebar: () => set((state) => ({ rightSidebarCollapsed: !state.rightSidebarCollapsed })),
   setActiveRightPanel: (panel) => set({ activeRightPanel: panel }),
   setRightPanelLocked: (locked) => set({ rightPanelLocked: locked }),

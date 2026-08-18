@@ -15,7 +15,6 @@ import { useEditorStore } from '@/store/editorStore';
  *
  * 本 Hook 新增注册：
  * - Cmd+Shift+E: 切换场景折叠/展开（Phase 1.4 实现，此处占位 console.log）
- * - Cmd+Shift+F: 聚焦到左侧栏搜索面板（dispatch 自定义事件）
  * - Cmd+/: 显示/隐藏快捷键帮助面板
  * - Cmd+B: 加粗切换
  * - Cmd+I: 斜体切换
@@ -47,13 +46,6 @@ export function useKeyboardShortcuts(editor: Editor | null) {
       if (mod && e.shiftKey && e.key === 'E') {
         e.preventDefault();
         document.dispatchEvent(new CustomEvent('script-editor:toggle-scene-folding'));
-        return;
-      }
-
-      // Cmd+Shift+F: 聚焦到左侧栏搜索面板
-      if (mod && e.shiftKey && e.key === 'F') {
-        e.preventDefault();
-        document.dispatchEvent(new CustomEvent('script-editor:focus-search'));
         return;
       }
 

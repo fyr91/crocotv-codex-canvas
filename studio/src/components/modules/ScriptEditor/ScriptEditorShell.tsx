@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { EditorContent } from '@tiptap/react';
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, X } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, X } from 'lucide-react';
 import { useEditorStore } from '@/store/editorStore';
 import { useEditorSetup } from './hooks/useEditorSetup';
 import EditorToolbar from './toolbar/EditorToolbar';
@@ -19,7 +19,6 @@ import { PasteHintBar } from './components/PasteHintBar';
 import { ShortcutHelpPanel } from './components/ShortcutHelpPanel';
 import { ContinuityIndicator } from './components/ContinuityIndicator';
 import RightPanelContainer from './panels';
-import LeftSidebar from './sidebar';
 import ReadModeOverlay from './components/ReadModeOverlay';
 import PipelineLinkDialog from './dialogs/PipelineLinkDialog';
 import { scriptEditorApi } from '@/lib/scriptEditorApi';
@@ -47,7 +46,7 @@ export default function ScriptEditorShell({
   const { showHint, analysis, applyFormatting, dismissHint } = usePasteHandler(editor);
   const { showShortcutHelp, closeShortcutHelp } = useKeyboardShortcuts(editor);
   const continuityReport = useContinuityCheck(editor);
-  const { enabled: foldingEnabled, isAllExpanded, totalScenes: foldingTotal } = useSceneFolding(editor);
+  useSceneFolding(editor);
   const { mode: viewMode, setMode: setViewMode, isReadOnly, showToolbar, showSidebars } = useViewMode();
   const { hasNewerLocal, restoreFromLocal, dismissLocalRestore, isOffline } = useOfflineCache(projectId, editor);
   useDerivation(editor);
@@ -63,20 +62,15 @@ export default function ScriptEditorShell({
   const isDirty = useEditorStore((s) => s.isDirty);
   const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
   const wordCount = useEditorStore((s) => s.wordCount);
-  const derivedScenes = useEditorStore((s) => s.derivedScenes);
-  const leftCollapsed = useEditorStore((s) => s.leftSidebarCollapsed);
   const rightCollapsed = useEditorStore((s) => s.rightSidebarCollapsed);
-  const toggleLeft = useEditorStore((s) => s.toggleLeftSidebar);
   const toggleRight = useEditorStore((s) => s.toggleRightSidebar);
   const setProjectId = useEditorStore((s) => s.setProjectId);
   const setEditorMode = useEditorStore((s) => s.setEditorMode);
   const setDirty = useEditorStore((s) => s.setDirty);
   const setLastSavedAt = useEditorStore((s) => s.setLastSavedAt);
 
-  const showLeft = mode === 'full' && !leftCollapsed && showSidebars;
   const showRight = mode === 'full' && !rightCollapsed && showSidebars;
   const hideAllSidebars = mode === 'focus' || viewMode === 'focus';
-  const hideLeftOnly = mode === 'embedded';
   const isEditorEmpty = !editor || editor.isEmpty;
   const hasEntities = currentProject?.id === projectId && (
     (currentProject?.characters?.length ?? 0) +
@@ -228,16 +222,6 @@ export default function ScriptEditorShell({
       {!hideAllSidebars && showToolbar && (
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-foreground/10 px-4">
           <div className="flex items-center gap-3">
-            {mode === 'full' && (
-              <button
-                type="button"
-                onClick={toggleLeft}
-                className="text-text-muted hover:text-foreground transition-colors"
-                aria-label={t('shell.toggleLeftSidebar')}
-              >
-                {leftCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-              </button>
-            )}
             <span className="text-sm font-medium text-foreground">
               {t('shell.title')}
             </span>
@@ -271,15 +255,8 @@ export default function ScriptEditorShell({
         </div>
       )}
 
-      {/* Main content area: Three-column layout */}
+      {/* Main content area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar */}
-        {!hideAllSidebars && !hideLeftOnly && showLeft && (
-          <aside className="w-[260px] shrink-0 border-r border-foreground/10 bg-foreground/[0.02] backdrop-blur-xl overflow-hidden">
-            <LeftSidebar editor={editor} />
-          </aside>
-        )}
-
         {/* Editor Content Area */}
         <main className={`relative flex-1 min-w-0 overflow-y-auto ${
             viewMode === 'focus' ? 'flex items-start justify-center' : ''
@@ -358,15 +335,6 @@ export default function ScriptEditorShell({
       {!hideAllSidebars && showToolbar && (
         <div className="flex h-8 shrink-0 items-center gap-4 border-t border-foreground/10 px-4 text-sm text-text-muted">
           <span>{t('status.wordCount', { count: wordCount })}</span>
-          <span className="text-foreground/20">|</span>
-          <span>
-            {t('status.sceneCount', { count: derivedScenes.length })}
-            {foldingEnabled && (
-              <span className="ml-1 text-text-muted/60">
-                ({isAllExpanded ? t('status.allExpanded') : t('status.smartFolding')})
-              </span>
-            )}
-          </span>
           <span className="text-foreground/20">|</span>
           <span>
             {isOffline
