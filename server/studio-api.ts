@@ -26,7 +26,7 @@ import { cancelStudioGenerationJob, findStudioGenerationJob, getStudioGeneration
 export const studioApiRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 1 } });
 
-const STYLE_PRESETS = {
+export const STYLE_PRESETS = {
   categories: [
     { id: "animation", name: "Animation", name_zh: "动画", sort_order: 1 },
   ],
@@ -43,6 +43,20 @@ const STYLE_PRESETS = {
       video_prompt: "Pixar \"Up\" cinematography style. Slow lateral drifts and gentle push-ins for emotional montages, conveying the steady passage of time. Theatrical, character-centric lighting: warm golden key light filtering through windows, deep rim shadows isolating subjects, soft diffused fill. Volumetric cloud rendering with painted-cloud compositing. Dynamic balloon-physics camera movement — buoyant, weightless ascending motion contrasted with grounded static frames. Newsreel prologue with 16mm optical film grain and warm vignette for nostalgic authenticity. Immersive 3D depth staging: layered parallax between foreground props, mid-ground characters, and atmospheric backgrounds. Color grading shifts from desaturated monochrome to full saturated spectrum to mirror emotional arc. Deliberate, unhitched pacing in quiet moments; kinetic wide-angle action in adventure sequences.",
       video_negative_prompt: "",
       thumbnail: "/assets/styles/flying-house-whimsy.jpg",
+      object_position: "center",
+    },
+    {
+      id: "spider-verse-comic",
+      category: "animation",
+      name: "Spider-Verse Comic Animation",
+      name_zh: "蛛网次元",
+      subtitle_zh: "霓虹网点、错版叠色与手绘线条交织的高能多维漫画动画",
+      description: "融合三维 CGI 与二维手绘漫画语言，以网点印刷、错版叠色、强轮廓和霓虹城市节奏构建充满冲击力的多维动作世界。",
+      image_prompt: "Spider-Man: Into the Spider-Verse comic-book animation style. Non-photorealistic rendering (NPR) blending 3D CGI with hand-drawn 2D illustration. Visible ink outlines with \"line boil\" — slightly jittery hand-drawn line art on every frame. Halftone Ben-Day dot shading replacing smooth gradients, mimicking vintage comic book printing. Chromatic aberration / RGB color misregistration simulating offset ink printing. Bold graphic shapes with strong silhouettes and high-contrast compositions. Vivid neon color palette: electric cyan, hot magenta, neon yellow, deep Brooklyn graffiti red and blue. Cross-hatched line textures for shadow and depth. Stylized speed lines, impact bursts, and onomatopoeia graphic overlays. Each character dimension has a distinct visual identity — Miles' universe: urban graffiti + comic print; Gwen's: watercolor wash with bleeding edges; Noir: black-and-white film noir with rain streaks; Peni: anime cel-shaded; Ham: rubber-hose cartoon. Raw, energetic, deliberately imperfect — a living comic book brought to life.",
+      image_negative_prompt: "",
+      video_prompt: "Spider-Verse cinematic style. Stepped animation at 12fps for characters (animating on twos) against 24fps backgrounds, creating deliberate kinetic stutter. Zero motion blur — replaced by graphic smear frames and stylized speed streaks for action. Dynamic extreme camera angles: Dutch tilts, worm's-eye views, upside-down shots, and dramatic negative-space framing. Glitch/multiversal distortion effects: chromatic RGB splitting, pixel displacement, and scan-line interference for dimension-hopping sequences. Neon-lit Brooklyn cityscape at night with volumetric fog and graffiti-covered surfaces. Rapid intercutting between dimensions with distinct color grading per universe. Comic panel split-screen transitions and freeze-frame caption cards. High-energy hip-hop-influenced visual rhythm with punchy zoom-ins and whip pans. Deep depth-of-field with layered parallax — foreground ink lines, mid-ground characters, background halftone cityscapes.",
+      video_negative_prompt: "",
+      thumbnail: "/assets/styles/spider-verse-comic.jpg",
       object_position: "center",
     },
   ],
