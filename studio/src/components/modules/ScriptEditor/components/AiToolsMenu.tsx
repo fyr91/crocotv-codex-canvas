@@ -7,15 +7,15 @@ import { useTranslations } from 'next-intl';
 interface AiToolsMenuProps {
   extracting: boolean;
   extractDisabled?: boolean;
+  hasEntities?: boolean;
   onExtractEntities: () => void | Promise<void>;
-  showExtraction?: boolean;
 }
 
 export default function AiToolsMenu({
   extracting,
   extractDisabled = false,
+  hasEntities = false,
   onExtractEntities,
-  showExtraction = true,
 }: AiToolsMenuProps) {
   const t = useTranslations('scriptEditor');
   const tScript = useTranslations('script');
@@ -23,13 +23,12 @@ export default function AiToolsMenu({
   const rootRef = useRef<HTMLDivElement>(null);
 
   const tools = [
-    { id: 'extract', label: tScript('extractEntities'), available: true },
+    { id: 'extract', label: hasEntities ? tScript('updateEntities') : tScript('extractEntities'), available: true },
     { id: 'split-shots', label: t('aiTools.splitShots'), available: false },
     { id: 'continue-writing', label: t('aiTools.continueWriting'), available: false },
     { id: 'polish-text', label: t('aiTools.polishText'), available: false },
     { id: 'generate-script', label: t('aiTools.generateScript'), available: false },
   ] as const;
-  const visibleTools = showExtraction ? tools : tools.filter((tool) => tool.id !== 'extract');
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +73,7 @@ export default function AiToolsMenu({
           role="menu"
           className="absolute right-0 top-[calc(100%+8px)] z-40 w-64 overflow-hidden rounded-xl border border-foreground/10 bg-elevated/95 p-1.5 shadow-2xl backdrop-blur-xl"
         >
-          {visibleTools.map((tool) => {
+          {tools.map((tool) => {
             const executionDisabled = !tool.available || extractDisabled || extracting;
             return (
               <div
