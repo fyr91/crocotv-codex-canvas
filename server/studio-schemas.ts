@@ -114,6 +114,7 @@ const generationExecutionSchema = z.object({
   systemPromptSha256: z.string().regex(/^[a-f0-9]{64}$/),
   systemPromptNodeIds: z.array(boundedId).max(10),
   model: z.string().min(1).max(100),
+  responseApi: z.literal("ark-responses").optional(),
   thinking: z.enum(["enabled", "disabled", "auto"]).optional(),
   sourceNodeIds: z.array(boundedId).max(100),
   imageResourceIds: z.array(boundedId).max(16),
@@ -148,6 +149,7 @@ export const studioProjectStateSchema = z.object({
   episodeNumber: z.number().int().positive().optional(),
   aspectRatio: z.string().max(40).optional(),
   artDirection: artDirectionSchema.optional(),
+  artDirectionRecommendations: z.array(styleConfigSchema).max(100).default([]),
   modelSettings: looseRecord,
   promptConfig: z.record(z.string(), z.string()),
   promptBindings: z.record(z.string(), promptBindingSchema).default({}),
@@ -192,6 +194,7 @@ export function newStudioProjectState(originalText = "", workflowMode: StudioWor
     workflowMode,
     status: "ready",
     starred: false,
+    artDirectionRecommendations: [],
     modelSettings: {},
     promptConfig: {},
     promptBindings: defaultPromptBindings(),
@@ -229,7 +232,7 @@ export function parseStudioProjectState(value: unknown): StudioProjectState {
 }
 
 export const STUDIO_PROMPT_TEMPLATE_MAP = {
-  entity_extraction: "croco.p3.production-design",
+  entity_extraction: "croco.p3.entity-extraction",
   style_analysis: "croco.p3.art-direction-options",
   storyboard_extraction: "croco.p4.director-planning",
   storyboard_polish: "croco.p4.shot-revision",
@@ -245,6 +248,18 @@ function migratePromptConfig(input: Record<string, unknown>) {
   const promptConfig = input.promptConfig && typeof input.promptConfig === "object" && !Array.isArray(input.promptConfig) ? input.promptConfig as Record<string, unknown> : {};
   const bindings = { ...defaultPromptBindings(), ...(input.promptBindings && typeof input.promptBindings === "object" && !Array.isArray(input.promptBindings) ? input.promptBindings as Record<string, any> : {}) };
   const versions = Array.isArray(input.projectPromptVersions) ? [...input.projectPromptVersions] as Array<Record<string, unknown>> : [];
+  const legacyEntityTemplateKey = "croco.p3.production-design";
+  const entityTemplateKey = STUDIO_PROMPT_TEMPLATE_MAP.entity_extraction;
+  for (const version of [...versions]) {
+    if (version.templateKey !== legacyEntityTemplateKey || !["project", "legacy-studio-migration"].includes(String(version.source || ""))) continue;
+    if (!versions.some((candidate) => candidate.templateKey === entityTemplateKey && candidate.templateVersion === version.templateVersion)) {
+      versions.push({ ...version, templateKey: entityTemplateKey });
+    }
+  }
+  const entityBinding = bindings.entity_extraction as Record<string, unknown> | undefined;
+  if (entityBinding?.templateKey === legacyEntityTemplateKey && ["builtin", "project", "legacy-studio-migration"].includes(String(entityBinding.source || ""))) {
+    bindings.entity_extraction = { ...entityBinding, templateKey: entityTemplateKey };
+  }
   for (const [operation, templateKey] of Object.entries(STUDIO_PROMPT_TEMPLATE_MAP)) {
     const custom = typeof promptConfig[operation] === "string" ? promptConfig[operation] as string : "";
     if (!custom) continue;

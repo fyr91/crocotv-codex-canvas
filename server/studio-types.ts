@@ -88,6 +88,11 @@ export type StudioStyleConfig = Record<string, unknown> & {
   image_negative_prompt: string;
   video_prompt: string;
   video_negative_prompt: string;
+  thumbnail_url?: string;
+  thumbnail_resource_id?: string;
+  thumbnail_job_id?: string;
+  thumbnail_status?: "queued" | "running" | "completed" | "failed";
+  thumbnail_error?: string;
 };
 
 export type StudioDocumentState = {
@@ -132,6 +137,7 @@ export type StudioGenerationExecution = {
   systemPromptSha256: string;
   systemPromptNodeIds: string[];
   model: string;
+  responseApi?: "ark-responses";
   thinking?: "enabled" | "disabled" | "auto";
   sourceNodeIds: string[];
   imageResourceIds: string[];
@@ -168,6 +174,7 @@ export type StudioProjectState = {
   episodeNumber?: number;
   aspectRatio?: string;
   artDirection?: StudioArtDirection;
+  artDirectionRecommendations: StudioStyleConfig[];
   modelSettings: Record<string, unknown>;
   promptConfig: Record<string, string>;
   promptBindings: Record<string, StudioPromptBinding>;

@@ -187,6 +187,10 @@ export interface StyleConfig {
     video_prompt: string;
     video_negative_prompt: string;
     thumbnail_url?: string;
+    thumbnail_resource_id?: string;
+    thumbnail_job_id?: string;
+    thumbnail_status?: "queued" | "running" | "completed" | "failed";
+    thumbnail_error?: string;
     is_custom: boolean;
     reason?: string; // For AI recommendations
 }

@@ -9,18 +9,15 @@ const artDirectionSchema = {
   properties: {
     options: {
       type: "array",
-      minItems: 3,
-      maxItems: 3,
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "image_prompt", "image_negative_prompt", "video_prompt", "video_negative_prompt"],
+        required: ["image_prompt", "video_prompt"],
         properties: {
           name: { type: "string", minLength: 1 },
+          description: { type: "string", minLength: 1 },
           image_prompt: { type: "string", minLength: 1 },
-          image_negative_prompt: { type: "string", minLength: 1 },
           video_prompt: { type: "string", minLength: 1 },
-          video_negative_prompt: { type: "string", minLength: 1 },
         },
       },
     },
@@ -69,55 +66,51 @@ test("DeepSeek thinking 模式按调用参数显式传递", { concurrency: false
   }
 });
 
-test("Doubao 风格分析通过强制工具调用应用 JSON Schema", { concurrency: false }, async () => {
+test("Doubao 风格分析通过无 Web Search 的 Responses API 应用 JSON Schema", { concurrency: false }, async () => {
   const originalFetch = globalThis.fetch;
-  const originalKey = process.env.CODING_PLAN_API_KEY;
+  const originalKey = process.env.ARK_API_KEY;
+  const originalBaseUrl = process.env.ARK_BASE_URL;
+  const originalModel = process.env.ARK_DOUBAO_TURBO_MODEL;
   let requestBody: any;
   const structuredResult = {
     options: [
-      { name: "风格一", image_prompt: "图像一", image_negative_prompt: "图像负向一", video_prompt: "视频一", video_negative_prompt: "视频负向一" },
-      { name: "风格二", image_prompt: "图像二", image_negative_prompt: "图像负向二", video_prompt: "视频二", video_negative_prompt: "视频负向二" },
-      { name: "风格三", image_prompt: "图像三", image_negative_prompt: "图像负向三", video_prompt: "视频三", video_negative_prompt: "视频负向三" },
+      { name: "风格一", description: "说明一", image_prompt: "图像一", video_prompt: "视频一" },
+      { name: "风格二", description: "说明二", image_prompt: "图像二", video_prompt: "视频二" },
+      { name: "风格三", description: "说明三", image_prompt: "图像三", video_prompt: "视频三" },
     ],
   };
-  process.env.CODING_PLAN_API_KEY = "test-key";
-  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+  process.env.ARK_API_KEY = "test-key";
+  process.env.ARK_BASE_URL = "https://ark.example/api/v3";
+  process.env.ARK_DOUBAO_TURBO_MODEL = "doubao-seed-2-1-turbo-test";
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    assert.equal(String(input), "https://ark.example/api/v3/responses");
     requestBody = JSON.parse(String(init?.body || "{}"));
-    return new Response(JSON.stringify({ content: [{ type: "tool_use", name: "art_direction_options", input: structuredResult }] }), { status: 200, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(structuredResult) }] }] }), { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   try {
     const text = await generateText("提取风格", "doubao-seed-2.1-turbo", [], [], "system", {
       outputSchema: artDirectionSchema,
       outputSchemaName: "art_direction_options",
+      responseApi: "ark-responses",
     });
     assert.deepEqual(JSON.parse(text), structuredResult);
-    assert.equal(requestBody.model, "doubao-seed-2.1-turbo");
-    assert.deepEqual(requestBody.tools, [{
-      name: "art_direction_options",
-      description: "Return the final structured result. Do not emit prose.",
-      input_schema: artDirectionSchema,
-    }]);
-    assert.deepEqual(requestBody.tool_choice, { type: "tool", name: "art_direction_options" });
+    assert.equal(requestBody.model, "doubao-seed-2-1-turbo-test");
+    assert.equal(requestBody.instructions, "system");
+    assert.deepEqual(requestBody.input, [{ role: "user", content: "提取风格" }]);
+    assert.equal(requestBody.tools, undefined);
+    assert.deepEqual(requestBody.text, { format: { type: "json_schema", name: "art_direction_options", schema: artDirectionSchema, strict: false } });
+    assert.equal(requestBody.store, false);
   } finally {
     globalThis.fetch = originalFetch;
-    if (originalKey === undefined) delete process.env.CODING_PLAN_API_KEY;
-    else process.env.CODING_PLAN_API_KEY = originalKey;
+    if (originalKey === undefined) delete process.env.ARK_API_KEY; else process.env.ARK_API_KEY = originalKey;
+    if (originalBaseUrl === undefined) delete process.env.ARK_BASE_URL; else process.env.ARK_BASE_URL = originalBaseUrl;
+    if (originalModel === undefined) delete process.env.ARK_DOUBAO_TURBO_MODEL; else process.env.ARK_DOUBAO_TURBO_MODEL = originalModel;
   }
 });
 
-test("Schema 模式不接受 Coding Plan 的普通文本回退", { concurrency: false }, async () => {
-  const originalFetch = globalThis.fetch;
-  const originalKey = process.env.CODING_PLAN_API_KEY;
-  process.env.CODING_PLAN_API_KEY = "test-key";
-  globalThis.fetch = (async () => new Response(JSON.stringify({ content: [{ type: "text", text: "```json\n{}\n```" }] }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
-  try {
-    await assert.rejects(
-      () => generateText("提取风格", "doubao-seed-2.1-turbo", [], [], "system", { outputSchema: artDirectionSchema, outputSchemaName: "art_direction_options" }),
-      /没有返回符合 Schema 的结构化结果/,
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-    if (originalKey === undefined) delete process.env.CODING_PLAN_API_KEY;
-    else process.env.CODING_PLAN_API_KEY = originalKey;
-  }
+test("Coding Plan 不使用 Tool Call 模拟原生结构化输出", { concurrency: false }, async () => {
+  await assert.rejects(
+    () => generateText("提取风格", "doubao-seed-2.1-turbo", [], [], "system", { outputSchema: artDirectionSchema, outputSchemaName: "art_direction_options" }),
+    /不支持原生 JSON Schema 输出，请使用 Ark Responses/,
+  );
 });

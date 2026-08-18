@@ -32788,6 +32788,14 @@ var init_server3 = __esm({
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
     }, async ({ projectId, selectedStyleId, styleConfig, customStyles, recommendations }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/art_direction/save`, { method: "POST", body: { selected_style_id: selectedStyleId, style_config: studioStyleConfigBody(styleConfig), custom_styles: customStyles.map(studioStyleConfigBody), ai_recommendations: recommendations.map(studioStyleConfigBody) } })));
+    server.registerTool("studio_generate_art_style_preview", {
+      description: "Queue a 4:3 Nano Banana 2 Lite preview for one persisted AI art-direction recommendation. The recommendation's Chinese image prompt is used through the shared Canvas runtime, Web/Studio state receives the generated local resource, and the call can incur image-generation cost. Poll studio_get_generation_job with the returned jobId.",
+      inputSchema: {
+        projectId: external_exports.string().uuid(),
+        styleId: external_exports.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/)
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+    }, async ({ projectId, styleId }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/art_direction/${encodeURIComponent(styleId)}/preview`, { method: "POST" })));
     server.registerTool("studio_upsert_asset", {
       description: "Create or structurally update one Studio character, scene, or prop. An optional local referenceImageResourceId becomes an image input for subsequent generation; omitting it keeps normal text-only generation. Its deterministic managed Canvas nodes and stage connections are updated atomically.",
       inputSchema: { projectId: external_exports.string().uuid(), assetType: external_exports.enum(["character", "scene", "prop"]), asset: studioEntitySchema },

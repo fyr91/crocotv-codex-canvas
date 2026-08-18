@@ -275,6 +275,7 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
         thinking: textThinkingMode(config),
         outputSchema: textOutputSchema(config),
         outputSchemaName: textOutputSchemaName(config),
+        responseApi: textResponseApi(config),
       })));
       signal?.throwIfAborted();
       const failure = await finishTextOutputs(projectId, config.id, outputIds, settled, originClientId);
@@ -588,6 +589,7 @@ function generationCount(node: CanvasNode, mode: GenerationMode, model: string) 
 function textThinkingMode(node: CanvasNode): TextThinkingMode | undefined { const value = String(node.metadata?.thinking || ""); return value === "enabled" || value === "disabled" || value === "auto" ? value : undefined; }
 function textOutputSchema(node: CanvasNode): Record<string, unknown> | undefined { const value = node.metadata?.outputSchema; return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }
 function textOutputSchemaName(node: CanvasNode): string | undefined { const value = String(node.metadata?.outputSchemaName || "").trim(); return value || undefined; }
+function textResponseApi(node: CanvasNode): "ark-responses" | undefined { return node.metadata?.responseApi === "ark-responses" ? "ark-responses" : undefined; }
 function videoDuration(node: CanvasNode, model: string) { return Math.max(3, Math.min(model === "ltx-2.5" ? 20 : 15, Math.floor(Number(node.metadata?.seconds) || 6))); }
 function videoInputMode(node: CanvasNode, model: string, inputs: ResolvedInput) { if (model === "minimax-h3") return normalizeH3InputMode(node.metadata?.videoInputMode || node.metadata?.generation_mode); return ltxInputMode(node.metadata?.videoInputMode, inputs.imageIds.length > 0); }
 export function ltxInputMode(value: unknown, hasImage: boolean) { const mode = String(value || ""); if (mode === "text" || mode === "firstFrame" || mode === "multimodal") return mode; return hasImage ? "multimodal" : "text"; }

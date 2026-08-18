@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Palette, Wand2, Plus, Check, Lock, RotateCcw, ArrowUp, AlertTriangle, X, Image as ImageIcon, Pencil } from "lucide-react";
+import { Sparkles, Palette, Wand2, Plus, Check, Lock, RotateCcw, ArrowUp, AlertTriangle, X, Image as ImageIcon, Pencil, Loader2 } from "lucide-react";
 import { useProjectStore, type StyleConfig, type StylePreset, type StylePresetCategory } from "@/store/projectStore";
 import { api } from "@/lib/api";
 import StepPageHeader, { StepPill } from "@/components/shared/StepPageHeader";
@@ -44,6 +44,71 @@ export default function ArtDirection() {
     const [aiModalVideoNegative, setAiModalVideoNegative] = useState("");
 
     const [isSaving, setIsSaving] = useState(false);
+    const previewPollers = useRef(new Set<string>());
+    const mounted = useRef(true);
+
+    useEffect(() => {
+        mounted.current = true;
+        return () => { mounted.current = false; };
+    }, []);
+
+    const patchRecommendation = (styleId: string, patch: Partial<StyleConfig>) => {
+        setAiRecommendations((current) => current.map((style) => style.id === styleId ? { ...style, ...patch } : style));
+        setAiModalStyle((current) => current?.id === styleId ? { ...current, ...patch } : current);
+    };
+
+    const pollStylePreview = async (styleId: string, jobId: string) => {
+        const project = currentProject;
+        if (!project) return;
+        if (previewPollers.current.has(jobId)) return;
+        previewPollers.current.add(jobId);
+        try {
+            for (let attempt = 0; attempt < 240 && mounted.current; attempt += 1) {
+                const job = await api.getGenerationJob(jobId);
+                if (job.status === "queued" || job.status === "running") {
+                    patchRecommendation(styleId, { thumbnail_job_id: jobId, thumbnail_status: job.status });
+                    await new Promise((resolve) => setTimeout(resolve, 1500));
+                    continue;
+                }
+                if (job.status === "completed") {
+                    const fresh = await api.getProject(project.id);
+                    if (!mounted.current) return;
+                    updateProject(project.id, fresh);
+                    const recommendations = fresh.art_direction?.ai_recommendations || [];
+                    setAiRecommendations(recommendations);
+                    const completed = recommendations.find((style: StyleConfig) => style.id === styleId);
+                    if (completed) setAiModalStyle((current) => current?.id === styleId ? completed : current);
+                    toast.success(ta("stylePreviewReady"), { projectId: project.id, projectTitle: project.title });
+                    return;
+                }
+                patchRecommendation(styleId, { thumbnail_job_id: jobId, thumbnail_status: "failed", thumbnail_error: job.error || ta("stylePreviewFailed") });
+                toast.error(ta("stylePreviewFailed"), { body: job.error });
+                return;
+            }
+        } catch (error) {
+            if (mounted.current) {
+                const message = error instanceof Error ? error.message : ta("stylePreviewFailed");
+                patchRecommendation(styleId, { thumbnail_job_id: jobId, thumbnail_status: "failed", thumbnail_error: message });
+                toast.error(ta("stylePreviewFailed"), { body: message });
+            }
+        } finally {
+            previewPollers.current.delete(jobId);
+        }
+    };
+
+    const handlePreviewStyle = async (style: StyleConfig) => {
+        if (!currentProject || style.thumbnail_status === "queued" || style.thumbnail_status === "running") return;
+        patchRecommendation(style.id, { thumbnail_status: "queued", thumbnail_error: "" });
+        try {
+            const job = await api.generateArtStylePreview(currentProject.id, style.id);
+            patchRecommendation(style.id, { thumbnail_job_id: job.jobId, thumbnail_status: "queued" });
+            void pollStylePreview(style.id, job.jobId);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : ta("stylePreviewFailed");
+            patchRecommendation(style.id, { thumbnail_status: "failed", thumbnail_error: message });
+            toast.error(ta("stylePreviewFailed"), { body: message });
+        }
+    };
 
     const filteredPresets = useMemo(() => {
         if (activeCategory === "all") return presets;
@@ -143,6 +208,14 @@ export default function ArtDirection() {
             setAiRecommendations(currentProject.art_direction.ai_recommendations);
         }
     }, [currentProject?.art_direction?.ai_recommendations]);
+
+    useEffect(() => {
+        for (const style of aiRecommendations) {
+            if (style.thumbnail_job_id && (style.thumbnail_status === "queued" || style.thumbnail_status === "running")) {
+                void pollStylePreview(style.id, style.thumbnail_job_id);
+            }
+        }
+    }, [aiRecommendations]);
 
     const loadPresets = async () => {
         try {
@@ -421,6 +494,7 @@ export default function ArtDirection() {
                                 style={style}
                                 isSelected={selectedStyle?.id === style.id}
                                 onClick={() => openAiModal(style)}
+                                onPreview={() => void handlePreviewStyle(style)}
                             />
                         ))}
                     </div>
@@ -614,11 +688,14 @@ function SelectionIndicator({ className = "" }: { className?: string }) {
     );
 }
 
-function AIRecommendationCard({ style, isSelected, onClick }: {
+function AIRecommendationCard({ style, isSelected, onClick, onPreview }: {
     style: StyleConfig;
     isSelected: boolean;
     onClick: () => void;
+    onPreview: () => void;
 }) {
+    const ta = useTranslations("artDirection");
+    const generating = style.thumbnail_status === "queued" || style.thumbnail_status === "running";
     return (
         <motion.div
             layout
@@ -629,6 +706,31 @@ function AIRecommendationCard({ style, isSelected, onClick }: {
                     : "border-glass-border hover:border-foreground/30 hover:shadow-sm"
             }`}
         >
+            <div className="relative aspect-[4/3] overflow-hidden bg-elevated">
+                {style.thumbnail_url ? (
+                    <img src={style.thumbnail_url} alt={ta("stylePreviewAlt", { name: style.name })} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-glass to-elevated">
+                        {generating ? <Loader2 size={22} className="animate-spin text-text-muted" /> : <ImageIcon size={24} className="text-text-muted/50" />}
+                    </div>
+                )}
+                {isSelected && <SelectionIndicator className="absolute right-2 top-2 shadow-md" />}
+                <button
+                    type="button"
+                    disabled={generating}
+                    onClick={(event) => { event.stopPropagation(); onPreview(); }}
+                    className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-black/70 px-2.5 py-1.5 text-sm text-white backdrop-blur-sm transition-colors hover:bg-black/85 disabled:cursor-wait disabled:opacity-70"
+                >
+                    {generating && <Loader2 size={12} className="animate-spin" />}
+                    {style.thumbnail_status === "queued"
+                        ? ta("stylePreviewQueued")
+                        : style.thumbnail_status === "running"
+                            ? ta("stylePreviewGenerating")
+                            : style.thumbnail_url
+                                ? ta("regenerateStylePreview")
+                                : ta("generateStylePreview")}
+                </button>
+            </div>
             <div className="p-4 space-y-2">
                 {/* Header: AI badge + name */}
                 <div className="flex items-start gap-2">
@@ -639,7 +741,6 @@ function AIRecommendationCard({ style, isSelected, onClick }: {
                     <h4 className="text-sm font-medium text-foreground leading-tight line-clamp-1 flex-1">
                         {style.name}
                     </h4>
-                    {isSelected && <SelectionIndicator />}
                 </div>
 
                 {/* Description */}
@@ -735,6 +836,9 @@ function AIRecommendationModal({ style, isSelected, editing, positivePrompt, neg
                 <div className="flex-1 min-h-0 flex overflow-hidden">
                     {/* Left panel: reason + keyword tags */}
                     <div className="w-[38%] shrink-0 bg-glass border-r border-glass-border p-6 flex flex-col justify-center">
+                        {style.thumbnail_url && (
+                            <img src={style.thumbnail_url} alt={ta("stylePreviewAlt", { name: style.name })} className="mb-5 aspect-[4/3] w-full rounded-xl border border-glass-border object-cover" />
+                        )}
                         {(style as any).reason && (
                             <div className="mb-6">
                                 <p className="font-mono text-sm uppercase tracking-[0.18em] text-foreground mb-2">{ta("reasonLabel")}</p>

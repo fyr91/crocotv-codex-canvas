@@ -3,7 +3,7 @@ import path from "node:path";
 import { atomicJson, dataDir, readJson } from "./storage";
 
 export type StudioGenerationJobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
-export type StudioGenerationOperation = "asset-image" | "frame-video" | "asset-video" | "playground";
+export type StudioGenerationOperation = "asset-image" | "frame-video" | "asset-video" | "style-preview" | "playground";
 
 type StudioGenerationJob = {
   id: string;

@@ -165,16 +165,105 @@ export async function analyzeStudioArtDirection(projectId: string, text: string,
   const parsed = await runStudioPromptJson({ projectId, configId, operation: "style_analysis", draftPrompt: text, originClientId });
   const candidates = Array.isArray(parsed.options) ? parsed.options : parsed.recommendations;
   const recommendations = Array.isArray(candidates) ? candidates.map((item, index) => normalizeStyle(item, index)) : [];
+  await mutateStudioProject(projectId, (state) => ({ ...state, artDirectionRecommendations: recommendations }), { originClientId });
   return { recommendations };
 }
 
+export async function queueStudioArtStylePreview(projectId: string, styleId: string, originClientId: string) {
+  const normalizedStyleId = requiredId(styleId, "风格 ID");
+  const initial = await getStudioBackedProject(projectId);
+  const style = initial.studio.artDirectionRecommendations.find((item) => item.id === normalizedStyleId)
+    || initial.studio.artDirection?.ai_recommendations.find((item) => item.id === normalizedStyleId);
+  if (!style) throw new Error("风格候选不存在，请重新分析剧本");
+  if (!String(style.image_prompt || "").trim()) throw new Error("风格候选没有可用于预览的图片提示词");
+  const jobId = randomUUID();
+  await patchArtStyleRecommendation(projectId, normalizedStyleId, {
+    thumbnail_job_id: jobId,
+    thumbnail_status: "queued",
+    thumbnail_error: "",
+  }, originClientId);
+  try {
+    return await createStudioGenerationJob({
+      id: jobId,
+      projectId,
+      operation: "style-preview",
+      metadata: { styleId: normalizedStyleId, model: models.image[0] },
+      execute: async ({ signal }) => {
+        await patchArtStyleRecommendation(projectId, normalizedStyleId, { thumbnail_status: "running" }, originClientId);
+        try {
+          const current = await readProject(projectId) as any;
+          const right = Math.max(160, ...current.nodes.map((node: any) => Number(node.position?.x || 0) + Number(node.width || 0)));
+          const configId = stableStudioNodeId(projectId, "art-direction", normalizedStyleId, `style-preview-${jobId}`);
+          const prompt = joinPromptParts(
+            `为影视项目《${String(current.title || "未命名项目")}》生成一张能够代表“${style.name}”方向的风格预览图。${String(style.description || "").trim()}`,
+            style.image_prompt,
+            "单幅完整的电影概念画面，横向 4:3 构图，无文字、无标题、无标志、无水印。",
+          );
+          const created = await applyCanvasOperations(projectId, avoidStudioNodeOverlaps(current.nodes, [{
+            op: "add_node",
+            node: {
+              id: configId,
+              type: "config",
+              title: `${style.name} · 风格预览`,
+              position: { x: right + 96, y: 160 },
+              width: 360,
+              height: 390,
+              metadata: {
+                generationMode: "image",
+                model: models.image[0],
+                composerContent: prompt,
+                count: 1,
+                size: "1184x896",
+                artifactType: "studio-art-style-preview-config",
+                studioStyleId: normalizedStyleId,
+                studioGenerationJobId: jobId,
+                status: "idle",
+              },
+            },
+          }]), Number(current.version), { allowStudioManagedWrites: true });
+          publishProjectUpdated(created.project, originClientId);
+          signal.throwIfAborted();
+          const runResult = await runCanvasConfigNodes({ projectId, configNodeIds: [configId], concurrency: 1, originClientId, signal });
+          const run = runResult.results[0];
+          if (!run || run.status === "error") throw new Error(run?.error || "风格预览生成失败");
+          const completedCanvas = await readProject(projectId) as any;
+          const output = completedCanvas.nodes.find((node: any) => node.id === run.outputNodeIds[0]);
+          const resourceId = String(output?.metadata?.storageKey || "");
+          const url = String(output?.metadata?.content || "");
+          if (!resourceId || !url) throw new Error("风格预览没有生成本地图片资源");
+          await patchArtStyleRecommendation(projectId, normalizedStyleId, {
+            thumbnail_url: url,
+            thumbnail_resource_id: resourceId,
+            thumbnail_job_id: jobId,
+            thumbnail_status: "completed",
+            thumbnail_error: "",
+          }, originClientId);
+          return { styleId: normalizedStyleId, resourceId, url, configNodeId: configId, outputNodeId: output.id };
+        } catch (error) {
+          await patchArtStyleRecommendation(projectId, normalizedStyleId, {
+            thumbnail_status: "failed",
+            thumbnail_error: error instanceof Error ? error.message : "风格预览生成失败",
+          }, originClientId).catch(() => undefined);
+          throw error;
+        }
+      },
+    });
+  } catch (error) {
+    await patchArtStyleRecommendation(projectId, normalizedStyleId, {
+      thumbnail_status: "failed",
+      thumbnail_error: error instanceof Error ? error.message : "风格预览任务创建失败",
+    }, originClientId).catch(() => undefined);
+    throw error;
+  }
+}
+
 export async function saveStudioArtDirection(projectId: string, raw: any, originClientId: string) {
-  return mutateStudioProject(projectId, (state) => ({ ...state, artDirection: {
+  return mutateStudioProject(projectId, (state) => { const recommendations = arrayRecords(raw?.ai_recommendations).map((style, index) => normalizeStyle(style, index)); return ({ ...state, artDirectionRecommendations: recommendations, artDirection: {
     selected_style_id: String(raw?.selected_style_id || "custom"),
     style_config: normalizeStyle(raw?.style_config, 0),
     custom_styles: arrayRecords(raw?.custom_styles).map((style, index) => normalizeStyle(style, index)),
-    ai_recommendations: arrayRecords(raw?.ai_recommendations).map((style, index) => normalizeStyle(style, index)),
-  } }), { originClientId });
+    ai_recommendations: recommendations,
+  } }); }, { originClientId });
 }
 
 export async function clearStudioArtDirection(projectId: string, originClientId: string) {
@@ -892,6 +981,17 @@ function mergeStoryboardFrames(existing: StudioStoryboardFrame[], generated: unk
   });
 }
 function normalizeStyle(value: any, index: number) { return { ...objectValue(value), id: safeId(value?.id || `recommendation-${index + 1}`), name: String(value?.name || `风格 ${index + 1}`), description: String(value?.description || ""), image_prompt: String(value?.image_prompt || ""), image_negative_prompt: String(value?.image_negative_prompt || ""), video_prompt: String(value?.video_prompt || ""), video_negative_prompt: String(value?.video_negative_prompt || "") }; }
+async function patchArtStyleRecommendation(projectId: string, styleId: string, patch: Record<string, unknown>, originClientId: string) {
+  return mutateStudioProject(projectId, (state) => {
+    const update = (style: any) => style.id === styleId ? normalizeStyle({ ...style, ...patch, id: style.id }, 0) : style;
+    const recommendations = state.artDirectionRecommendations.map(update);
+    return {
+      ...state,
+      artDirectionRecommendations: recommendations,
+      ...(state.artDirection ? { artDirection: { ...state.artDirection, ai_recommendations: state.artDirection.ai_recommendations.map(update) } } : {}),
+    };
+  }, { originClientId });
+}
 function imageStylePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.image_prompt || "").trim(); }
 function imageStyleNegativePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.image_negative_prompt || "").trim(); }
 function videoStylePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.video_prompt || "").trim(); }

@@ -24,6 +24,7 @@ export type TextGenerationOptions = {
   thinking?: TextThinkingMode;
   outputSchema?: Record<string, unknown>;
   outputSchemaName?: string;
+  responseApi?: "ark-responses";
 };
 
 export async function generateText(prompt: string, requestedModel?: string, inputResourceIds: string[] = [], inputDataUrls: string[] = [], systemPrompt = "", options: TextGenerationOptions = {}) {
@@ -50,6 +51,7 @@ export async function generateText(prompt: string, requestedModel?: string, inpu
       const match = dataUrl.match(/^data:(image\/(?:png|jpeg|webp));base64,/);
       if (match && modelAcceptsMimeType(logicalModel, match[1])) media.push({ mimeType: match[1], url: dataUrl });
     }
+    if (options.responseApi === "ark-responses") return requestArkResponsesText({ logicalModel, model, prompt, systemPrompt, media, ...options });
     if (channel === "coding-plan") return requestCodingPlanText({ logicalModel, model, prompt, systemPrompt, media, ...options });
     const apiKey = required(channel === "runware" ? "RUNWARE_API_KEY" : channel === "bigmodel" ? "BIGMODEL_API_KEY" : "ARK_API_KEY");
     const baseUrl = (channel === "runware" ? process.env.RUNWARE_BASE_URL || "https://api.runware.ai/v1" : channel === "bigmodel" ? process.env.BIGMODEL_BASE_URL || "https://open.bigmodel.cn/api/paas/v4" : process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
@@ -71,14 +73,62 @@ export async function generateText(prompt: string, requestedModel?: string, inpu
   }
 }
 
+async function requestArkResponsesText(input: { logicalModel: string; model: string; prompt: string; systemPrompt: string; media: Array<{ mimeType: string; url: string }> } & TextGenerationOptions) {
+  const apiKey = required("ARK_API_KEY");
+  const baseUrl = String(process.env.ARK_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3").replace(/\/$/, "");
+  const endpoint = baseUrl.endsWith("/responses") ? baseUrl : `${baseUrl}/responses`;
+  const outputSchemaName = structuredOutputName(input.outputSchemaName);
+  const userContent = input.media.length
+    ? [
+        { type: "input_text", text: input.prompt },
+        ...input.media.map((item) => ({ type: "input_image", image_url: item.url })),
+      ]
+    : input.prompt;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: resolveArkResponsesDeployment(input.logicalModel, input.model),
+      ...(input.systemPrompt.length ? { instructions: input.systemPrompt } : {}),
+      input: [{ role: "user", content: userContent }],
+      ...(input.outputSchema ? {
+        text: {
+          format: {
+            type: "json_schema",
+            name: outputSchemaName,
+            schema: input.outputSchema,
+            strict: false,
+          },
+        },
+      } : {}),
+      store: false,
+    }),
+    signal: AbortSignal.timeout(420_000),
+  });
+  if (!response.ok) throw new Error(await responseError(response, `火山方舟 Responses 请求失败（${response.status}）`));
+  const payload = await response.json() as any;
+  const text = typeof payload?.output_text === "string"
+    ? payload.output_text
+    : Array.isArray(payload?.output)
+      ? payload.output
+          .filter((item: any) => item?.type === "message")
+          .flatMap((item: any) => Array.isArray(item.content) ? item.content : [])
+          .filter((item: any) => item?.type === "output_text" && typeof item.text === "string")
+          .map((item: any) => item.text)
+          .join("")
+      : "";
+  if (!text.trim()) throw new Error("火山方舟 Responses 没有返回结构化文本");
+  return text;
+}
+
 async function requestCodingPlanText(input: { logicalModel: string; model: string; prompt: string; systemPrompt: string; media: Array<{ mimeType: string; url: string }> } & TextGenerationOptions) {
+  if (input.outputSchema) throw new Error("火山 Coding Plan 不支持原生 JSON Schema 输出，请使用 Ark Responses");
   const apiKey = required("CODING_PLAN_API_KEY");
   const baseUrl = String(process.env.CODING_PLAN_BASE_URL || "https://ark.cn-beijing.volces.com/api/plan").replace(/\/$/, "");
   const endpoint = baseUrl.endsWith("/v1/messages") ? baseUrl : `${baseUrl}/v1/messages`;
   const content = input.media.length
     ? [{ type: "text", text: input.prompt }, ...input.media.map((item) => anthropicMediaContent(item.mimeType, item.url))]
     : input.prompt;
-  const outputSchemaName = structuredOutputName(input.outputSchemaName);
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
@@ -88,27 +138,12 @@ async function requestCodingPlanText(input: { logicalModel: string; model: strin
       ...(input.systemPrompt.length ? { system: input.systemPrompt } : {}),
       messages: [{ role: "user", content }],
       ...(input.logicalModel === "deepseek-v4-flash" ? { thinking: { type: input.thinking || "enabled" } } : {}),
-      ...(input.outputSchema ? {
-        tools: [{
-          name: outputSchemaName,
-          description: "Return the final structured result. Do not emit prose.",
-          input_schema: input.outputSchema,
-        }],
-        tool_choice: { type: "tool", name: outputSchemaName },
-      } : {}),
       stream: false,
     }),
     signal: AbortSignal.timeout(420_000),
   });
   if (!response.ok) throw new Error(await responseError(response, `火山 Coding Plan 请求失败（${response.status}）`));
   const payload = await response.json() as any;
-  if (input.outputSchema) {
-    const toolUse = Array.isArray(payload?.content)
-      ? payload.content.find((block: any) => block?.type === "tool_use" && block.name === outputSchemaName && block.input && typeof block.input === "object" && !Array.isArray(block.input))
-      : undefined;
-    if (!toolUse) throw new Error("火山 Coding Plan 没有返回符合 Schema 的结构化结果");
-    return JSON.stringify(toolUse.input);
-  }
   const text = Array.isArray(payload?.content)
     ? payload.content.filter((block: any) => block?.type === "text" && typeof block.text === "string").map((block: any) => block.text).join("")
     : payload?.choices?.[0]?.message?.content;
@@ -687,6 +722,15 @@ function resolveLlmDeployment(model: string) {
     "glm-5v-turbo": "BIGMODEL_GLM_5V_MODEL",
   };
   return String((envByModel[model] && process.env[envByModel[model]]) || model).trim();
+}
+function resolveArkResponsesDeployment(logicalModel: string, resolvedModel: string) {
+  const envByModel: Record<string, string> = {
+    "doubao-seed-2.1-turbo": "ARK_DOUBAO_TURBO_MODEL",
+    "deepseek-v4-flash": "ARK_DEEPSEEK_V4_FLASH_MODEL",
+    "deepseek-v4-pro": "ARK_DEEPSEEK_V4_PRO_MODEL",
+  };
+  const configured = envByModel[logicalModel] ? process.env[envByModel[logicalModel]] : undefined;
+  return String(configured || resolvedModel).trim();
 }
 function modelAcceptsMimeType(model: string, mimeType: string) {
   if (models.runwareLlm.includes(model)) return /^(image|video|audio)\//.test(mimeType);

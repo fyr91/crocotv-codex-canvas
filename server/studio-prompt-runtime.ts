@@ -128,6 +128,7 @@ export async function executeStudioPrompt(input: StudioGenerationRequest): Promi
             outputSchema: resolved.outputSchema,
             outputSchemaName: "art_direction_options",
           } : {}),
+          ...(resolved.responseApi ? { responseApi: resolved.responseApi } : {}),
           studioPromptOperation: input.operation,
           status: "idle",
         },
@@ -159,6 +160,7 @@ export async function executeStudioPrompt(input: StudioGenerationRequest): Promi
     systemPromptSha256: resolved.systemPromptSha256,
     systemPromptNodeIds: stringArray(snapshot.systemPromptNodeIds),
     model: resolved.model,
+    ...(resolved.responseApi ? { responseApi: resolved.responseApi } : {}),
     ...(input.thinking ? { thinking: input.thinking } : {}),
     sourceNodeIds: stringArray(snapshot.sourceNodeIds),
     imageResourceIds: resources.filter((resource) => resource.type === "image").map((resource) => resource.resourceId),
@@ -187,7 +189,10 @@ async function resolveStudioPrompt(state: Awaited<ReturnType<typeof getStudioBac
     systemPrompt: prompt.systemPrompt,
     systemPromptSha256: "systemPromptSha256" in prompt ? prompt.systemPromptSha256 : prompt.contentSha256,
     model: builtin.modelPolicy.allowOverride && textModels().includes(projectRequestedModel) ? projectRequestedModel : builtin.modelPolicy.defaultModel,
-    ...(operation === "style_analysis" && builtin.outputSchema ? { outputSchema: structuredClone(builtin.outputSchema) } : {}),
+    ...(operation === "style_analysis" && builtin.outputSchema ? {
+      outputSchema: structuredClone(builtin.outputSchema),
+      responseApi: "ark-responses" as const,
+    } : {}),
   };
 }
 

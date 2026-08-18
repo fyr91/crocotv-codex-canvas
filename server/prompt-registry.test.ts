@@ -32,14 +32,25 @@ test("读取 Prompt 时保留源文件完整字节并校验哈希", async () => 
   assert.ok(template.systemPrompt.endsWith("\n"));
 });
 
-test("艺术方向模板固定使用 Doubao 并声明最小三选项 Schema", async () => {
+test("艺术方向模板固定使用 Doubao Responses 并声明候选字段 Schema", async () => {
   const template = await registry.getPromptTemplate("croco.p3.art-direction-options");
   assert.deepEqual(template.modelPolicy, {
     defaultModel: "doubao-seed-2.1-turbo",
-    modelFamily: "coding_plan",
+    modelFamily: "ark_responses",
     allowOverride: false,
   });
+  assert.match(template.systemPrompt, /生成恰好 3 个/);
   assert.deepEqual(template.outputSchema, artDirectionOutputSchema());
+});
+
+test("实体提取作为独立模板进入全局 Registry 并保留旧模板兼容读取", async () => {
+  const active = await registry.getPromptTemplate("croco.p3.entity-extraction");
+  assert.equal(active.title, "实体提取");
+  assert.equal(active.templateVersion, "1.0.0");
+  const legacy = await registry.getPromptTemplate("croco.p3.production-design");
+  assert.equal(legacy.legacy, true);
+  assert.equal(legacy.active, false);
+  assert.ok(!(await registry.listPromptTemplates()).some((template) => template.templateKey === legacy.templateKey));
 });
 
 test("未知 Prompt 返回可识别的 404 错误", async () => {
@@ -72,18 +83,15 @@ function artDirectionOutputSchema() {
     properties: {
       options: {
         type: "array",
-        minItems: 3,
-        maxItems: 3,
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["name", "image_prompt", "image_negative_prompt", "video_prompt", "video_negative_prompt"],
+          required: ["image_prompt", "video_prompt"],
           properties: {
             name: { type: "string", minLength: 1 },
+            description: { type: "string", minLength: 1 },
             image_prompt: { type: "string", minLength: 1 },
-            image_negative_prompt: { type: "string", minLength: 1 },
             video_prompt: { type: "string", minLength: 1 },
-            video_negative_prompt: { type: "string", minLength: 1 },
           },
         },
       },

@@ -805,6 +805,16 @@ export const api = {
         return res.data;
     },
 
+    generateArtStylePreview: async (scriptId: string, styleId: string) => {
+        const res = await axios.post(`${API_URL}/projects/${scriptId}/art_direction/${encodeURIComponent(styleId)}/preview`);
+        return res.data as { jobId: string; status: string };
+    },
+
+    getGenerationJob: async (jobId: string) => {
+        const res = await axios.get(`${API_URL}/generation-jobs/${encodeURIComponent(jobId)}`);
+        return res.data as { jobId: string; status: "queued" | "running" | "completed" | "failed" | "cancelled"; error?: string; result?: Record<string, unknown> };
+    },
+
     saveArtDirection: async (scriptId: string, selectedStyleId: string, styleConfig: any, customStyles: any[] = [], aiRecommendations: any[] = []) => {
         const res = await axios.post(`${API_URL}/projects/${scriptId}/art_direction/save`, {
             selected_style_id: selectedStyleId,

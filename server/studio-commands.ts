@@ -132,7 +132,11 @@ export function studioProjectResponse(project: StudioBackedProject) {
     series_id: studio.seriesId,
     episode_number: studio.episodeNumber,
     aspect_ratio: studio.aspectRatio,
-    art_direction: studio.artDirection,
+    art_direction: studio.artDirection
+      ? { ...studio.artDirection, ai_recommendations: studio.artDirectionRecommendations.length ? studio.artDirectionRecommendations : studio.artDirection.ai_recommendations }
+      : studio.artDirectionRecommendations.length
+        ? { ai_recommendations: studio.artDirectionRecommendations }
+        : undefined,
     model_settings: studio.modelSettings,
     prompt_config: studio.promptConfig,
     merged_video_url: studio.assembly.mergedVideoUrl,

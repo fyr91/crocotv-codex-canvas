@@ -10,7 +10,7 @@ import { studioDocumentToText, studioTextToDocument } from "./studio-document";
 import {
   analyzeStudioArtDirection, analyzeStudioStoryboard, applyStudioEntityExtraction, bindStudioCharacterResources, clearStudioArtDirection, copyStudioFrame, createStudioEntity, createStudioFrame, createStudioVideoTasks,
   deleteStudioEntity, deleteStudioFrame, extractStudioEntities, generateStudioAsset, generateStudioFrameAudio, mergeStudioProject, patchStudioEntity, patchStudioFrame,
-  polishStudioText, previewStudioEntities, queueStudioAssetGeneration, queueStudioVideoTasks, renderStudioFrame, reorderStudioFrames, replaceStudioStoryboard, saveStudioArtDirection, selectStudioVideo, toggleStudioEntityFlag,
+  polishStudioText, previewStudioEntities, queueStudioArtStylePreview, queueStudioAssetGeneration, queueStudioVideoTasks, renderStudioFrame, reorderStudioFrames, replaceStudioStoryboard, saveStudioArtDirection, selectStudioVideo, toggleStudioEntityFlag,
 } from "./studio-workflow";
 import { studioCompatRouter } from "./studio-compat-api";
 import { studioPlaygroundRouter } from "./studio-playground-api";
@@ -99,6 +99,7 @@ studioApiRouter.post("/projects/:id/toggle_starred", projectRoute(async (request
 studioApiRouter.post("/projects/:id/sync_descriptions", projectRoute(async (_request, response, id) => response.json(await getStudioProject(id))));
 
 studioApiRouter.post("/projects/:id/art_direction/analyze", projectRoute(async (request, response, id) => response.json(await analyzeStudioArtDirection(id, String(request.body?.script_text || ""), clientId(request)))));
+studioApiRouter.post("/projects/:id/art_direction/:styleId/preview", projectRoute(async (request, response, id) => response.status(202).json(await queueStudioArtStylePreview(id, param(request.params.styleId), clientId(request)))));
 studioApiRouter.post("/projects/:id/art_direction/save", projectRoute(async (request, response, id) => response.json(await saveStudioArtDirection(id, request.body, clientId(request)))));
 studioApiRouter.post("/projects/:id/art_direction/clear", projectRoute(async (request, response, id) => response.json(await clearStudioArtDirection(id, clientId(request)))));
 studioApiRouter.get("/art_direction/presets", route(async (_request, response) => response.json(STYLE_PRESETS)));

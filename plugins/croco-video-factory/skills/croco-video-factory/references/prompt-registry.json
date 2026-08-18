@@ -51,16 +51,30 @@
       "inputModes": ["text", "structured"],
       "inputSchema": { "type": "object", "required": ["script_context", "existing_entities", "available_system_characters"], "properties": { "script_context": { "type": "object" }, "existing_entities": { "type": "object" }, "available_system_characters": { "type": "array" } } },
       "outputSchema": { "type": "object", "required": ["characters", "scenes", "props"] },
+      "active": false,
+      "legacy": true
+    },
+    {
+      "templateKey": "croco.p3.entity-extraction",
+      "templateVersion": "1.0.0",
+      "title": "实体提取",
+      "stage": "P3",
+      "sourceFile": "P3-实体提取-System-Prompt.md",
+      "contentSha256": "112b4c5736b2679f2e8c4ddce3f8ff5510f55a290e78cf344bb385152d635785",
+      "modelPolicy": { "defaultModel": "google:gemini@3.1-pro", "modelFamily": "gemini", "allowOverride": true },
+      "inputModes": ["text", "structured"],
+      "inputSchema": { "type": "object", "required": ["script_context", "existing_entities", "available_system_characters"], "properties": { "script_context": { "type": "object" }, "existing_entities": { "type": "object" }, "available_system_characters": { "type": "array" } } },
+      "outputSchema": { "type": "object", "required": ["characters", "scenes", "props"] },
       "active": true
     },
     {
       "templateKey": "croco.p3.art-direction-options",
-      "templateVersion": "2.0.0",
+      "templateVersion": "3.0.0",
       "title": "艺术方向选项",
       "stage": "P3",
       "sourceFile": "P3-艺术方向选项-System-Prompt.md",
-      "contentSha256": "f6f25018351e257b235b0d1b5fde09c5f6ae07d9c8bec7405301c86dcf2e97fe",
-      "modelPolicy": { "defaultModel": "doubao-seed-2.1-turbo", "modelFamily": "coding_plan", "allowOverride": false },
+      "contentSha256": "41b2c79d0fe8c0176a5c0c5f1a4dc34292d91a6c89efe0e26e178075474ba620",
+      "modelPolicy": { "defaultModel": "doubao-seed-2.1-turbo", "modelFamily": "ark_responses", "allowOverride": false },
       "inputModes": ["text", "structured"],
       "inputSchema": { "type": "object", "required": ["lockedContent"], "properties": { "lockedContent": { "type": "string" }, "existingResources": { "type": "array" }, "visualConstraints": { "type": "object" } } },
       "outputSchema": {
@@ -70,18 +84,15 @@
         "properties": {
           "options": {
             "type": "array",
-            "minItems": 3,
-            "maxItems": 3,
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["name", "image_prompt", "image_negative_prompt", "video_prompt", "video_negative_prompt"],
+              "required": ["image_prompt", "video_prompt"],
               "properties": {
                 "name": { "type": "string", "minLength": 1 },
+                "description": { "type": "string", "minLength": 1 },
                 "image_prompt": { "type": "string", "minLength": 1 },
-                "image_negative_prompt": { "type": "string", "minLength": 1 },
-                "video_prompt": { "type": "string", "minLength": 1 },
-                "video_negative_prompt": { "type": "string", "minLength": 1 }
+                "video_prompt": { "type": "string", "minLength": 1 }
               }
             }
           }
