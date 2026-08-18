@@ -144,7 +144,19 @@ export async function applyStudioEntityExtraction(projectId: string, text: strin
 }
 
 export async function bindStudioCharacterResources(projectId: string, characterId: string, raw: unknown, originClientId: string) {
-  const patch = await validateCharacterBindingPatch(objectValue(raw));
+  const patch: Record<string, unknown> = await validateCharacterBindingPatch(objectValue(raw));
+  const project = await getStudioBackedProject(projectId);
+  const character = project.studio.characters.find((item) => item.id === characterId);
+  if (!character) throw new Error(`character 不存在：${characterId}`);
+
+  if (!patch.system_character_id) {
+    const previousResourceId = String(character.reference_image_resource_id || "").trim();
+    const previousResource = previousResourceId ? await resourceById(previousResourceId) : undefined;
+    const previousBoundImageUrl = previousResource?.url || (previousResourceId ? `/files/by-id/${previousResourceId}` : "");
+    if (previousBoundImageUrl && character.image_url === previousBoundImageUrl) patch.image_url = undefined;
+    if (previousBoundImageUrl && character.reference_image_url === previousBoundImageUrl) patch.reference_image_url = undefined;
+  }
+
   return patchStudioEntity(projectId, "character", characterId, patch, originClientId);
 }
 

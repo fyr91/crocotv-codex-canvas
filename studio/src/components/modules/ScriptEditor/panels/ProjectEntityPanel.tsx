@@ -33,6 +33,7 @@ function normalizeName(value: string) {
 
 function characterPreviewUrl(entity: ProjectEntity) {
   const character = entity as Project['characters'][number];
+  if (!character.system_character_id) return undefined;
   const selectedSheet = character.reference_sheet?.image_variants?.find(
     (variant) => variant.id === character.reference_sheet?.selected_image_id,
   )?.url;
@@ -190,19 +191,19 @@ export default function ProjectEntityPanel({
           {entities.map((entity) => (
             <article key={entity.id} className="rounded-lg border border-foreground/10 bg-elevated/80 p-3">
               <div className="flex items-start gap-2">
-                {kind === 'character' && characterPreviewUrl(entity) ? (
-                  <button
-                    type="button"
-                    onClick={() => setBindingCharacterId(entity.id)}
-                    className="size-11 shrink-0 overflow-hidden rounded-md border border-foreground/10 bg-black/20 transition-colors hover:border-primary/50"
-                    aria-label={t('panels.bindCharacterAssets')}
-                    title={t('panels.bindCharacterAssets')}
-                  >
-                    <img src={characterPreviewUrl(entity)} alt={entity.name} className="size-full object-cover" />
-                  </button>
-                ) : null}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
+                    {kind === 'character' && characterPreviewUrl(entity) ? (
+                      <button
+                        type="button"
+                        onClick={() => setBindingCharacterId(entity.id)}
+                        className="size-5 shrink-0 overflow-hidden rounded-full border border-foreground/15 bg-black/20 transition-colors hover:border-primary/50"
+                        aria-label={t('panels.bindCharacterAssets')}
+                        title={t('panels.bindCharacterAssets')}
+                      >
+                        <img src={characterPreviewUrl(entity)} alt={entity.name} className="size-full object-cover" />
+                      </button>
+                    ) : null}
                     <h3 className="truncate text-sm font-medium text-foreground">{entity.name}</h3>
                     <span className="inline-flex items-center gap-1 rounded-full bg-status-completed-bg px-1.5 py-0.5 text-[10px] text-status-completed-fg">
                       <Check size={9} /> {t('panels.syncedToCast')}
