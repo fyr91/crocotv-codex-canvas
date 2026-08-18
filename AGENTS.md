@@ -4,7 +4,12 @@
 
 本仓库是完全本地运行的 CrocoTV 画布及其可安装的 Codex Plugin。必须保留 `web/` 中已经实现的视觉语言、组件、资源、节点行为和交互模式，不得另建并行的 UI 体系。历史 `refs/` 目录仅供本地参考，不属于可分发源码。
 
-受支持的产品范围是无限画布及其本地资源和生成能力。不得重新引入账户管理、分享、共享素材、Happy Horse 或已经移除的工作流节点产品界面。
+受支持的产品范围是无限画布与 Croco Studio 工作台及其本地资源和生成能力。不得重新引入账户管理、分享、共享素材、Happy Horse 或已经移除的工作流节点产品界面。
+
+本仓库包含两套面向用户的交互体系，共用同一本地后端、项目存储、统一资源库和生成能力：
+
+- CrocoTV Canvas（`web/`）：自研无限画布，画布交互与视觉语言的权威实现。
+- Croco Studio（`studio/`）：源自阿里开源 LumenX 前端的视频创作工作台，上游来源与许可见 `studio/UPSTREAM.md`。应尽量保留其原有布局、组件、交互动画和视觉资产；本地改动限于品牌、进程启动、API transport、Canvas 导航，以及用 Croco Canvas 的标准命令和运行时替换上游的服务商行为。不得恢复 LumenX 中未开发或已移除的 placeholder 能力。
 
 每张画布分别保存在 `data/projects/<project-id>/` 下的独立文件夹中。所有上传、拉取的角色和生成的资源都必须归入 `data/resources/` 下统一的本地资源目录及其索引。
 
@@ -58,6 +63,13 @@
 - `web/src/stores/canvas/use-canvas-store.ts`：浏览器项目状态和防抖持久化。
 - `web/src/services/canvas-live-sync.ts`：将 MCP 或服务端变更应用到已打开的画布。
 - `web/src/types/canvas.ts`：浏览器端节点和连接的权威类型定义。
+- `studio/`：Croco Studio 前端（Next.js）；`studio/src/` 为 LumenX 本地化源码，`studio/UPSTREAM.md` 记录上游来源与改动边界。
+- `server/studio-api.ts`：Studio 的 Express Router，统一挂载在 `/api/studio`。
+- `server/studio-workflow.ts`：Studio 业务工作流编排；实体、分镜、生成与合片动作都通过标准命令层和共享生成运行时作用于同一项目。
+- `server/studio-commands.ts`：Studio 结构化状态命令的权威入口；所有 Studio 状态修改都经此进入标准 Canvas 命令层。
+- `server/studio-canvas-mapping.ts`：Studio 状态到画布托管图（studioManaged 节点与连接）的确定性投影与 diff。
+- `server/studio-canvas-translation.ts`：画布侧编辑托管节点时的白名单翻译，回写 Studio 状态后重新投影。
+- `server/studio-generation-jobs.ts`：Studio 生成任务的生命周期、取消与恢复。
 - `data/`：本地运行时数据；不得将生成数据或用户数据当作源代码 fixture。
 - `plugins/croco-video-factory/skills/`：可分发 Skill 的权威源码。
 - `.codex/.env`：CrocoTV、MCP 和 Skill 脚本共享的本地密钥；严禁提交。
@@ -78,6 +90,15 @@
 浏览器必须订阅服务端更新，不得让延迟执行的整份文档保存覆盖更新的 MCP 变更。
 
 生成模块的执行也必须走标准路径：浏览器点击和 MCP 调用都必须使用 `server/canvas-node-runtime.ts`。不得新增一条外观看似相连节点流程、实际却丢弃所连接媒体载荷的服务商调用路径。
+
+## Studio 与 Canvas 的反射架构
+
+Studio 状态（`project.studio`）是 Studio 工作流的唯一事实源；画布上由 Studio 产生的节点与连接只是它的确定性投影（reflection），不是独立数据。
+
+1. Studio 的结构化修改必须经 `server/studio-commands.ts` 进入 `applyCanvasOperations`，由 `server/studio-canvas-mapping.ts` 以幂等 diff 方式重投影托管图。托管节点 ID 由 `stableStudioNodeId` 决定，元数据带 `studioManaged` 标记；投影永不删除用户自由节点。
+2. 画布侧对托管节点的编辑只能经 `server/studio-canvas-translation.ts` 的白名单翻译回 Studio 状态后重新投影；托管图上不得出现第二条直写路径。视觉属性（位置、尺寸）除外，可直接修改。
+3. 用户在画布上手动连接托管节点的边存入 `studio.canvasBindings`，参数覆盖存入 `studio.canvasNodeOverrides`；每次投影时重放，端点失效时丢弃。
+4. Studio 驱动的生成必须与浏览器、MCP 一样走 `server/canvas-node-runtime.ts`，生成结果按稳定输出节点 ID 读回并写入 Studio 状态；不得为 Studio 另建服务商调用路径。
 
 ## MCP 能力对等规则
 
