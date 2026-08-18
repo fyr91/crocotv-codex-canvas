@@ -9,6 +9,7 @@ import { parseChangelog } from "./src/lib/release";
 const webDir = dirname(fileURLToPath(import.meta.url));
 const localVersion = readFileSync(resolve(webDir, "../VERSION"), "utf8").trim() || "dev";
 const localChangelog = readFileSync(resolve(webDir, "../CHANGELOG.md"), "utf8");
+const localApiOrigin = process.env.CROCO_LOCAL_API_ORIGIN || "http://127.0.0.1:4399";
 
 export default defineConfig({
     base: process.env.VITE_BASE || "/",
@@ -26,8 +27,8 @@ export default defineConfig({
         host: "0.0.0.0",
         port: 3000,
         proxy: {
-            "/api": "http://127.0.0.1:4399",
-            "/files": "http://127.0.0.1:4399",
+            "/api": localApiOrigin,
+            "/files": localApiOrigin,
         },
     },
 });

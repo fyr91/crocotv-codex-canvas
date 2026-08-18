@@ -6,6 +6,7 @@ export const providerSecretKeys = [
   "ARK_API_KEY",
   "BIGMODEL_API_KEY",
   "RUNWARE_API_KEY",
+  "GPU_API_TOKEN",
   "H3_API_KEY",
   "SUNO_API_KEY",
   "CROCO_CHARACTERS_API_TOKEN",

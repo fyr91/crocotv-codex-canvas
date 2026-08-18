@@ -32325,7 +32325,7 @@ async function runGeneration(capability, prompt, model, voiceId, params, context
     return { resource: (await api("/api/generate/image", { method: "POST", body: { prompt, model, width: params.width, height: params.height, referenceResourceIds: params.referenceResourceIds || [] } })).resource };
   }
   if (capability === "video") {
-    const resources2 = (await api("/api/generate/video", { method: "POST", body: { prompt, model: model || "minimax-h3", duration: params.duration || 5, quality: params.quality, ratio: params.ratio, count: 1, inputMode: params.inputMode, optimizePrompt: params.optimizePrompt !== false, imageResourceIds: params.imageResourceIds || [], audioResourceIds: params.audioResourceIds || [] } })).resources;
+    const resources2 = (await api("/api/generate/video", { method: "POST", body: { prompt, model: model || "minimax-h3", duration: params.duration || 5, quality: params.quality, ratio: params.ratio, count: 1, inputMode: params.inputMode, optimizePrompt: params.optimizePrompt !== false, referenceStrength: params.referenceStrength, seed: params.seed, imageResourceIds: params.imageResourceIds || [], videoResourceIds: params.videoResourceIds || [], audioResourceIds: params.audioResourceIds || [] } })).resources;
     if (!resources2[0]) throw new Error("\u89C6\u9891\u751F\u6210\u6CA1\u6709\u8FD4\u56DE\u8D44\u6E90");
     return { resource: resources2[0] };
   }
@@ -32500,18 +32500,21 @@ var init_server3 = __esm({
     studioOrigin = process.env.CROCO_LOCAL_STUDIO_ORIGIN || "http://localhost:3010";
     mcpClientId = `mcp-${process.pid}`;
     server = new McpServer({ name: "crocotv", version: bundleManifest.mcpVersion }, {
-      instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic free-Canvas changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Studio-backed projects retain their five-stage Studio workflow; use Studio domain tools or studio_apply_canvas_edits for Studio-managed nodes so changes translate through structured Studio state. Use canvas_create_project when a new free canvas is requested and studio_create_project for a Video Workshop project. For new Canvas-provider generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. MiniMax H3 is one physical model. Text, first-frame, ordered first/last-frame, and multimodal reference modes are user-operation semantics; the shared runtime optimizes them into one structured H3 prompt by default and submits either T2V or image/audio R2V. Set metadata.videoPromptEnhance to false only when the user explicitly asks to skip optimization. Reference video and video editing are currently unavailable. When Codex built-in ImageGen has already produced a GPT image, use canvas_place_imagegen_result to import it and preserve Prompt/Reference provenance without fabricating a provider Config. Generated or imported files must enter the local resource library before being placed on a canvas."
+      instructions: "Croco Canvas is a local visual canvas. Read the project before editing it. Prefer canvas_apply_operations for atomic free-Canvas changes, use temporary refs to connect nodes created in the same call, and never edit project.json directly. Studio-backed projects retain their five-stage Studio workflow; use Studio domain tools or studio_apply_canvas_edits for Studio-managed nodes so changes translate through structured Studio state. Use canvas_create_project when a new free canvas is requested and studio_create_project for a Video Workshop project. For new Canvas-provider generation work, construct and connect generation-module nodes, then call canvas_run_nodes so the workflow remains visible and reproducible; do not bypass the graph with legacy direct generation tools. The bundled catalog is fixed in this code release and does not discover scheduler inventory at runtime. GPU-backed models are MiniMax H3 and LTX 2.5 for video, ERNIE Image Turbo for text-to-image, and FlashVSR for eligible H3 result enhancement. MiniMax H3 text, first-frame, ordered first/last-frame, and multimodal modes use the shared structured H3 prompt optimizer. LTX 2.5 supports text, one first frame, or one Ingredients reference sheet and does not use the H3 optimizer. Reference video and video editing are currently unavailable. When Codex built-in ImageGen has already produced a GPT image, use canvas_place_imagegen_result to import it and preserve Prompt/Reference provenance without fabricating a provider Config. Generated or imported files must enter the local resource library before being placed on a canvas."
     });
     positionSchema = external_exports.object({ x: external_exports.number(), y: external_exports.number() });
     metadataSchema = external_exports.record(external_exports.string(), external_exports.unknown());
     generationParamsSchema = external_exports.object({
-      duration: external_exports.number().int().min(3).max(15).optional(),
+      duration: external_exports.number().int().min(3).max(20).optional(),
       quality: external_exports.string().max(40).optional(),
       ratio: external_exports.string().max(20).optional(),
       imageResourceIds: external_exports.array(external_exports.string().min(1).max(180)).max(9).optional(),
+      videoResourceIds: external_exports.array(external_exports.string().min(1).max(180)).max(1).optional(),
       audioResourceIds: external_exports.array(external_exports.string().min(1).max(180)).max(3).optional(),
       inputMode: external_exports.enum(["text", "firstFrame", "firstLastFrame", "multimodal"]).optional(),
-      optimizePrompt: external_exports.boolean().optional().describe("Defaults to true. Set false only when the user explicitly asks to skip H3 prompt optimization.")
+      optimizePrompt: external_exports.boolean().optional().describe("Defaults to true. For H3 this controls structured prompt optimization; for LTX it maps to enhance_prompt."),
+      referenceStrength: external_exports.number().min(0.1).max(1.5).optional(),
+      seed: external_exports.number().int().nonnegative().optional()
     }).catchall(external_exports.unknown());
     connectionPortSchema = external_exports.enum(["node", "workflow-input", "workflow-output"]);
     generationCapabilitySchema = external_exports.enum(["text", "image", "video", "speech", "music"]);
@@ -32674,7 +32677,7 @@ var init_server3 = __esm({
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
     }, async ({ projectId, operation, ...body }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/prompt-strategy/${encodeURIComponent(operation)}/binding`, { method: "PUT", body })));
     server.registerTool("studio_get_model_catalog", {
-      description: "Read the authoritative Croco model/provider catalog shared by Canvas and Video Workshop. MiniMax H3 is exposed once; text, first-frame, ordered first/last-frame, and multimodal reference modes are UI semantics mapped to T2V or image/audio R2V. Reference video and video editing are unavailable.",
+      description: "Read the authoritative fixed Croco model/provider catalog bundled with this release. It is not a live scheduler inventory. GPU models include MiniMax H3, LTX 2.5, ERNIE Image Turbo, and the FlashVSR enhancement capability, each with model-specific inputs and parameters.",
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
     }, async () => toolResult(await api("/api/studio/model-catalog")));
     server.registerTool("studio_list_provider_status", {
@@ -33021,7 +33024,7 @@ var init_server3 = __esm({
       });
     });
     server.registerTool("canvas_run_nodes", {
-      description: "Submit one or more existing Canvas generation-module nodes as an asynchronous run job through the same local execution path used by the UI. When concurrency is omitted, every selected node starts concurrently; pass a lower value only when the user explicitly requests throttling. Image config nodes support connected multimodal image references through Nano Banana Lite, Nano Banana, and GPT Image 02. MiniMax H3 config nodes support text, first-frame, ordered first/last-frame, and multimodal image/audio operation modes. All default to the shared structured H3 prompt optimizer, then map to T2V or R2V; set metadata.videoPromptEnhance to false only on an explicit user request. Connected videos are rejected because reference video and video editing are unavailable. The claimed config nodes are immediately locked while MCP owns them; generated results retain connections to their exact inputs, including Studio Canvas bindings when applicable. Poll canvas_get_run_status with the returned jobId.",
+      description: "Submit one or more existing Canvas generation-module nodes as an asynchronous run job through the same local execution path used by the UI. When concurrency is omitted, every selected node starts concurrently; pass a lower value only when the user explicitly requests throttling. Image config nodes support Nano Banana, GPT Image 02, and text-only ERNIE Image Turbo. Video config nodes support MiniMax H3 text/first-frame/first-last/multimodal image-audio modes and LTX 2.5 text/one-first-frame/one-Ingredients-reference modes. H3 uses its structured prompt optimizer; LTX uses its own enhance_prompt parameter. Connected videos are rejected because reference video and video editing are unavailable. The claimed config nodes are immediately locked while MCP owns them; generated results retain connections to their exact inputs. Poll canvas_get_run_status with the returned jobId.",
       inputSchema: {
         projectId: external_exports.string().uuid(),
         nodeIds: external_exports.array(external_exports.string().min(1).max(80)).min(1).max(20),
@@ -33077,7 +33080,7 @@ var init_server3 = __esm({
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
     }, async ({ projectId, ...body }) => toolResult(await api(`/api/canvas/projects/${encodeURIComponent(projectId)}/merge-videos`, { method: "POST", body })));
     server.registerTool("canvas_generate", {
-      description: "Legacy direct generation that does not construct a reproducible generation-module graph. Prefer canvas_run_nodes. Video generation supports MiniMax H3 only.",
+      description: "Legacy direct generation that does not construct a reproducible generation-module graph. Prefer canvas_run_nodes. Uses the same fixed model adapters as Canvas, including ERNIE Image Turbo, MiniMax H3, and LTX 2.5.",
       inputSchema: {
         projectId: external_exports.string().uuid(),
         targetNodeId: external_exports.string().min(1).max(80).optional(),

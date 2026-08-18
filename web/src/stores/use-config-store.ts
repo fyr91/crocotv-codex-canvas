@@ -296,11 +296,14 @@ export const useConfigStore = create<ConfigStore>()(
                 catalogModelConfigs.clear();
                 const options = models.map((item) => {
                     const value = encodeChannelModel(item.id, item.model_key);
-                    catalogCapabilities.set(value, item.capability === "llm" ? "text" : item.capability === "speech" || item.capability === "music" ? "audio" : item.capability);
-                    providerCapabilities.set(value, item.capability);
-                    catalogProviderIds.set(value, item.provider_id);
-                    catalogDisplayNames.set(value, item.display_name);
-                    catalogModelConfigs.set(value, item.config || {});
+                    const capability = item.capability === "llm" ? "text" : item.capability === "speech" || item.capability === "music" ? "audio" : item.capability;
+                    for (const key of [value, item.model_key]) {
+                        catalogCapabilities.set(key, capability);
+                        providerCapabilities.set(key, item.capability);
+                        catalogProviderIds.set(key, item.provider_id);
+                        catalogDisplayNames.set(key, item.display_name);
+                        catalogModelConfigs.set(key, item.config || {});
+                    }
                     return value;
                 });
                 const byCapability = (capability: ModelCapability) => options.filter((value) => catalogCapabilities.get(value) === capability);

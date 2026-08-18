@@ -2928,7 +2928,8 @@ function CrocoCanvasPage() {
                     const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Music];
                     const isEmptyMusicNode = sourceNode?.type === CanvasNodeType.Music && !sourceNode.metadata?.content && !workflow;
                     const musicBatchId = nanoid();
-                    const musicIds = [isEmptyMusicNode ? nodeId : nanoid(), nanoid()];
+                    const musicCount = generationConfig.model === "minimax-music-3" ? 1 : 2;
+                    const musicIds = Array.from({ length: musicCount }, (_, index) => index === 0 && isEmptyMusicNode ? nodeId : nanoid());
                     const parent = sourceNode?.position || { x: 0, y: 0 };
                     const parentWidth = sourceNode?.width || spec.width;
                     const parentHeight = sourceNode?.height || spec.height;
@@ -2945,7 +2946,7 @@ function CrocoCanvasPage() {
                         metadata: { ...(isEmptyMusicNode && index === 0 ? sourceNode!.metadata : {}), status: NODE_STATUS_LOADING, errorDetails: undefined, ...buildMusicGenerationMetadata(generationConfig, musicConfig, musicBatchId, index), ...workflowMetadata },
                     }));
                     pendingChildIds = musicIds;
-                    setNodes((prev) => isEmptyMusicNode ? [...prev.map((node) => node.id === nodeId ? musicNodes[0] : node), musicNodes[1]] : [...prev, ...musicNodes]);
+                    setNodes((prev) => isEmptyMusicNode ? [...prev.map((node) => node.id === nodeId ? musicNodes[0] : node), ...musicNodes.slice(1)] : [...prev, ...musicNodes]);
                     if (!isEmptyMusicNode) setConnections((prev) => [...prev, ...musicIds.map((musicId) => ({ id: nanoid(), fromNodeId: nodeId, toNodeId: musicId }))]);
                     musicIds.filter((id) => id !== nodeId).forEach((id) => startGenerationRequest(id, nodeId, runningId, runController));
                     let musicFailure = false;
@@ -4227,6 +4228,10 @@ function buildMusicGenerationMetadata(config: AiConfig, music: MusicGenerationCo
         musicVocalGender: music.vocalGender,
         musicStyleWeight: music.styleWeight,
         musicWeirdnessConstraint: music.weirdnessConstraint,
+        musicMaxDuration: music.maxDuration,
+        musicSeed: music.seed,
+        musicTiledDecode: music.tiledDecode,
+        musicOutputFormat: music.outputFormat,
         musicBatchId,
         musicOutputIndex,
     };

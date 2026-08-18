@@ -2,9 +2,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 export function h3Config(env = process.env) {
-    const config = { baseUrl: String(env.H3_BASE_URL || "").replace(/\/$/, ""), apiKey: String(env.H3_API_KEY || "").trim() };
-    if (!config.baseUrl) throw new Error("请在 .codex/.env 中填写 H3_BASE_URL");
-    if (!config.apiKey) throw new Error("请在 .codex/.env 中填写 H3_API_KEY");
+    const config = { baseUrl: String(env.GPU_API_BASE_URL || env.H3_BASE_URL || "").replace(/\/$/, ""), apiKey: String(env.GPU_API_TOKEN || env.H3_API_KEY || "").trim() };
+    if (!config.baseUrl) throw new Error("请在 .codex/.env 中填写 GPU_API_BASE_URL");
+    if (!config.apiKey) throw new Error("请在 .codex/.env 中填写 GPU_API_TOKEN");
     return config;
 }
 
@@ -25,25 +25,25 @@ export function buildH3Request(input) {
     if (audios.length > 3) throw new Error("H3 参考音频最多 3 段");
     if (String(input.prompt || "").length > 20000) throw new Error("H3 Prompt 不能超过 20000 字符");
     const mode = images.length || audios.length ? "r2v" : "t2v";
-    return { external_job_id: input.externalJobId, count: 1, request: { mode, prompt: input.prompt, quality: String(input.quality || "preview"), duration_seconds: duration, steps: 20, ...(mode === "r2v" ? { reference_image_asset_ids: images, reference_audio_asset_ids: audios } : {}), ref_image_size: "match" } };
+    return {
+        model_id: "minimax-h3",
+        operation: "video.generate",
+        contract_version: "1",
+        client_job_id: input.externalJobId,
+        parameters: { mode, prompt: input.prompt, quality: String(input.quality || "preview"), duration_seconds: duration, steps: 20, ref_image_size: "match" },
+        inputs: [...images.map((asset_id) => ({ role: "reference_image", asset_id })), ...audios.map((asset_id) => ({ role: "reference_audio", asset_id }))],
+    };
 }
 
 export async function ensureH3Runtime(config, dependencies = {}) {
-    const fetcher = dependencies.fetcher || fetch;
-    const current = await json(fetcher, config, "/api/v1/gpu/runtime");
-    if (current.active_runtime === "h3" && current.runtime_ready !== false && current.runtime_phase !== "warming") return current;
-    const response = await fetcher(`${config.baseUrl}/api/v1/gpu/runtime/h3`, { method: "POST", headers: auth(config) });
-    if (response.status === 409) throw new Error("GPU Runtime 忙碌，请等待活动任务结束后重试");
-    if (!response.ok) throw new Error(`H3 Runtime 切换失败（${response.status}）`);
-    const value = await response.json();
-    if (value.active_runtime !== "h3" || value.runtime_ready === false) throw new Error("H3 Runtime 尚未就绪");
-    return value;
+    // 模型常驻和冷热切换由成都调度中心在任务出队时管理，客户端不得直连 GPU Runtime。
+    return { active_runtime: "managed-by-gpu-orchestrator", runtime_ready: true };
 }
 
 export async function uploadH3Asset({ config, kind, filePath }, dependencies = {}) {
     const form = new FormData();
     form.append("file", new Blob([await readFile(filePath)], { type: mediaType(filePath) }), path.basename(filePath));
-    const response = await (dependencies.fetcher || fetch)(`${config.baseUrl}/api/v1/h3/assets/${kind}`, { method: "POST", headers: auth(config), body: form });
+    const response = await (dependencies.fetcher || fetch)(`${config.baseUrl}/api/v2/assets/${kind}`, { method: "POST", headers: auth(config), body: form });
     if (!response.ok) throw new Error(`H3 素材上传失败（${response.status}）`);
     return (await response.json()).asset_id;
 }
@@ -53,16 +53,16 @@ function mediaType(filePath) {
 }
 
 export async function submitH3Job({ config, request, idempotencyKey }, dependencies = {}) {
-    return json(dependencies.fetcher || fetch, config, "/api/v1/h3/jobs/batch", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey }, body: JSON.stringify(request) });
+    return json(dependencies.fetcher || fetch, config, "/api/v2/jobs", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": `croco-skill:${idempotencyKey}` }, body: JSON.stringify(request) });
 }
 
 export async function getH3Job({ config, jobId }, dependencies = {}) {
-    return json(dependencies.fetcher || fetch, config, `/api/v1/h3/jobs/${encodeURIComponent(jobId)}`);
+    return json(dependencies.fetcher || fetch, config, `/api/v2/jobs/${encodeURIComponent(jobId)}`);
 }
 
 export async function downloadH3({ config, jobId, kind = "content" }, dependencies = {}) {
-    const suffix = kind === "poster" ? "/poster" : "/content";
-    const response = await (dependencies.fetcher || fetch)(`${config.baseUrl}/api/v1/h3/jobs/${encodeURIComponent(jobId)}${suffix}`, { headers: auth(config) });
+    const outputId = kind === "poster" ? "poster" : "video";
+    const response = await (dependencies.fetcher || fetch)(`${config.baseUrl}/api/v2/jobs/${encodeURIComponent(jobId)}/outputs/${outputId}/content`, { headers: auth(config) });
     if (!response.ok) throw new Error(`H3 ${kind} 下载失败（${response.status}）`);
     return Buffer.from(await response.arrayBuffer());
 }
