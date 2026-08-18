@@ -16,6 +16,7 @@ import type { TextThinkingMode } from "./providers";
 import { findReusableEntityExtraction, parseStudioJson, type EntityExtractionPayload } from "./studio-entity-extraction-recovery";
 
 type EntityKind = "character" | "scene" | "prop";
+type EntityExtractionOptions = { force?: boolean };
 const ENTITY_EXTRACTION_MODEL = "deepseek-v4-flash";
 const ENTITY_EXTRACTION_THINKING: TextThinkingMode = "disabled";
 const entityExtractionRequests = new Map<string, Promise<EntityExtractionPayload>>();
@@ -53,15 +54,15 @@ export async function recoverInterruptedStudioGenerations() {
   }
 }
 
-export async function extractStudioEntities(projectId: string, text: string, originClientId: string) {
+export async function extractStudioEntities(projectId: string, text: string, originClientId: string, options: EntityExtractionOptions = {}) {
   await mutateStudioProject(projectId, (state) => ({ ...state, originalText: text }), { originClientId });
-  const parsed = await resolveEntityExtractionPreview(projectId, text, originClientId);
+  const parsed = await resolveEntityExtractionPreview(projectId, text, originClientId, options);
   return applyStudioEntityExtraction(projectId, text, parsed, originClientId);
 }
 
-export async function previewStudioEntities(projectId: string, text: string, originClientId: string) {
+export async function previewStudioEntities(projectId: string, text: string, originClientId: string, options: EntityExtractionOptions = {}) {
   const project = await getStudioBackedProject(projectId);
-  const parsed = await resolveEntityExtractionPreview(projectId, text, originClientId);
+  const parsed = await resolveEntityExtractionPreview(projectId, text, originClientId, options);
   return {
     characters: onlyNewEntities(normalizeEntities(parsed.characters), project.studio.characters),
     scenes: onlyNewEntities(normalizeEntities(parsed.scenes), project.studio.scenes),
@@ -69,10 +70,10 @@ export async function previewStudioEntities(projectId: string, text: string, ori
   };
 }
 
-async function resolveEntityExtractionPreview(projectId: string, text: string, originClientId: string): Promise<EntityExtractionPayload> {
+async function resolveEntityExtractionPreview(projectId: string, text: string, originClientId: string, options: EntityExtractionOptions): Promise<EntityExtractionPayload> {
   const current = await getStudioBackedProject(projectId);
-  const sourceHash = textHash(text);
-  if (current.studio.derivationBaselines.entityExtraction?.sourceHash === sourceHash) {
+  const policy = entityExtractionRequestPolicy(current.studio.derivationBaselines.entityExtraction, text, options.force === true);
+  if (policy.skip) {
     return { characters: [], scenes: [], props: [] };
   }
   const availableSystemCharacters = (await listCharacters()).map((character) => ({
@@ -82,7 +83,7 @@ async function resolveEntityExtractionPreview(projectId: string, text: string, o
     summary: character.summary || "",
   }));
   const requestPayload = JSON.stringify({
-    script_context: changedScriptContext(current.studio.derivationBaselines.entityExtraction?.sourceText, text),
+    script_context: policy.scriptContext,
     existing_entities: {
       characters: entityContext(current.studio.characters),
       scenes: entityContext(current.studio.scenes),
@@ -90,12 +91,14 @@ async function resolveEntityExtractionPreview(projectId: string, text: string, o
     },
     available_system_characters: availableSystemCharacters,
   }, null, 2);
-  const reusable = findReusableEntityExtraction({
-    text: requestPayload,
-    nodes: current.nodes,
-    executions: current.studio.generationExecutions,
-  });
-  if (reusable) return reusable;
+  if (policy.allowReusable) {
+    const reusable = findReusableEntityExtraction({
+      text: requestPayload,
+      nodes: current.nodes,
+      executions: current.studio.generationExecutions,
+    });
+    if (reusable) return reusable;
+  }
 
   const requestKey = `${projectId}:${createHash("sha256").update(requestPayload).digest("hex")}`;
   const inFlight = entityExtractionRequests.get(requestKey);
@@ -818,6 +821,21 @@ async function requireCharacterResource(characterId: string, resourceId: string,
   const belongs = resource?.metadata?.characterId === characterId || linkedIds.includes(characterId);
   if (!resource || resource.type !== type || !belongs) throw new Error(`所选${type === "image" ? "图片" : "参考声音"}不属于同步角色`);
   return resource;
+}
+export function entityExtractionRequestPolicy(
+  baseline: { sourceText?: string; sourceHash?: string } | undefined,
+  currentText: string,
+  force: boolean,
+) {
+  const sourceHash = textHash(currentText);
+  return {
+    sourceHash,
+    skip: !force && baseline?.sourceHash === sourceHash,
+    allowReusable: !force,
+    scriptContext: force
+      ? { mode: "full", current_text: currentText }
+      : changedScriptContext(baseline?.sourceText, currentText),
+  };
 }
 function changedScriptContext(previousText: string | undefined, currentText: string) {
   if (!previousText) return { mode: "full", current_text: currentText };

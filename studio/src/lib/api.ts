@@ -310,13 +310,14 @@ export const api = {
         return { ...res.data, originalText: res.data.original_text };
     },
 
-    extractPreview: (scriptId: string, text: string) => {
-        const requestKey = `${scriptId}\0${text}`;
+    extractPreview: (scriptId: string, text: string, options: { force?: boolean } = {}) => {
+        const force = options.force === true;
+        const requestKey = `${scriptId}\0${text}\0${force}`;
         const existing = extractionPreviewRequests.get(requestKey);
         if (existing) return existing;
         let request!: Promise<ExtractionPreview>;
         request = axios
-            .post(`${API_URL}/projects/${scriptId}/extract_preview`, { text })
+            .post(`${API_URL}/projects/${scriptId}/extract_preview`, { text, force })
             .then((res) => res.data as ExtractionPreview)
             .finally(() => {
                 if (extractionPreviewRequests.get(requestKey) === request) extractionPreviewRequests.delete(requestKey);

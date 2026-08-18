@@ -418,7 +418,7 @@ export const useProjectStore = create<ProjectStore>()(
                 const projectId = currentProject.id;
                 set({ isAnalyzing: true });
                 try {
-                    const preview = await api.extractPreview(projectId, text);
+                    const preview = await api.extractPreview(projectId, text, { force: true });
                     set({ pendingExtraction: preview, pendingExtractionScript: text, pendingExtractionProjectId: projectId, isAnalyzing: false });
                     return preview;
                 } catch (error) {

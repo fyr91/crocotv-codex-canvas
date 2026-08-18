@@ -2388,6 +2388,7 @@
       "detectedInScript": "Detected in script",
       "addToCast": "Add to Cast",
       "addEntity": "Add",
+      "bindCharacterAssets": "Bind character assets",
       "editEntity": "Edit entity",
       "deleteEntity": "Delete entity",
       "saveEntity": "Save entity",

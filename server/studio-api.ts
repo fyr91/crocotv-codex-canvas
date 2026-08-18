@@ -92,8 +92,8 @@ studioApiRouter.post("/projects", route(async (request, response) => response.st
 studioApiRouter.get("/projects/", route(async (_request, response) => response.json(await listStudioProjectResponses({ kind: "episode" }))));
 studioApiRouter.get("/projects", route(async (_request, response) => response.json(await listStudioProjectResponses({ kind: "episode" }))));
 studioApiRouter.put("/projects/:id/text", projectRoute(async (request, response, id) => response.json(await updateStudioScript(id, request.body, clientId(request)))));
-studioApiRouter.put("/projects/:id/reparse", projectRoute(async (request, response, id) => response.json(await extractStudioEntities(id, String(request.body?.text || ""), clientId(request)))));
-studioApiRouter.post("/projects/:id/extract_preview", projectRoute(async (request, response, id) => response.json(await previewStudioEntities(id, String(request.body?.text || ""), clientId(request)))));
+studioApiRouter.put("/projects/:id/reparse", projectRoute(async (request, response, id) => response.json(await extractStudioEntities(id, String(request.body?.text || ""), clientId(request), { force: true }))));
+studioApiRouter.post("/projects/:id/extract_preview", projectRoute(async (request, response, id) => response.json(await previewStudioEntities(id, String(request.body?.text || ""), clientId(request), { force: request.body?.force === true }))));
 studioApiRouter.post("/projects/:id/extraction/apply", projectRoute(async (request, response, id) => response.json(await applyStudioEntityExtraction(id, String(request.body?.text || ""), request.body?.extraction, clientId(request)))));
 studioApiRouter.post("/projects/:id/toggle_starred", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, starred: !state.starred }), { originClientId: clientId(request) }))));
 studioApiRouter.post("/projects/:id/sync_descriptions", projectRoute(async (_request, response, id) => response.json(await getStudioProject(id))));
@@ -449,7 +449,7 @@ async function generateMissingAssets(projectId: string, originClientId: string) 
 }
 async function runStudioStage(projectId: string, stage: string, originClientId: string) {
   let project: any = await getStudioProject(projectId);
-  if (stage === "extract_entities") return extractStudioEntities(projectId, project.original_text || "", originClientId);
+  if (stage === "extract_entities") return extractStudioEntities(projectId, project.original_text || "", originClientId, { force: true });
   if (stage === "analyze_art_direction") return analyzeStudioArtDirection(projectId, project.original_text || "", originClientId);
   if (stage === "analyze_storyboard") return analyzeStudioStoryboard(projectId, project.original_text || "", originClientId);
   if (stage === "generate_assets") return generateMissingAssets(projectId, originClientId);

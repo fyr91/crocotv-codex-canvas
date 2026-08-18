@@ -116,7 +116,7 @@ export default function ScriptProcessor() {
             body: ts("analyzingScriptBody"),
         });
         try {
-            const preview = await api.extractPreview(projectId, script);
+            const preview = await api.extractPreview(projectId, script, { force: true });
             toast.update(toastId, {
                 kind: "success",
                 title: ts("analysisDone"),

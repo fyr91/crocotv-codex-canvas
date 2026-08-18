@@ -2388,6 +2388,7 @@
       "detectedInScript": "剧本中即时识别",
       "addToCast": "加入 Cast",
       "addEntity": "新增",
+      "bindCharacterAssets": "绑定角色素材",
       "editEntity": "编辑实体",
       "deleteEntity": "删除实体",
       "saveEntity": "保存实体",

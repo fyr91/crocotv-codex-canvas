@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Link2, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { api, crudApi } from '@/lib/api';
 import { useProjectStore, type Project } from '@/store/projectStore';
 import { toast } from '@/store/toastStore';
+import CharacterResourceBindingModal from '../../cast/CharacterResourceBindingModal';
 
 export type ProjectEntityKind = 'character' | 'scene' | 'prop';
 
@@ -45,6 +46,7 @@ export default function ProjectEntityPanel({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [bindingCharacterId, setBindingCharacterId] = useState<string | null>(null);
 
   const entities = useMemo<ProjectEntity[]>(() => {
     if (!currentProject) return [];
@@ -184,6 +186,17 @@ export default function ProjectEntityPanel({
                     <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-text-muted">{entity.description}</p>
                   ) : null}
                 </div>
+                {kind === 'character' ? (
+                  <button
+                    type="button"
+                    onClick={() => setBindingCharacterId(entity.id)}
+                    className={`transition-colors hover:text-primary ${'system_character_id' in entity && entity.system_character_id ? 'text-primary' : 'text-text-muted'}`}
+                    aria-label={t('panels.bindCharacterAssets')}
+                    title={t('panels.bindCharacterAssets')}
+                  >
+                    <Link2 size={13} />
+                  </button>
+                ) : null}
                 <button type="button" onClick={() => openEdit(entity)} className="text-text-muted transition-colors hover:text-primary" aria-label={t('panels.editEntity')}>
                   <Pencil size={13} />
                 </button>
@@ -245,6 +258,13 @@ export default function ProjectEntityPanel({
           </div>
         </div>
       ) : null}
+
+      <CharacterResourceBindingModal
+        character={kind === 'character'
+          ? currentProject?.characters?.find((character) => character.id === bindingCharacterId) ?? null
+          : null}
+        onClose={() => setBindingCharacterId(null)}
+      />
     </div>
   );
 }
