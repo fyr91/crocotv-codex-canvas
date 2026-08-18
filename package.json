@@ -16,6 +16,7 @@
     "generate:model-catalog": "tsx scripts/generate-studio-model-catalog.ts",
     "build": "npm run generate:model-catalog && npm run build:mcp && npm run build:skills && npm run build:manifest && tsc --noEmit && npm --prefix web run build && npm --prefix studio run build",
     "setup": "node scripts/configure-local.mjs",
+    "check:gpu": "node scripts/check-gpu-connection.mjs",
     "check:compatibility": "node plugins/croco-video-factory/scripts/check-compatibility.mjs",
     "start": "concurrently -k -n server,web,studio -c cyan,green,magenta \"tsx server/bootstrap.ts\" \"npm --prefix web run start\" \"npm --prefix studio run start\""
   },
