@@ -88,7 +88,10 @@ test("publishes a loading output node before H3 prompt optimization completes", 
   assert.ok(output, "the result placeholder should exist while prompt optimization is pending");
   assert.equal(output.type, "video");
   assert.equal(output.metadata.status, "loading");
-  assert.equal(output.metadata.generationState, "running");
+  assert.equal(output.metadata.generationState, "queued");
+  assert.equal(output.metadata.generationStage, "submitting");
+  assert.equal(output.metadata.generationProgress, 0);
+  assert.equal(output.metadata.remoteOperationLabel, "MiniMax H3 正在提交");
   assert.equal(output.metadata.remoteOperationId, "canvas-job-1");
   assert.equal(output.metadata.remoteOperationOrigin, "canvas");
   assert.equal(config.metadata.remoteOperationLabel, "正在执行生成模组");

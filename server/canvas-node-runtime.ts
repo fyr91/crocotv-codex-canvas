@@ -55,6 +55,9 @@ export async function queueCanvasConfigNodes(input: {
       metadata: {
         status: "loading",
         generationState: "queued",
+        generationStage: "queued",
+        generationProgress: 0,
+        generationJobId: null,
         remoteOperationActive: true,
         remoteOperationId: input.operationId,
         remoteOperationOrigin: input.operationOrigin || "mcp",
@@ -62,7 +65,7 @@ export async function queueCanvasConfigNodes(input: {
         errorDetails: "",
       },
     },
-  })), ...targetIds.map((nodeId): CanvasOperation => ({ op: "update_node", nodeId, patch: { metadata: { status: "loading", generationState: "queued", remoteOperationActive: true, remoteOperationId: input.operationId, remoteOperationOrigin: input.operationOrigin || "mcp", remoteOperationLabel: "MCP · 等待原位重跑", errorDetails: "" } } }))], input.originClientId || "canvas-node-runtime");
+  })), ...targetIds.map((nodeId): CanvasOperation => ({ op: "update_node", nodeId, patch: { metadata: { status: "loading", generationState: "queued", generationStage: "queued", generationProgress: 0, generationJobId: null, remoteOperationActive: true, remoteOperationId: input.operationId, remoteOperationOrigin: input.operationOrigin || "mcp", remoteOperationLabel: input.operationOrigin === "canvas" ? "等待重新生成" : "MCP · 等待原位重跑", errorDetails: "" } } }))], input.originClientId || "canvas-node-runtime");
   return { nodeIds, projectVersion: result.project.version };
 }
 
@@ -162,7 +165,7 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
   const initialOperations: CanvasOperation[] = [{
     op: "update_node",
     nodeId: config.id,
-    patch: { metadata: { status: "loading", generationState: "running", remoteOperationActive: remoteOperation, remoteOperationId: remoteOperation ? operationId : null, remoteOperationOrigin: managedOperationOrigin, remoteOperationLabel: isMcpOperation ? "MCP 正在执行生成模组" : "正在执行生成模组", errorDetails: "", resolvedPrompt: inputs.prompt, inputSnapshot } },
+    patch: { metadata: { status: "loading", generationState: "running", generationStage: "preparing", generationProgress: 0, generationJobId: null, remoteOperationActive: remoteOperation, remoteOperationId: remoteOperation ? operationId : null, remoteOperationOrigin: managedOperationOrigin, remoteOperationLabel: isMcpOperation ? "MCP 正在执行生成模组" : "正在执行生成模组", errorDetails: "", resolvedPrompt: inputs.prompt, inputSnapshot } },
   }];
 
   if (toneNodeId) {
@@ -207,11 +210,14 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
           promptDraft: String(config.metadata?.composerContent ?? config.metadata?.prompt ?? ""),
           model: String(config.metadata?.model || model),
           status: "loading",
-          generationState: "running",
+          generationState: providerUsesQueue(mode) ? "queued" : "running",
+          generationStage: providerUsesQueue(mode) ? "submitting" : "preparing",
+          generationProgress: 0,
+          generationJobId: null,
           remoteOperationActive: remoteOperation,
           remoteOperationId: remoteOperation ? operationId : null,
           remoteOperationOrigin: managedOperationOrigin,
-          remoteOperationLabel: providerLabel(mode, model),
+          remoteOperationLabel: providerUsesQueue(mode) ? providerSubmittingLabel(mode, model) : providerLabel(mode, model),
           sourceConfigNodeId: config.id,
           inputSnapshot,
           ...shotLayout.child(toneNodeId ? 2 + index : 1 + index),
@@ -565,7 +571,7 @@ function withRuntimeStudioBindings(project: CanvasProject, operations: CanvasOpe
 }
 
 function resourceMetadata(resource: StoredResource) {
-  return { content: resource.url, storageKey: resource.id, mimeType: resource.mimeType, bytes: resource.size, status: "success", generationState: "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: "生成完成", errorDetails: "", ...(resource.metadata || {}) };
+  return { content: resource.url, storageKey: resource.id, mimeType: resource.mimeType, bytes: resource.size, status: "success", generationState: "ready", generationStage: "completed", generationProgress: 100, remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: "生成完成", errorDetails: "", ...(resource.metadata || {}) };
 }
 function requiredConfig(project: CanvasProject, nodeId: string) { const node = project.nodes.find((item) => item.id === nodeId); if (!node) throw new Error(`节点不存在：${nodeId}`); if (node.type !== "config") throw new Error(`节点 ${nodeId} 不是生成模组`); return node; }
 function generationMode(node: CanvasNode): GenerationMode { const value = String(node.metadata?.generationMode || "image"); if (!["text", "image", "video", "audio", "music"].includes(value)) throw new Error(`不支持的生成模式：${value}`); return value as GenerationMode; }
@@ -590,6 +596,8 @@ function outputSize(type: string) { if (type === "image") return { width: 360, h
 function outputPosition(project: CanvasProject, config: CanvasNode, index: number, width: number, height: number) { const existing = project.connections.filter((connection) => connection.fromNodeId === config.id).length; return { x: config.position.x + config.width + 96, y: config.position.y + (existing + index) * (height + 36) }; }
 function outputTitle(mode: GenerationMode, config: CanvasNode, prompt: string) { const configured = String(config.title || "").trim().replace(/生成模组/g, "结果"); const fallback: Record<GenerationMode, string> = { text: "Generated Text", image: "Generated Image", video: "Generated Video", audio: "Generated Audio", music: "Generated Music" }; return configured && configured !== "结果" ? configured.slice(0, 64) : prompt.replace(/\s+/g, " ").slice(0, 32) || fallback[mode]; }
 function providerLabel(mode: GenerationMode, model: string) { if (mode === "audio") return "等待 DeepSeek 语气优化"; if (mode === "video") return model === "ltx-2.5" ? "LTX 2.5 生成中" : "MiniMax H3 生成中"; if (mode === "music") return model === "minimax-music-3" ? "MiniMax Music 3 生成中" : "Suno 生成中"; return `${model} 请求中`; }
+function providerUsesQueue(mode: GenerationMode) { return mode === "image" || mode === "video" || mode === "music"; }
+function providerSubmittingLabel(mode: GenerationMode, model: string) { return providerLabel(mode, model).replace(/生成中$|请求中$/, "正在提交"); }
 function shotLayoutMetadata(config: CanvasNode) {
   const factoryRunId = String(config.metadata?.factoryRunId || "");
   const groupId = String(config.metadata?.groupId || "");

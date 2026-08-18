@@ -5,7 +5,7 @@ import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import type { CloudAsset } from "./cloud-assets";
 import { watchDirectGenerationProgress } from "./direct-generation-progress";
 
-type RequestOptions = { signal?: AbortSignal; clientRequestId?: string; ltxFrames?: unknown; onJobCreated?: (jobId: string, outputIndex?: number) => void; onStatusChange?: (status: "queued" | "running" | "succeeded" | "failed" | "canceled", outputIndex?: number) => void; onProgress?: (progress: number, stage?: string, outputIndex?: number) => void; onResult?: (result: VideoGenerationResult) => void; onArchived?: (result: VideoGenerationResult) => void; onReviewReady?: (review: never) => void };
+type RequestOptions = { signal?: AbortSignal; clientRequestId?: string; ltxFrames?: unknown; onJobCreated?: (jobId: string, outputIndex?: number) => void; onStatusChange?: (status: "queued" | "running" | "succeeded" | "failed" | "canceled", outputIndex?: number) => void; onProgress?: (progress: number, stage?: string, outputIndex?: number, label?: string) => void; onResult?: (result: VideoGenerationResult) => void; onArchived?: (result: VideoGenerationResult) => void; onReviewReady?: (review: never) => void };
 export type VideoGenerationResult = { outputIndex: number; blob?: Blob; url?: string; mimeType?: string; storageKey?: string; bytes?: number; width?: number; height?: number; durationMs?: number; isTemporaryPreview?: boolean };
 export type VideoGenerationTask = { id: string; provider: string; model: string; expectedCount: number; reviewMode: "none" };
 export type VideoGenerationTaskState = { status: "pending" } | { status: "completed"; result: VideoGenerationResult } | { status: "failed"; error: string };
@@ -18,7 +18,7 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
     const progress = watchDirectGenerationProgress(clientRequestId, {
         onJobCreated: (jobId, outputIndex) => options?.onJobCreated?.(jobId, outputIndex),
         onStatusChange: (status, outputIndex) => options?.onStatusChange?.(status, outputIndex),
-        onProgress: (value, stage, outputIndex) => options?.onProgress?.(value, stage, outputIndex),
+        onProgress: (value, stage, outputIndex, label) => options?.onProgress?.(value, stage, outputIndex, label),
     });
     try {
         const response = await fetch("/api/generate/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({

@@ -20,6 +20,7 @@ import { CanvasStackFrame as BatchFrame } from "./canvas-stack-frame";
 import { ManagedCanvasVideo } from "./managed-canvas-video";
 import { AudioNodePlayer } from "@/components/audio/audio-node-player";
 import { canvasNodeImagePreviewUrl } from "@/lib/canvas/canvas-viewport-virtualization";
+import { canvasGenerationProgressDisplay } from "@/lib/canvas/canvas-generation-progress";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const selectionBlue = "#2f80ff";
@@ -649,6 +650,7 @@ function WorkflowGroupNodeContent({ node, theme, groupChildCount, onRunWorkflow,
 
 function LoadingContent({ node, theme }: Pick<NodeContentRendererProps, "node" | "theme">) {
     const reasoning = reasoningDisplayState(node.metadata || {});
+    const progressDisplay = canvasGenerationProgressDisplay(node.metadata || {});
     if (node.type === CanvasNodeType.Text && reasoning.visible) return (
         <div className="flex h-full min-h-0 w-full flex-col justify-end gap-2 px-3 pb-3 pt-8" style={{ color: theme.node.activeStroke }}>
             <span className="text-center text-[10px] tracking-[0.2em]">{node.metadata?.generationState === "queued" ? "排队中" : "生成中"}</span>
@@ -658,8 +660,8 @@ function LoadingContent({ node, theme }: Pick<NodeContentRendererProps, "node" |
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.activeStroke }}>
             <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
-            <span className="text-[10px] tracking-[0.2em]">{node.metadata?.generationState === "queued" ? "排队中" : `生成中${Number(node.metadata?.generationProgress || 0) > 0 ? ` ${Math.round(Number(node.metadata?.generationProgress))}%` : ""}`}</span>
-            {Number(node.metadata?.generationProgress || 0) > 0 ? <div className="h-1.5 w-24 overflow-hidden rounded-full" style={{ background: theme.node.stroke }}><div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${Math.round(Number(node.metadata?.generationProgress || 0))}%`, background: theme.node.activeStroke }} /></div> : null}
+            <span className="max-w-[85%] text-center text-[10px] tracking-[0.12em]">{progressDisplay.label}</span>
+            {progressDisplay.showProgress ? <div className="h-1.5 w-24 overflow-hidden rounded-full" style={{ background: theme.node.stroke }}><div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${progressDisplay.progress || 0}%`, background: theme.node.activeStroke }} /></div> : null}
         </div>
     );
 }

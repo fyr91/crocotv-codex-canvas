@@ -16,7 +16,7 @@ type DirectGenerationProgressSnapshot = {
 export type DirectGenerationProgressHandlers = {
     onJobCreated?: (jobId: string, outputIndex: number) => void;
     onStatusChange?: (status: "queued" | "running" | "succeeded" | "failed", outputIndex: number) => void;
-    onProgress?: (progress: number, stage: string, outputIndex: number) => void;
+    onProgress?: (progress: number, stage: DirectGenerationJobProgress["stage"], outputIndex: number, label: string) => void;
 };
 
 const pollIntervalMs = 350;
@@ -41,7 +41,7 @@ export function watchDirectGenerationProgress(requestId: string, handlers: Direc
                 jobSignatures.set(job.outputIndex, signature);
                 if (isNewJob) handlers.onJobCreated?.(job.jobId, job.outputIndex);
                 handlers.onStatusChange?.(job.stage === "submitted" || job.stage === "queued" ? "queued" : job.stage === "completed" ? "succeeded" : "running", job.outputIndex);
-                handlers.onProgress?.(Math.max(0, Math.min(100, Number(job.progress) || 0)), job.label, job.outputIndex);
+                handlers.onProgress?.(Math.max(0, Math.min(100, Number(job.progress) || 0)), job.stage, job.outputIndex, job.label);
             }
             if (snapshot.status === "failed") {
                 const indexes = snapshot.jobs.length ? snapshot.jobs.map((job) => job.outputIndex) : [0];
