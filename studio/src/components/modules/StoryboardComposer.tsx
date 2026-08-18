@@ -290,7 +290,7 @@ export default function StoryboardComposer() {
 
             // Construct enhanced prompt using Art Direction style config.
             const artDirection = currentProject?.art_direction;
-            const globalStylePrompt = artDirection?.style_config?.positive_prompt || "";
+            const globalStylePrompt = artDirection?.style_config?.image_prompt || "";
 
             // Construct final prompt:
             // If image_prompt exists (polished or manually edited), it already contains action/dialogue,

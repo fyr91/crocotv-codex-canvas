@@ -34,6 +34,8 @@ export default function SeriesArtDirectionPanel({ seriesId, onSaved }: SeriesArt
     const [modalEditing, setModalEditing] = useState(false);
     const [modalPositive, setModalPositive] = useState("");
     const [modalNegative, setModalNegative] = useState("");
+    const [modalVideoPrompt, setModalVideoPrompt] = useState("");
+    const [modalVideoNegative, setModalVideoNegative] = useState("");
 
     useEffect(() => {
         let cancelled = false;
@@ -64,15 +66,19 @@ export default function SeriesArtDirectionPanel({ seriesId, onSaved }: SeriesArt
         if (!selectedStyle && !currentStyleName) return false;
         if (!selectedStyle || !currentStyleName) return true;
         return selectedStyle.name !== currentStyleName
-            || selectedStyle.positive_prompt !== (series?.art_direction?.style_config?.positive_prompt ?? "")
-            || selectedStyle.negative_prompt !== (series?.art_direction?.style_config?.negative_prompt ?? "");
+            || selectedStyle.image_prompt !== (series?.art_direction?.style_config?.image_prompt ?? "")
+            || selectedStyle.image_negative_prompt !== (series?.art_direction?.style_config?.image_negative_prompt ?? "")
+            || selectedStyle.video_prompt !== (series?.art_direction?.style_config?.video_prompt ?? "")
+            || selectedStyle.video_negative_prompt !== (series?.art_direction?.style_config?.video_negative_prompt ?? "");
     }, [selectedStyle, currentStyleName, series?.art_direction?.style_config]);
 
     const openPresetModal = (preset: StylePreset) => {
         setModalPreset(preset);
         setModalEditing(false);
-        setModalPositive(preset.positive_prompt);
-        setModalNegative(preset.negative_prompt);
+        setModalPositive(preset.image_prompt);
+        setModalNegative(preset.image_negative_prompt);
+        setModalVideoPrompt(preset.video_prompt);
+        setModalVideoNegative(preset.video_negative_prompt);
     };
 
     const closePresetModal = () => {
@@ -83,15 +89,19 @@ export default function SeriesArtDirectionPanel({ seriesId, onSaved }: SeriesArt
     const handleModalApply = () => {
         if (!modalPreset) return;
         const isCustomized = modalEditing && (
-            modalPositive !== modalPreset.positive_prompt ||
-            modalNegative !== modalPreset.negative_prompt
+            modalPositive !== modalPreset.image_prompt ||
+            modalNegative !== modalPreset.image_negative_prompt ||
+            modalVideoPrompt !== modalPreset.video_prompt ||
+            modalVideoNegative !== modalPreset.video_negative_prompt
         );
         setSelectedStyle({
             id: modalPreset.id,
-            name: modalPreset.name,
-            description: "",
-            positive_prompt: isCustomized ? modalPositive : modalPreset.positive_prompt,
-            negative_prompt: isCustomized ? modalNegative : modalPreset.negative_prompt,
+            name: modalPreset.name_zh,
+            description: modalPreset.subtitle_zh || modalPreset.description || "",
+            image_prompt: isCustomized ? modalPositive : modalPreset.image_prompt,
+            image_negative_prompt: isCustomized ? modalNegative : modalPreset.image_negative_prompt,
+            video_prompt: isCustomized ? modalVideoPrompt : modalPreset.video_prompt,
+            video_negative_prompt: isCustomized ? modalVideoNegative : modalPreset.video_negative_prompt,
             is_custom: false,
         });
         closePresetModal();
@@ -198,10 +208,10 @@ export default function SeriesArtDirectionPanel({ seriesId, onSaved }: SeriesArt
                             {selectedStyle ? (
                                 <div className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-3">
                                     <p className="font-display text-base font-medium text-foreground">{selectedStyle.name}</p>
-                                    {selectedStyle.positive_prompt && (
+                                    {selectedStyle.image_prompt && (
                                         <p className="mt-2 font-mono text-sm text-text-muted line-clamp-2">
                                             <span className="text-primary mr-1">+</span>
-                                            {selectedStyle.positive_prompt}
+                                            {selectedStyle.image_prompt}
                                         </p>
                                     )}
                                 </div>
@@ -299,8 +309,12 @@ export default function SeriesArtDirectionPanel({ seriesId, onSaved }: SeriesArt
                         editing={modalEditing}
                         positivePrompt={modalPositive}
                         negativePrompt={modalNegative}
+                        videoPrompt={modalVideoPrompt}
+                        videoNegativePrompt={modalVideoNegative}
                         onPositiveChange={setModalPositive}
                         onNegativeChange={setModalNegative}
+                        onVideoPromptChange={setModalVideoPrompt}
+                        onVideoNegativeChange={setModalVideoNegative}
                         onStartEditing={() => setModalEditing(true)}
                         onApply={handleModalApply}
                         onClose={closePresetModal}
@@ -308,8 +322,10 @@ export default function SeriesArtDirectionPanel({ seriesId, onSaved }: SeriesArt
                         onSwitchPreset={(p) => {
                             setModalPreset(p);
                             setModalEditing(false);
-                            setModalPositive(p.positive_prompt);
-                            setModalNegative(p.negative_prompt);
+                            setModalPositive(p.image_prompt);
+                            setModalNegative(p.image_negative_prompt);
+                            setModalVideoPrompt(p.video_prompt);
+                            setModalVideoNegative(p.video_negative_prompt);
                         }}
                     />
                 )}
@@ -318,14 +334,18 @@ export default function SeriesArtDirectionPanel({ seriesId, onSaved }: SeriesArt
     );
 }
 
-function SeriesPresetModal({ preset, isSelected, editing, positivePrompt, negativePrompt, onPositiveChange, onNegativeChange, onStartEditing, onApply, onClose, sameCategoryPresets, onSwitchPreset }: {
+function SeriesPresetModal({ preset, isSelected, editing, positivePrompt, negativePrompt, videoPrompt, videoNegativePrompt, onPositiveChange, onNegativeChange, onVideoPromptChange, onVideoNegativeChange, onStartEditing, onApply, onClose, sameCategoryPresets, onSwitchPreset }: {
     preset: StylePreset;
     isSelected: boolean;
     editing: boolean;
     positivePrompt: string;
     negativePrompt: string;
+    videoPrompt: string;
+    videoNegativePrompt: string;
     onPositiveChange: (v: string) => void;
     onNegativeChange: (v: string) => void;
+    onVideoPromptChange: (v: string) => void;
+    onVideoNegativeChange: (v: string) => void;
     onStartEditing: () => void;
     onApply: () => void;
     onClose: () => void;
@@ -335,8 +355,10 @@ function SeriesPresetModal({ preset, isSelected, editing, positivePrompt, negati
     const t = useTranslations("seriesArtDirection");
     const tCommon = useTranslations("common");
     const isCustomized = editing && (
-        positivePrompt !== preset.positive_prompt ||
-        negativePrompt !== preset.negative_prompt
+        positivePrompt !== preset.image_prompt ||
+        negativePrompt !== preset.image_negative_prompt ||
+        videoPrompt !== preset.video_prompt ||
+        videoNegativePrompt !== preset.video_negative_prompt
     );
 
     return (
@@ -349,6 +371,9 @@ function SeriesPresetModal({ preset, isSelected, editing, positivePrompt, negati
             onClick={onClose}
         >
             <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="series-style-modal-title"
                 initial={{ opacity: 0, scale: 0.96, y: 8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -359,10 +384,11 @@ function SeriesPresetModal({ preset, isSelected, editing, positivePrompt, negati
                 {/* Header */}
                 <header className="flex items-center justify-between px-6 py-4 border-b border-glass-border shrink-0">
                     <div>
-                        <h2 className="text-xl font-medium text-foreground">{preset.name_zh}</h2>
+                        <h2 id="series-style-modal-title" className="text-xl font-medium text-foreground">{preset.name_zh}</h2>
                         <p className="text-sm text-text-muted mt-0.5">{preset.name}</p>
+                        {preset.subtitle_zh && <p className="text-sm text-text-secondary mt-1">{preset.subtitle_zh}</p>}
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-hover-bg text-text-muted hover:text-foreground transition-colors">
+                    <button aria-label={tCommon("close")} onClick={onClose} className="p-2 rounded-lg hover:bg-hover-bg text-text-muted hover:text-foreground transition-colors">
                         <X size={18} />
                     </button>
                 </header>
@@ -411,23 +437,39 @@ function SeriesPresetModal({ preset, isSelected, editing, positivePrompt, negati
                             {!editing ? (
                                 <>
                                     <div>
-                                        <p className="text-sm text-text-muted mb-1.5">{t("positive")}</p>
-                                        <p className="text-sm text-text-secondary leading-relaxed">{preset.positive_prompt}</p>
+                                        <p className="text-sm text-text-muted mb-1.5">{t("imagePrompt")}</p>
+                                        <p className="text-sm text-text-secondary leading-relaxed">{preset.image_prompt}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-text-muted mb-1.5">{t("negative")}</p>
-                                        <p className="text-sm text-text-secondary leading-relaxed">{preset.negative_prompt}</p>
+                                        <p className="text-sm text-text-muted mb-1.5">{t("imageNegativePrompt")}</p>
+                                        <p className="text-sm text-text-secondary leading-relaxed">{preset.image_negative_prompt || "—"}</p>
+                                    </div>
+                                    <div className="border-t border-glass-border pt-4">
+                                        <p className="text-sm text-text-muted mb-1.5">{t("videoPrompt")}</p>
+                                        <p className="text-sm text-text-secondary leading-relaxed">{preset.video_prompt}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-text-muted mb-1.5">{t("videoNegativePrompt")}</p>
+                                        <p className="text-sm text-text-secondary leading-relaxed">{preset.video_negative_prompt || "—"}</p>
                                     </div>
                                 </>
                             ) : (
                                 <>
                                     <div>
-                                        <p className="text-sm text-text-muted mb-1.5">{t("positive")}</p>
+                                        <p className="text-sm text-text-muted mb-1.5">{t("imagePrompt")}</p>
                                         <textarea value={positivePrompt} onChange={(e) => onPositiveChange(e.target.value)} rows={5} className="w-full bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-foreground focus:border-primary focus:outline-none resize-none" />
                                     </div>
                                     <div>
-                                        <p className="text-sm text-text-muted mb-1.5">{t("negative")}</p>
+                                        <p className="text-sm text-text-muted mb-1.5">{t("imageNegativePrompt")}</p>
                                         <textarea value={negativePrompt} onChange={(e) => onNegativeChange(e.target.value)} rows={3} className="w-full bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-foreground focus:border-primary focus:outline-none resize-none" />
+                                    </div>
+                                    <div className="border-t border-glass-border pt-4">
+                                        <p className="text-sm text-text-muted mb-1.5">{t("videoPrompt")}</p>
+                                        <textarea value={videoPrompt} onChange={(e) => onVideoPromptChange(e.target.value)} rows={5} className="w-full bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-foreground focus:border-primary focus:outline-none resize-none" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-text-muted mb-1.5">{t("videoNegativePrompt")}</p>
+                                        <textarea value={videoNegativePrompt} onChange={(e) => onVideoNegativeChange(e.target.value)} rows={3} className="w-full bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-foreground focus:border-primary focus:outline-none resize-none" />
                                     </div>
                                 </>
                             )}

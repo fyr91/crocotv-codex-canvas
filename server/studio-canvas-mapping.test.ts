@@ -55,6 +55,41 @@ test("Studio full mapping becomes updates when managed nodes already exist", () 
   assert.equal(text.patch.metadata?.content, "第二场");
 });
 
+test("visual style presets route distinct prompts to image and video nodes", () => {
+  const projectId = "project-style-routing";
+  const state = {
+    ...newStudioProjectState("风格路由"),
+    artDirection: {
+      selected_style_id: "flying-house-whimsy",
+      style_config: {
+        id: "flying-house-whimsy",
+        name: "飞屋奇想",
+        image_prompt: "IMAGE_STYLE_TOKEN",
+        image_negative_prompt: "IMAGE_NEGATIVE_TOKEN",
+        video_prompt: "VIDEO_STYLE_TOKEN",
+        video_negative_prompt: "VIDEO_NEGATIVE_TOKEN",
+      },
+      custom_styles: [],
+      ai_recommendations: [],
+    },
+    characters: [{ id: "hero", name: "主角", description: "方形轮廓的老人" }],
+    frames: [{ id: "shot-1", title: "镜头一", prompt: "镜头缓慢推进", order: 0 }],
+  };
+  const operations = studioScriptMappingOperations({ projectId, state, nodes: [] });
+  const nodes = operations.flatMap((operation) => operation.op === "add_node" ? [operation.node] : []);
+  const characterImage = nodes.find((node) => node.id === stableStudioNodeId(projectId, "character", "hero", "image-config"));
+  const frameImage = nodes.find((node) => node.id === stableStudioNodeId(projectId, "frame", "shot-1", "image-config"));
+  const frameVideo = nodes.find((node) => node.id === stableStudioNodeId(projectId, "frame", "shot-1", "video-config"));
+  assert.match(String(characterImage?.metadata?.composerContent), /IMAGE_STYLE_TOKEN/);
+  assert.equal(characterImage?.metadata?.negativePrompt, "IMAGE_NEGATIVE_TOKEN");
+  assert.match(String(frameImage?.metadata?.composerContent), /IMAGE_STYLE_TOKEN/);
+  assert.doesNotMatch(String(frameImage?.metadata?.composerContent), /VIDEO_STYLE_TOKEN/);
+  assert.match(String(frameVideo?.metadata?.composerContent), /镜头缓慢推进/);
+  assert.match(String(frameVideo?.metadata?.composerContent), /VIDEO_STYLE_TOKEN/);
+  assert.doesNotMatch(String(frameVideo?.metadata?.composerContent), /IMAGE_STYLE_TOKEN/);
+  assert.equal(frameVideo?.metadata?.negativePrompt, "VIDEO_NEGATIVE_TOKEN");
+});
+
 test("asset reference image is projected as a connected Canvas generation input", () => {
   const projectId = "project-character-binding";
   const state = {

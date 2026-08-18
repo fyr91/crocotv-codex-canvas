@@ -132,8 +132,6 @@ export function studioProjectResponse(project: StudioBackedProject) {
     series_id: studio.seriesId,
     episode_number: studio.episodeNumber,
     aspect_ratio: studio.aspectRatio,
-    style_preset: studio.stylePreset,
-    style_prompt: studio.stylePrompt,
     art_direction: studio.artDirection,
     model_settings: studio.modelSettings,
     prompt_config: studio.promptConfig,

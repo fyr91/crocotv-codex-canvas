@@ -208,23 +208,13 @@ export default function CastWorkbenchModal({ isOpen, kind, entityId, onClose }: 
         }
     }, [isOpen, entity, kind, selectedTemplate]);
 
-    const [presets, setPresets] = useState<any[]>([]);
-    useEffect(() => {
-        api.getStylePresets().then((res: any) => setPresets(res?.presets || res || [])).catch(() => {});
-    }, []);
-
     if (!isOpen || !kind || !entity || !currentProject) return null;
 
     const resolvedArtDirection = currentProject.art_direction ?? currentSeries?.art_direction;
     const styleConfig = resolvedArtDirection?.style_config;
     const styleName = styleConfig?.name || "";
-    const styleNegative = styleConfig?.negative_prompt || "";
-    // Resolve positive_prompt with preset fallback (series data often omits it)
-    let stylePositive = styleConfig?.positive_prompt || "";
-    if (!stylePositive && styleConfig?.id && presets.length > 0) {
-        const match = presets.find((p: any) => p.id === styleConfig.id);
-        if (match) stylePositive = match.prompt || match.positive_prompt || "";
-    }
+    const styleNegative = styleConfig?.image_negative_prompt || "";
+    const stylePositive = styleConfig?.image_prompt || "";
 
     const ms = currentProject.model_settings;
     const defaultAspectRatio = kind === "character"
@@ -309,8 +299,6 @@ export default function CastWorkbenchModal({ isOpen, kind, entityId, onClose }: 
                 currentProject.id,
                 entity.id,
                 kind,
-                currentProject.style_preset || "realistic",
-                applyStyle ? stylePositive : "",
                 kind === "character" ? "reference_sheet" : "all",
                 prompt.trim(),
                 applyStyle,

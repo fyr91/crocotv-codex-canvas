@@ -14,11 +14,13 @@ const artDirectionSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "positive_prompt", "negative_prompt"],
+        required: ["name", "image_prompt", "image_negative_prompt", "video_prompt", "video_negative_prompt"],
         properties: {
           name: { type: "string", minLength: 1 },
-          positive_prompt: { type: "string", minLength: 1 },
-          negative_prompt: { type: "string", minLength: 1 },
+          image_prompt: { type: "string", minLength: 1 },
+          image_negative_prompt: { type: "string", minLength: 1 },
+          video_prompt: { type: "string", minLength: 1 },
+          video_negative_prompt: { type: "string", minLength: 1 },
         },
       },
     },
@@ -73,9 +75,9 @@ test("Doubao 风格分析通过强制工具调用应用 JSON Schema", { concurre
   let requestBody: any;
   const structuredResult = {
     options: [
-      { name: "风格一", positive_prompt: "正向一", negative_prompt: "负向一" },
-      { name: "风格二", positive_prompt: "正向二", negative_prompt: "负向二" },
-      { name: "风格三", positive_prompt: "正向三", negative_prompt: "负向三" },
+      { name: "风格一", image_prompt: "图像一", image_negative_prompt: "图像负向一", video_prompt: "视频一", video_negative_prompt: "视频负向一" },
+      { name: "风格二", image_prompt: "图像二", image_negative_prompt: "图像负向二", video_prompt: "视频二", video_negative_prompt: "视频负向二" },
+      { name: "风格三", image_prompt: "图像三", image_negative_prompt: "图像负向三", video_prompt: "视频三", video_negative_prompt: "视频负向三" },
     ],
   };
   process.env.CODING_PLAN_API_KEY = "test-key";

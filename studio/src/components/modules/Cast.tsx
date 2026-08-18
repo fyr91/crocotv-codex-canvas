@@ -449,8 +449,6 @@ function AddCastGenerationModal({
                     projectId,
                     entityId,
                     kind,
-                    currentProject?.style_preset || "realistic",
-                    "",
                     generationType,
                     description.trim() || name.trim(),
                     true,

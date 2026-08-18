@@ -166,8 +166,10 @@ export interface StylePreset {
     description?: string;
     best_for?: string[];
     avoid_for?: string[];
-    positive_prompt: string;
-    negative_prompt: string;
+    image_prompt: string;
+    image_negative_prompt: string;
+    video_prompt: string;
+    video_negative_prompt: string;
     sample_prompt?: string;
     thumbnail: string | null;
     object_position?: string;
@@ -177,8 +179,10 @@ export interface StyleConfig {
     id: string;
     name: string;
     description?: string;
-    positive_prompt: string;
-    negative_prompt: string;
+    image_prompt: string;
+    image_negative_prompt: string;
+    video_prompt: string;
+    video_negative_prompt: string;
     thumbnail_url?: string;
     is_custom: boolean;
     reason?: string; // For AI recommendations
@@ -272,7 +276,6 @@ export interface Project {
     createdAt: string;
     updatedAt: string;
     aspectRatio?: string;
-    style_preset?: string;
     art_direction?: ArtDirection;
     model_settings?: ModelSettings;
     prompt_config?: PromptConfig;

@@ -64,11 +64,19 @@ const videoTaskSchema = z.object({
   resource_id: boundedId.optional(),
   selected: z.boolean().optional(),
 }).passthrough();
+const styleConfigSchema = z.object({
+  id: z.string().min(1).max(180),
+  name: z.string().min(1).max(180),
+  image_prompt: z.string().max(100_000).default(""),
+  image_negative_prompt: z.string().max(100_000).default(""),
+  video_prompt: z.string().max(100_000).default(""),
+  video_negative_prompt: z.string().max(100_000).default(""),
+}).passthrough();
 const artDirectionSchema = z.object({
   selected_style_id: z.string().max(180),
-  style_config: looseRecord,
-  custom_styles: z.array(looseRecord).max(1_000),
-  ai_recommendations: z.array(looseRecord).max(1_000),
+  style_config: styleConfigSchema,
+  custom_styles: z.array(styleConfigSchema).max(1_000),
+  ai_recommendations: z.array(styleConfigSchema).max(1_000),
 }).passthrough();
 const assemblySchema = z.object({
   orderedFrameIds: z.array(boundedId).max(10_000),
@@ -139,8 +147,6 @@ export const studioProjectStateSchema = z.object({
   seriesId: boundedId.optional(),
   episodeNumber: z.number().int().positive().optional(),
   aspectRatio: z.string().max(40).optional(),
-  stylePreset: z.string().max(180).optional(),
-  stylePrompt: z.string().max(100_000).optional(),
   artDirection: artDirectionSchema.optional(),
   modelSettings: looseRecord,
   promptConfig: z.record(z.string(), z.string()),

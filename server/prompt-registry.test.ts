@@ -77,11 +77,13 @@ function artDirectionOutputSchema() {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["name", "positive_prompt", "negative_prompt"],
+          required: ["name", "image_prompt", "image_negative_prompt", "video_prompt", "video_negative_prompt"],
           properties: {
             name: { type: "string", minLength: 1 },
-            positive_prompt: { type: "string", minLength: 1 },
-            negative_prompt: { type: "string", minLength: 1 },
+            image_prompt: { type: "string", minLength: 1 },
+            image_negative_prompt: { type: "string", minLength: 1 },
+            video_prompt: { type: "string", minLength: 1 },
+            video_negative_prompt: { type: "string", minLength: 1 },
           },
         },
       },

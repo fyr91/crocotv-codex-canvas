@@ -19,14 +19,14 @@ interface CharacterWorkbenchProps {
     onUpdateDescription: (desc: string) => void;
     onGenerate: (type: string, prompt: string, applyStyle: boolean, negativePrompt: string, batchSize: number) => void;
     generatingTypes: { type: string; batchSize: number }[];
-    stylePrompt?: string;
-    styleNegativePrompt?: string;
+    imageStylePrompt?: string;
+    imageStyleNegativePrompt?: string;
     onGenerateVideo?: (prompt: string, duration: number, subType?: string) => void;
     onDeleteVideo?: (videoId: string) => void;
     isGeneratingVideo?: boolean;
 }
 
-export default function CharacterWorkbench({ asset, onClose, onUpdateDescription, onGenerate, generatingTypes = [], stylePrompt = "", styleNegativePrompt = "", onGenerateVideo, onDeleteVideo, isGeneratingVideo }: CharacterWorkbenchProps) {
+export default function CharacterWorkbench({ asset, onClose, onUpdateDescription, onGenerate, generatingTypes = [], imageStylePrompt = "", imageStyleNegativePrompt = "", onGenerateVideo, onDeleteVideo, isGeneratingVideo }: CharacterWorkbenchProps) {
     const tc = useTranslations("character");
     const [activePanel, setActivePanel] = useState<"full_body" | "three_view" | "headshot" | "video">("full_body");
     const updateProject = useProjectStore(state => state.updateProject);
@@ -461,7 +461,7 @@ export default function CharacterWorkbench({ asset, onClose, onUpdateDescription
                     </div>
 
                     {/* Art Direction Style Display (Collapsible) - Only show toggle when style exists */}
-                    {applyStyle && (stylePrompt || styleNegativePrompt) && (
+                    {applyStyle && (imageStylePrompt || imageStyleNegativePrompt) && (
                         <div className="border-t border-border-subtle">
                             <button
                                 onClick={() => setShowStyleExpanded(!showStyleExpanded)}
@@ -484,20 +484,20 @@ export default function CharacterWorkbench({ asset, onClose, onUpdateDescription
                                     >
                                         <div className="px-6 pb-4">
                                             <div className="bg-gradient-to-r from-primary/10 to-primary/10 border border-glass-border rounded-lg p-4">
-                                                {stylePrompt && (
+                                                {imageStylePrompt && (
                                                     <div className="mb-3">
-                                                        <span className="text-sm font-medium text-status-completed-fg block mb-1">{tc("stylePromptLabel")}</span>
+                                                        <span className="text-sm font-medium text-status-completed-fg block mb-1">{tc("imageStylePromptLabel")}</span>
                                                         <p className="text-sm text-text-secondary font-mono bg-surface p-2 rounded border border-border-subtle leading-relaxed">
-                                                            {stylePrompt}
+                                                            {imageStylePrompt}
                                                         </p>
                                                     </div>
                                                 )}
 
-                                                {styleNegativePrompt && (
+                                                {imageStyleNegativePrompt && (
                                                     <div>
                                                         <span className="text-sm font-medium text-status-failed-fg block mb-1">{tc("negativePromptAppliedLabel")}</span>
                                                         <p className="text-sm text-text-secondary font-mono bg-surface p-2 rounded border border-border-subtle leading-relaxed">
-                                                            {styleNegativePrompt}
+                                                            {imageStyleNegativePrompt}
                                                         </p>
                                                     </div>
                                                 )}

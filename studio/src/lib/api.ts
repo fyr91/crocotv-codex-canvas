@@ -603,12 +603,10 @@ export const api = {
         return response.json();
     },
 
-    generateAsset: async (scriptId: string, assetId: string, assetType: string, stylePreset: string, stylePrompt?: string, generationType: string = "all", prompt: string = "", applyStyle: boolean = true, negativePrompt: string = "", batchSize: number = 1, modelName?: string, aspectRatio?: string) => {
+    generateAsset: async (scriptId: string, assetId: string, assetType: string, generationType: string = "all", prompt: string = "", applyStyle: boolean = true, negativePrompt: string = "", batchSize: number = 1, modelName?: string, aspectRatio?: string) => {
         const res = await axios.post(`${API_URL}/projects/${scriptId}/assets/generate`, {
             asset_id: assetId,
             asset_type: assetType,
-            style_preset: stylePreset,
-            style_prompt: stylePrompt,
             generation_type: generationType,
             prompt: prompt,
             apply_style: applyStyle,
@@ -914,14 +912,6 @@ export const api = {
         const res = await axios.post(`${API_URL}/projects/${scriptId}/frames/update`, {
             frame_id: frameId,
             ...data
-        });
-        return res.data;
-    },
-
-    updateProjectStyle: async (scriptId: string, stylePreset: string, stylePrompt?: string) => {
-        const res = await axios.patch(`${API_URL}/projects/${scriptId}/style`, {
-            style_preset: stylePreset,
-            style_prompt: stylePrompt
         });
         return res.data;
     },

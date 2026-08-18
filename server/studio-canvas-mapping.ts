@@ -104,10 +104,10 @@ function projectGraph(projectId: string, state: StudioProjectState) {
   edges.push({ fromNodeId: scriptId, toNodeId: entityAnalysisId });
 
   const artId = stableStudioNodeId(projectId, "art-direction", projectId, "direction");
-  const artContent = state.artDirection ? JSON.stringify(state.artDirection, null, 2) : state.stylePrompt || state.stylePreset || "尚未设置艺术指导";
+  const artContent = state.artDirection ? JSON.stringify(state.artDirection, null, 2) : "尚未设置艺术指导";
   nodes.push(node(projectId, "art-direction", projectId, "direction", "text", "艺术指导", 1088, 280, 664, 360, {
     groupId: groups.art.id, artifactType: "studio-art-direction", stage: "art-direction", content: artContent,
-    selectedStyleId: state.artDirection?.selected_style_id || state.stylePreset || "", status: state.artDirection || state.stylePreset ? "success" : "idle", layoutSection: "direction", layoutOrder: 1,
+    selectedStyleId: state.artDirection?.selected_style_id || "", status: state.artDirection ? "success" : "idle", layoutSection: "direction", layoutOrder: 1,
   }));
   edges.push({ fromNodeId: scriptId, toNodeId: artId });
   const artAnalysisId = stableStudioNodeId(projectId, "art-direction", projectId, "analysis-config");
@@ -182,7 +182,7 @@ function addEntity(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNo
     }));
   }
   const configId = stableStudioNodeId(projectId, kind, entity.id, "image-config");
-  const prompt = `${stylePrefix(state)}${entity.description || entity.name}${referenceNodeId ? `\n\n参考图：@[node:${referenceNodeId}]` : ""}`;
+  const prompt = `${imageStylePrefix(state)}${entity.description || entity.name}${referenceNodeId ? `\n\n参考图：@[node:${referenceNodeId}]` : ""}`;
   nodes.push(node(projectId, kind, entity.id, "image-config", "config", `${entity.name} · 形象生成`, referenceNodeId ? 2312 : 1968, y + 280, 320, 390, imageConfigMetadata(groupId, prompt, kind, y + 1, undefined, state)));
   edges.push({ fromNodeId: entityId, toNodeId: configId });
   if (referenceNodeId) edges.push({ fromNodeId: referenceNodeId, toNodeId: configId });
@@ -213,7 +213,7 @@ function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNod
   }));
   edges.push({ fromNodeId: artId, toNodeId: promptId });
   const imageConfigId = stableStudioNodeId(projectId, "frame", frame.id, "image-config");
-  nodes.push(node(projectId, "frame", frame.id, "image-config", "config", `${frame.title} · 首帧`, 2848, y + 300, 340, 390, imageConfigMetadata(groupId, `${stylePrefix(state)}${frame.prompt}`, "frame", frame.order * 10 + 1, frame.id, state)));
+  nodes.push(node(projectId, "frame", frame.id, "image-config", "config", `${frame.title} · 首帧`, 2848, y + 300, 340, 390, imageConfigMetadata(groupId, `${imageStylePrefix(state)}${frame.prompt}`, "frame", frame.order * 10 + 1, frame.id, state)));
   edges.push({ fromNodeId: promptId, toNodeId: imageConfigId });
   const visualContextConfigId = stableStudioNodeId(projectId, "frame", frame.id, "visual-context-config");
   nodes.push(node(projectId, "frame", frame.id, "visual-context-config", "config", `${frame.title} · 视觉上下文`, 3744, y, 340, 390, {
@@ -244,7 +244,7 @@ function addFrame(nodes: DesiredNode[], edges: Array<{ fromNodeId: string; toNod
   }
   const videoConfigId = stableStudioNodeId(projectId, "frame", frame.id, "video-config");
   nodes.push(node(projectId, "frame", frame.id, "video-config", "config", `${frame.title} · 视频`, 2848, y + 730, 340, 390, {
-    ...managed(projectId, "frame", frame.id, "video-config"), groupId, artifactType: "studio-video-config", stage: "storyboard", generationMode: "video", model: "minimax-h3", composerContent: frame.prompt,
+    ...managed(projectId, "frame", frame.id, "video-config"), groupId, artifactType: "studio-video-config", stage: "storyboard", generationMode: "video", model: "minimax-h3", composerContent: joinPromptParts(frame.prompt, videoStylePrompt(state)), negativePrompt: videoStyleNegativePrompt(state),
     seconds: Number(frame.duration) || 6, videoCount: 1, status: "idle", shotId: frame.id, layoutSection: "video", layoutOrder: frame.order * 10 + 3,
   }));
   edges.push({ fromNodeId: promptId, toNodeId: videoConfigId });
@@ -301,7 +301,7 @@ function imageConfigMetadata(groupId: string, prompt: string, section: string, o
   const settingKey = section === "character" ? "t2i_model" : section === "scene" ? "t2i_model" : section === "prop" ? "t2i_model" : "image_model";
   const requestedModel = String(state.modelSettings[settingKey] || state.modelSettings.image_model || models.image[0]);
   const model = models.image.includes(requestedModel) ? requestedModel : models.image[0];
-  return { groupId, artifactType: "studio-image-config", stage: section === "frame" ? "storyboard" : "cast", generationMode: "image", model, requestedModel, composerContent: prompt, count: 1, size: "1024x1024", status: "idle", ...(shotId ? { shotId } : {}), layoutSection: "image", layoutOrder: order };
+  return { groupId, artifactType: "studio-image-config", stage: section === "frame" ? "storyboard" : "cast", generationMode: "image", model, requestedModel, composerContent: prompt, negativePrompt: imageStyleNegativePrompt(state), count: 1, size: "1024x1024", status: "idle", ...(shotId ? { shotId } : {}), layoutSection: "image", layoutOrder: order };
 }
 
 function resourceMetadata(resourceId: string, url: string, groupId: string, section: string, order: number, shotId?: string) {
@@ -316,7 +316,11 @@ function selectedFrameTask(state: StudioProjectState, frameId: string): StudioVi
   const frame = state.frames.find((item) => item.id === frameId);
   return state.videoTasks.find((task) => task.id === frame?.selected_video_id || task.id === frame?.selectedTakeId) || state.videoTasks.filter((task) => task.frame_id === frameId && task.resource_id).at(-1);
 }
-function stylePrefix(state: StudioProjectState) { return state.stylePrompt ? `${state.stylePrompt}\n` : state.artDirection?.style_config?.positive_prompt ? `${state.artDirection.style_config.positive_prompt}\n` : ""; }
+function imageStylePrefix(state: StudioProjectState) { const prompt = String(state.artDirection?.style_config?.image_prompt || "").trim(); return prompt ? `${prompt}\n\n` : ""; }
+function imageStyleNegativePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.image_negative_prompt || "").trim(); }
+function videoStylePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.video_prompt || "").trim(); }
+function videoStyleNegativePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.video_negative_prompt || "").trim(); }
+function joinPromptParts(...parts: unknown[]) { return parts.map((part) => String(part || "").trim()).filter(Boolean).join("\n\n"); }
 function entityExtractionPrompt(state: StudioProjectState) {
   return JSON.stringify({ operation: "entity_extraction", script: state.originalText }, null, 2);
 }
@@ -324,7 +328,7 @@ function artDirectionPrompt(state: StudioProjectState) {
   return JSON.stringify({ operation: "style_analysis", script: state.originalText }, null, 2);
 }
 function storyboardPrompt(state: StudioProjectState) {
-  return JSON.stringify({ operation: "storyboard_extraction", artDirection: state.artDirection || state.stylePrompt || state.stylePreset || null, script: state.originalText }, null, 2);
+  return JSON.stringify({ operation: "storyboard_extraction", artDirection: state.artDirection || null, script: state.originalText }, null, 2);
 }
 function frameDialogue(frame: StudioStoryboardFrame) {
   if (typeof frame.dialogue === "string") return frame.dialogue;

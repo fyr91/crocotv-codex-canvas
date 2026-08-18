@@ -156,9 +156,9 @@ export async function analyzeStudioArtDirection(projectId: string, text: string,
 export async function saveStudioArtDirection(projectId: string, raw: any, originClientId: string) {
   return mutateStudioProject(projectId, (state) => ({ ...state, artDirection: {
     selected_style_id: String(raw?.selected_style_id || "custom"),
-    style_config: objectValue(raw?.style_config),
-    custom_styles: arrayRecords(raw?.custom_styles),
-    ai_recommendations: arrayRecords(raw?.ai_recommendations),
+    style_config: normalizeStyle(raw?.style_config, 0),
+    custom_styles: arrayRecords(raw?.custom_styles).map((style, index) => normalizeStyle(style, index)),
+    ai_recommendations: arrayRecords(raw?.ai_recommendations).map((style, index) => normalizeStyle(style, index)),
   } }), { originClientId });
 }
 
@@ -222,7 +222,9 @@ async function prepareStudioAssetGeneration(projectId: string, raw: any, originC
   const entityId = requiredId(raw?.asset_id, "资产 ID");
   const initial = await getStudioBackedProject(projectId);
   const sourceEntity = requiredEntity(initial.studio[entityCollection(kind)], entityId);
-  const resolvedPrompt = String(raw?.prompt || raw?.style_prompt || sourceEntity.description || sourceEntity.name);
+  const basePrompt = String(raw?.prompt || sourceEntity.description || sourceEntity.name);
+  const resolvedPrompt = raw?.apply_style === false ? basePrompt : joinPromptParts(imageStylePrompt(initial.studio), basePrompt);
+  const negativePrompt = joinPromptParts(raw?.apply_style === false ? "" : imageStyleNegativePrompt(initial.studio), raw?.negative_prompt);
   const referenceResourceId = String(sourceEntity.reference_image_resource_id || "").trim();
   const referenceNodeId = referenceResourceId ? stableStudioNodeId(projectId, kind, entityId, "image-reference") : "";
   const composerContent = referenceNodeId ? `${resolvedPrompt}\n\n参考图：@[node:${referenceNodeId}]` : resolvedPrompt;
@@ -239,6 +241,7 @@ async function prepareStudioAssetGeneration(projectId: string, raw: any, originC
   try {
     await configureNode(projectId, configId, {
       composerContent,
+      negativePrompt,
       model: resolveImageModel(raw?.model_name), count,
       size: aspectSize(String(raw?.aspect_ratio || "1:1")),
     }, originClientId);
@@ -279,7 +282,7 @@ export async function analyzeStudioStoryboard(projectId: string, text: string, o
     characters: entityContext(project.studio.characters),
     scenes: entityContext(project.studio.scenes),
     props: entityContext(project.studio.props),
-    art_direction: project.studio.artDirection || project.studio.stylePrompt || project.studio.stylePreset || null,
+    art_direction: project.studio.artDirection || null,
   }, null, 2);
   const parsed = await runStudioPromptJson({ projectId, configId, operation: "storyboard_extraction", draftPrompt: promptInput, originClientId });
   const frames = mergeStoryboardFrames(project.studio.frames, parsed.frames || parsed.shots);
@@ -349,15 +352,20 @@ export async function reorderStudioFrames(projectId: string, frameIds: string[],
 
 export async function renderStudioFrame(projectId: string, raw: any, originClientId: string) {
   const frameId = requiredId(raw?.frame_id, "镜头 ID");
+  const initial = await getStudioBackedProject(projectId);
+  const sourceFrame = requiredFrame(initial.studio, frameId);
+  const basePrompt = String(raw?.prompt || sourceFrame.prompt);
+  const resolvedPrompt = raw?.apply_style === false ? basePrompt : joinPromptParts(imageStylePrompt(initial.studio), basePrompt);
+  const negativePrompt = joinPromptParts(raw?.apply_style === false ? "" : imageStyleNegativePrompt(initial.studio), raw?.negative_prompt);
   const count = boundedCount(raw?.batch_size);
-  const variants: StudioImageVariant[] = Array.from({ length: count }, () => ({ id: randomUUID(), url: "", created_at: Date.now() / 1000, prompt_used: String(raw?.prompt || "") }));
+  const variants: StudioImageVariant[] = Array.from({ length: count }, () => ({ id: randomUUID(), url: "", created_at: Date.now() / 1000, prompt_used: resolvedPrompt }));
   await mutateStudioProject(projectId, (state) => {
     const frame = requiredFrame(state, frameId);
-    return { ...state, frames: state.frames.map((item) => item.id === frameId ? { ...item, prompt: String(raw?.prompt || frame.prompt), status: "generating", image_asset: { selected_id: variants[0].id, variants: [...(frame.image_asset?.variants || []), ...variants] } } : item) };
+    return { ...state, frames: state.frames.map((item) => item.id === frameId ? { ...item, prompt: basePrompt, status: "generating", image_asset: { selected_id: variants[0].id, variants: [...(frame.image_asset?.variants || []), ...variants] } } : item) };
   }, { originClientId });
   const configId = stableStudioNodeId(projectId, "frame", frameId, "image-config");
   const outputIds = variants.map((variant) => stableStudioNodeId(projectId, "frame", frameId, `image-output-${variant.id}`));
-  await configureNode(projectId, configId, { composerContent: String(raw?.prompt || ""), count }, originClientId);
+  await configureNode(projectId, configId, { composerContent: resolvedPrompt, negativePrompt, count }, originClientId);
   try { await runTargets(projectId, configId, outputIds, originClientId); }
   catch (error) { await patchStudioFrame(projectId, frameId, { status: "failed" }, originClientId).catch(() => undefined); throw error; }
   const results = await outputResources(projectId, outputIds);
@@ -394,12 +402,14 @@ async function prepareStudioVideoTasks(projectId: string, raw: any, originClient
   const frameId = requiredId(raw?.frame_id, "镜头 ID");
   const initial = await getStudioBackedProject(projectId);
   const sourceFrame = requiredFrame(initial.studio, frameId);
-  const resolvedPrompt = String(raw?.prompt || sourceFrame.prompt);
+  const basePrompt = String(raw?.prompt || sourceFrame.prompt);
+  const resolvedPrompt = raw?.apply_style === false ? basePrompt : joinPromptParts(basePrompt, videoStylePrompt(initial.studio));
+  const negativePrompt = joinPromptParts(raw?.apply_style === false ? "" : videoStyleNegativePrompt(initial.studio), raw?.negative_prompt);
   const generationMode = String(raw?.generation_mode || "i2v").toLowerCase();
   const videoInputs = await resolveStudioVideoInputs(sourceFrame, raw, generationMode);
   const count = boundedCount(raw?.batch_size);
   const tasks: StudioVideoTask[] = Array.from({ length: count }, () => ({
-    id: randomUUID(), project_id: projectId, frame_id: frameId, image_url: String(raw?.image_url || sourceFrame.image_url || ""), prompt: resolvedPrompt, status: "processing", created_at: Date.now() / 1000,
+    id: randomUUID(), project_id: projectId, frame_id: frameId, image_url: String(raw?.image_url || sourceFrame.image_url || ""), prompt: resolvedPrompt, negative_prompt: negativePrompt, status: "processing", created_at: Date.now() / 1000,
     duration: Number(raw?.duration) || 6, model: String(raw?.model || "minimax-h3"), generation_mode: generationMode, workbench_tab: raw?.workbench_tab,
     reference_resource_ids: videoInputs.map((input) => input.resourceId),
     ...(generationJobId ? { generation_job_id: generationJobId } : {}),
@@ -408,7 +418,7 @@ async function prepareStudioVideoTasks(projectId: string, raw: any, originClient
   const configId = stableStudioNodeId(projectId, "frame", frameId, "video-config");
   const outputIds = tasks.map((task) => stableStudioNodeId(projectId, "take", task.id, "video-output"));
   try {
-    await configureStudioVideoNode(projectId, configId, frameId, resolvedPrompt, generationMode, videoInputs, { seconds: Number(raw?.duration) || 6, videoCount: count, vquality: String(raw?.resolution || "preview"), videoPromptEnhance: raw?.prompt_extend === false ? "false" : "true" }, originClientId);
+    await configureStudioVideoNode(projectId, configId, frameId, resolvedPrompt, generationMode, videoInputs, { negativePrompt, seconds: Number(raw?.duration) || 6, videoCount: count, vquality: String(raw?.resolution || "preview"), videoPromptEnhance: raw?.prompt_extend === false ? "false" : "true" }, originClientId);
   } catch (error) {
     await mutateStudioProject(projectId, (state) => ({ ...state, videoTasks: state.videoTasks.map((task) => tasks.some((created) => created.id === task.id) ? { ...task, status: "failed", error: error instanceof Error ? error.message : "生成任务准备失败" } : task) }), { originClientId }).catch(() => undefined);
     throw error;
@@ -498,6 +508,9 @@ async function prepareStudioAssetVideo(projectId: string, raw: any, originClient
   const entityId = requiredId(raw?.asset_id, "资产 ID");
   const initial = await getStudioBackedProject(projectId);
   const entity = requiredEntity(initial.studio[entityCollection(kind)], entityId);
+  const basePrompt = String(raw?.prompt || entity.description || entity.name);
+  const resolvedPrompt = raw?.apply_style === false ? basePrompt : joinPromptParts(basePrompt, videoStylePrompt(initial.studio));
+  const negativePrompt = joinPromptParts(raw?.apply_style === false ? "" : videoStyleNegativePrompt(initial.studio), raw?.negative_prompt);
   const selectedVariant = entity.image_asset?.variants.find((variant) => variant.id === entity.image_asset?.selected_id)
     || entity.image_asset?.variants.find((variant) => variant.resource_id)
     || entity.image_asset?.variants.at(-1);
@@ -509,7 +522,7 @@ async function prepareStudioAssetVideo(projectId: string, raw: any, originClient
   if (!imageNodeId) throw new Error("资产尚无可用于视频生成的本地图片");
   const task: StudioVideoTask = {
     id: requestedTaskId || randomUUID(), project_id: projectId, asset_id: entityId, asset_type: kind,
-    status: "processing", prompt: String(raw?.prompt || entity.description || entity.name), image_url: String(selectedVariant?.url || entity.image_url || ""),
+    status: "processing", prompt: resolvedPrompt, negative_prompt: negativePrompt, image_url: String(selectedVariant?.url || entity.image_url || ""),
     created_at: Date.now() / 1000, duration: Number(raw?.duration) || 5, model: "minimax-h3", generation_mode: "i2v",
     ...(generationJobId ? { generation_job_id: generationJobId } : {}),
   };
@@ -524,7 +537,7 @@ async function prepareStudioAssetVideo(projectId: string, raw: any, originClient
   let created: Awaited<ReturnType<typeof applyCanvasOperations>>;
   try {
     created = await applyCanvasOperations(projectId, avoidStudioNodeOverlaps(project.nodes, [
-      { op: "add_node", node: { id: configId, type: "config", title: `${entity.name} · 动态参考`, position: { x: Number(sourceNode.position?.x || 2300) + 420, y: Number(sourceNode.position?.y || 280) }, width: 360, height: 390, metadata: { generationMode: "video", model: "minimax-h3", composerContent: task.prompt, seconds: task.duration, videoCount: 1, vquality: String(raw?.resolution || "preview"), artifactType: "studio-asset-video-config", studioAssetId: entityId, studioAssetType: kind, status: "idle" } } },
+      { op: "add_node", node: { id: configId, type: "config", title: `${entity.name} · 动态参考`, position: { x: Number(sourceNode.position?.x || 2300) + 420, y: Number(sourceNode.position?.y || 280) }, width: 360, height: 390, metadata: { generationMode: "video", model: "minimax-h3", composerContent: task.prompt, negativePrompt, seconds: task.duration, videoCount: 1, vquality: String(raw?.resolution || "preview"), artifactType: "studio-asset-video-config", studioAssetId: entityId, studioAssetType: kind, status: "idle" } } },
       { op: "connect", from: imageNodeId, to: configId },
     ]), Number(project.version), { allowStudioManagedWrites: true });
   } catch (error) {
@@ -848,7 +861,12 @@ function mergeStoryboardFrames(existing: StudioStoryboardFrame[], generated: unk
     return current ? { ...current, ...frame, id: current.id, order } : { ...frame, order };
   });
 }
-function normalizeStyle(value: any, index: number) { return { ...objectValue(value), id: safeId(value?.id || `recommendation-${index + 1}`), name: String(value?.name || `风格 ${index + 1}`), description: String(value?.description || ""), positive_prompt: String(value?.positive_prompt || ""), negative_prompt: String(value?.negative_prompt || "") }; }
+function normalizeStyle(value: any, index: number) { return { ...objectValue(value), id: safeId(value?.id || `recommendation-${index + 1}`), name: String(value?.name || `风格 ${index + 1}`), description: String(value?.description || ""), image_prompt: String(value?.image_prompt || ""), image_negative_prompt: String(value?.image_negative_prompt || ""), video_prompt: String(value?.video_prompt || ""), video_negative_prompt: String(value?.video_negative_prompt || "") }; }
+function imageStylePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.image_prompt || "").trim(); }
+function imageStyleNegativePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.image_negative_prompt || "").trim(); }
+function videoStylePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.video_prompt || "").trim(); }
+function videoStyleNegativePrompt(state: StudioProjectState) { return String(state.artDirection?.style_config?.video_negative_prompt || "").trim(); }
+function joinPromptParts(...parts: unknown[]) { return parts.map((part) => String(part || "").trim()).filter(Boolean).join("\n\n"); }
 function normalizeEntityKind(value: unknown): EntityKind { const text = String(value || "").toLowerCase().replace(/s$/, ""); if (text === "character" || text === "scene" || text === "prop") return text; throw new Error(`不支持的资产类型：${value}`); }
 function entityCollection(kind: EntityKind): "characters" | "scenes" | "props" { return kind === "character" ? "characters" : kind === "scene" ? "scenes" : "props"; }
 function requiredEntity(items: StudioNamedEntity[], id: string) { const item = items.find((entry) => entry.id === id); if (!item) throw new Error(`资产不存在：${id}`); return item; }

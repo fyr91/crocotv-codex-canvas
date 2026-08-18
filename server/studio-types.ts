@@ -76,9 +76,18 @@ export type StudioStoryboardFrame = Record<string, unknown> & {
 
 export type StudioArtDirection = Record<string, unknown> & {
   selected_style_id: string;
-  style_config: Record<string, unknown>;
-  custom_styles: Array<Record<string, unknown>>;
-  ai_recommendations: Array<Record<string, unknown>>;
+  style_config: StudioStyleConfig;
+  custom_styles: StudioStyleConfig[];
+  ai_recommendations: StudioStyleConfig[];
+};
+
+export type StudioStyleConfig = Record<string, unknown> & {
+  id: string;
+  name: string;
+  image_prompt: string;
+  image_negative_prompt: string;
+  video_prompt: string;
+  video_negative_prompt: string;
 };
 
 export type StudioDocumentState = {
@@ -158,8 +167,6 @@ export type StudioProjectState = {
   seriesId?: string;
   episodeNumber?: number;
   aspectRatio?: string;
-  stylePreset?: string;
-  stylePrompt?: string;
   artDirection?: StudioArtDirection;
   modelSettings: Record<string, unknown>;
   promptConfig: Record<string, string>;

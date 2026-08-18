@@ -28,12 +28,23 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 
 
 const STYLE_PRESETS = {
   categories: [
-    { id: "cinematic", name: "Cinematic", name_zh: "电影感", sort_order: 1 },
-    { id: "animation", name: "Animation", name_zh: "动画", sort_order: 2 },
+    { id: "animation", name: "Animation", name_zh: "动画", sort_order: 1 },
   ],
   presets: [
-    { id: "cinematic-realism", category: "cinematic", name: "Cinematic Realism", name_zh: "电影写实", positive_prompt: "cinematic realism, natural light, production design, film color grading", negative_prompt: "plastic skin, flat lighting, text, watermark", thumbnail: null },
-    { id: "stylized-animation", category: "animation", name: "Stylized Animation", name_zh: "风格动画", positive_prompt: "stylized animation, expressive shapes, cohesive palette, cinematic composition", negative_prompt: "photorealistic, noisy details, text, watermark", thumbnail: null },
+    {
+      id: "flying-house-whimsy",
+      category: "animation",
+      name: "Up-Inspired Animated Adventure",
+      name_zh: "飞屋奇想",
+      subtitle_zh: "温暖饱和、夸张造型与绘本质感的电影级三维冒险动画",
+      description: "以简洁几何造型承载丰富表面细节，用温暖高饱和色彩、柔和绘画质感和富有情绪的电影光影呈现奇想冒险。",
+      image_prompt: "Pixar \"Up\" art style, \"simplexity\" design philosophy — simple geometric shapes with rich surface detail. Caricatured character proportions: square/angular forms for rigidity, round/soft forms for warmth. Painterly texture with smooth edges and softly blurred backgrounds. Warm saturated palette: golden amber, burnt orange, lush tropical green, sky blue; desaturated sepia-gray for melancholy passages. Stylized yet believable environments inspired by Venezuelan tepui plateaus and Angel Falls. Exaggerated cloth simulation, simplified facial features (no nostrils, minimal pores), expressive oversized eyes. Vibrant color saturation correlated with emotional tone — vivid for hope and adventure, muted for grief. Whimsical, storybook quality with hand-painted atmospheric depth.",
+      image_negative_prompt: "",
+      video_prompt: "Pixar \"Up\" cinematography style. Slow lateral drifts and gentle push-ins for emotional montages, conveying the steady passage of time. Theatrical, character-centric lighting: warm golden key light filtering through windows, deep rim shadows isolating subjects, soft diffused fill. Volumetric cloud rendering with painted-cloud compositing. Dynamic balloon-physics camera movement — buoyant, weightless ascending motion contrasted with grounded static frames. Newsreel prologue with 16mm optical film grain and warm vignette for nostalgic authenticity. Immersive 3D depth staging: layered parallax between foreground props, mid-ground characters, and atmospheric backgrounds. Color grading shifts from desaturated monochrome to full saturated spectrum to mirror emotional arc. Deliberate, unhitched pacing in quiet moments; kinetic wide-angle action in adventure sequences.",
+      video_negative_prompt: "",
+      thumbnail: "/assets/styles/flying-house-whimsy.jpg",
+      object_position: "center",
+    },
   ],
 };
 studioApiRouter.get("/health", route(async (_request, response) => response.json({ ok: true, time: Date.now() / 1000, log_file: "data/runtime/server.log", log_dir: "data/runtime", studio_projects: (await listStudioProjectResponses({ kind: "episode" })).length })));
@@ -205,7 +216,6 @@ studioApiRouter.get("/projects/:id/prompt-executions", projectRoute(async (reque
 
 studioApiRouter.post("/video/polish_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), String(request.body?.draft_prompt || ""), clientId(request), promptRuntimeOptions(request.body, "video_polish")))));
 studioApiRouter.post("/video/polish_r2v_prompt", route(async (request, response) => response.json(await polishStudioText(requiredId(request.body?.script_id), String(request.body?.draft_prompt || ""), clientId(request), promptRuntimeOptions(request.body, "r2v_polish")))));
-studioApiRouter.patch("/projects/:id/style", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, stylePreset: String(request.body?.style_preset || ""), stylePrompt: String(request.body?.style_prompt || "") }), { originClientId: clientId(request) }))));
 studioApiRouter.post("/projects/:id/model_settings", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, modelSettings: { ...state.modelSettings, ...objectValue(request.body) } }), { originClientId: clientId(request) }))));
 studioApiRouter.get("/projects/:id/prompt_config", projectRoute(async (_request, response, id) => response.json((await getStudioBackedProject(id)).studio.promptConfig)));
 studioApiRouter.put("/projects/:id/prompt_config", projectRoute(async (request, response, id) => response.json(await mutateStudioProject(id, (state) => ({ ...state, promptConfig: { ...state.promptConfig, ...stringRecord(request.body) } }), { originClientId: clientId(request) }))));

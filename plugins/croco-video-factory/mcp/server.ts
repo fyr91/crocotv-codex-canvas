@@ -84,6 +84,26 @@ const studioEntitySchema = z.object({
   referenceImageResourceId: z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
   attributes: z.record(z.string(), z.unknown()).optional(),
 });
+const studioStyleConfigSchema = z.object({
+  id: z.string().min(1).max(180),
+  name: z.string().min(1).max(180),
+  description: z.string().max(10_000).optional(),
+  imagePrompt: z.string().max(100_000),
+  imageNegativePrompt: z.string().max(100_000).default(""),
+  videoPrompt: z.string().max(100_000),
+  videoNegativePrompt: z.string().max(100_000).default(""),
+});
+function studioStyleConfigBody(style: z.infer<typeof studioStyleConfigSchema>) {
+  return {
+    id: style.id,
+    name: style.name,
+    description: style.description || "",
+    image_prompt: style.imagePrompt,
+    image_negative_prompt: style.imageNegativePrompt,
+    video_prompt: style.videoPrompt,
+    video_negative_prompt: style.videoNegativePrompt,
+  };
+}
 const studioFrameSchema = z.object({
   id: z.string().min(1).max(80).optional(),
   title: z.string().min(1).max(180).optional(),
@@ -301,16 +321,16 @@ server.registerTool("studio_set_script_document", {
 })));
 
 server.registerTool("studio_set_art_direction", {
-  description: "Atomically save the selected Studio Art Direction and update its managed Canvas projection. The style remains structured Studio state, not free-form Canvas metadata.",
+  description: "Atomically save one Studio visual style with distinct image and video prompt routes. Image generation receives imagePrompt; video generation composes each shot prompt with videoPrompt. The structured style also updates the managed Canvas projection.",
   inputSchema: {
     projectId: z.string().uuid(),
     selectedStyleId: z.string().min(1).max(180),
-    styleConfig: z.record(z.string(), z.unknown()),
-    customStyles: z.array(z.record(z.string(), z.unknown())).max(100).default([]),
-    recommendations: z.array(z.record(z.string(), z.unknown())).max(100).default([]),
+    styleConfig: studioStyleConfigSchema,
+    customStyles: z.array(studioStyleConfigSchema).max(100).default([]),
+    recommendations: z.array(studioStyleConfigSchema).max(100).default([]),
   },
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-}, async ({ projectId, selectedStyleId, styleConfig, customStyles, recommendations }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/art_direction/save`, { method: "POST", body: { selected_style_id: selectedStyleId, style_config: styleConfig, custom_styles: customStyles, ai_recommendations: recommendations } })));
+}, async ({ projectId, selectedStyleId, styleConfig, customStyles, recommendations }) => toolResult(await api(`/api/studio/projects/${encodeURIComponent(projectId)}/art_direction/save`, { method: "POST", body: { selected_style_id: selectedStyleId, style_config: studioStyleConfigBody(styleConfig), custom_styles: customStyles.map(studioStyleConfigBody), ai_recommendations: recommendations.map(studioStyleConfigBody) } })));
 
 server.registerTool("studio_upsert_asset", {
   description: "Create or structurally update one Studio character, scene, or prop. An optional local referenceImageResourceId becomes an image input for subsequent generation; omitting it keeps normal text-only generation. Its deterministic managed Canvas nodes and stage connections are updated atomically.",

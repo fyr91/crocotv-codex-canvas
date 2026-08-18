@@ -237,15 +237,31 @@ function ArtDirectionStyleDisplay({ project }: { project: any }) {
                     <div>
                         <label className="text-sm font-medium text-text-muted uppercase mb-1.5 block">{tp("positivePrompt")}</label>
                         <div className="bg-surface border border-border-subtle rounded-lg p-2.5 text-sm text-text-secondary leading-relaxed max-h-20 overflow-y-auto">
-                            {artDirectionStyle.positive_prompt || tp('noPositivePrompt')}
+                            {artDirectionStyle.image_prompt || tp('noPositivePrompt')}
                         </div>
                     </div>
 
-                    {artDirectionStyle.negative_prompt && (
+                    {artDirectionStyle.image_negative_prompt && (
                         <div>
                             <label className="text-sm font-medium text-text-muted uppercase mb-1.5 block">{tp("negativePromptLabel")}</label>
                             <div className="bg-surface border border-border-subtle rounded-lg p-2.5 text-sm text-text-secondary leading-relaxed max-h-16 overflow-y-auto">
-                                {artDirectionStyle.negative_prompt}
+                                {artDirectionStyle.image_negative_prompt}
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="text-sm font-medium text-text-muted uppercase mb-1.5 block">{tp("videoPromptLabel")}</label>
+                        <div className="bg-surface border border-border-subtle rounded-lg p-2.5 text-sm text-text-secondary leading-relaxed max-h-20 overflow-y-auto">
+                            {artDirectionStyle.video_prompt || tp("noVideoPrompt")}
+                        </div>
+                    </div>
+
+                    {artDirectionStyle.video_negative_prompt && (
+                        <div>
+                            <label className="text-sm font-medium text-text-muted uppercase mb-1.5 block">{tp("videoNegativePromptLabel")}</label>
+                            <div className="bg-surface border border-border-subtle rounded-lg p-2.5 text-sm text-text-secondary leading-relaxed max-h-16 overflow-y-auto">
+                                {artDirectionStyle.video_negative_prompt}
                             </div>
                         </div>
                     )}

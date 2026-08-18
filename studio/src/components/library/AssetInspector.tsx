@@ -388,8 +388,6 @@ export default function AssetInspector({
         projectId,
         assetId,
         SINGULAR_TYPE[type],
-        "",
-        undefined,
         "all",
         "",
         true,

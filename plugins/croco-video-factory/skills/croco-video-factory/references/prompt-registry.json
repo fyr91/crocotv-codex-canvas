@@ -55,11 +55,11 @@
     },
     {
       "templateKey": "croco.p3.art-direction-options",
-      "templateVersion": "1.0.0",
+      "templateVersion": "2.0.0",
       "title": "艺术方向选项",
       "stage": "P3",
       "sourceFile": "P3-艺术方向选项-System-Prompt.md",
-      "contentSha256": "aff5ee13e9b4f73ddefd8bfcf9874371f2d2e046ccf82fe362c76e05c084995d",
+      "contentSha256": "f6f25018351e257b235b0d1b5fde09c5f6ae07d9c8bec7405301c86dcf2e97fe",
       "modelPolicy": { "defaultModel": "doubao-seed-2.1-turbo", "modelFamily": "coding_plan", "allowOverride": false },
       "inputModes": ["text", "structured"],
       "inputSchema": { "type": "object", "required": ["lockedContent"], "properties": { "lockedContent": { "type": "string" }, "existingResources": { "type": "array" }, "visualConstraints": { "type": "object" } } },
@@ -75,11 +75,13 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["name", "positive_prompt", "negative_prompt"],
+              "required": ["name", "image_prompt", "image_negative_prompt", "video_prompt", "video_negative_prompt"],
               "properties": {
                 "name": { "type": "string", "minLength": 1 },
-                "positive_prompt": { "type": "string", "minLength": 1 },
-                "negative_prompt": { "type": "string", "minLength": 1 }
+                "image_prompt": { "type": "string", "minLength": 1 },
+                "image_negative_prompt": { "type": "string", "minLength": 1 },
+                "video_prompt": { "type": "string", "minLength": 1 },
+                "video_negative_prompt": { "type": "string", "minLength": 1 }
               }
             }
           }

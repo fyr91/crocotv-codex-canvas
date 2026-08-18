@@ -80,8 +80,6 @@ export default function ConsistencyVault() {
         }
 
         try {
-            const stylePrompt = currentProject?.art_direction?.style_config?.positive_prompt || "";
-
             console.log("[handleGenerate] Starting asset generation...");
 
             // Call API - now returns immediately with task_id
@@ -89,8 +87,6 @@ export default function ConsistencyVault() {
                 currentProject.id,
                 assetId,
                 type,
-                "ArtDirection",
-                stylePrompt,
                 generationType,
                 prompt,
                 applyStyle,
@@ -477,8 +473,8 @@ export default function ConsistencyVault() {
                             onUpdateDescription={(desc: string) => handleUpdateDescription(selectedAssetId, selectedAssetType, desc)}
                             onGenerate={(type: string, prompt: string, applyStyle: boolean, negativePrompt: string, batchSize: number) => handleGenerate(selectedAssetId, selectedAssetType, type, prompt, applyStyle, negativePrompt, batchSize)}
                             generatingTypes={getAssetGeneratingTypes(selectedAssetId)}
-                            stylePrompt={currentProject?.art_direction?.style_config?.positive_prompt || ""}
-                            styleNegativePrompt={currentProject?.art_direction?.style_config?.negative_prompt || ""}
+                            imageStylePrompt={currentProject?.art_direction?.style_config?.image_prompt || ""}
+                            imageStyleNegativePrompt={currentProject?.art_direction?.style_config?.image_negative_prompt || ""}
                             onGenerateVideo={(prompt: string, duration: number, subType?: string) => handleGenerateVideo(selectedAssetId, selectedAssetType, prompt, duration, subType || "video")}
                             onDeleteVideo={(videoId: string) => handleDeleteVideo(selectedAssetId, selectedAssetType, videoId)}
                         />
@@ -493,8 +489,8 @@ export default function ConsistencyVault() {
                             onUpdateDescription={(desc: string) => handleUpdateDescription(selectedAssetId, selectedAssetType, desc)}
                             onGenerate={(applyStyle: boolean, negativePrompt: string, batchSize: number) => handleGenerate(selectedAssetId, selectedAssetType, "all", "", applyStyle, negativePrompt, batchSize)}
                             isGenerating={isAssetGenerating(selectedAssetId)}
-                            stylePrompt={currentProject?.art_direction?.style_config?.positive_prompt || ""}
-                            styleNegativePrompt={currentProject?.art_direction?.style_config?.negative_prompt || ""}
+                            imageStylePrompt={currentProject?.art_direction?.style_config?.image_prompt || ""}
+                            imageStyleNegativePrompt={currentProject?.art_direction?.style_config?.image_negative_prompt || ""}
                             onGenerateVideo={(prompt: string, duration: number) => handleGenerateVideo(selectedAssetId, selectedAssetType, prompt, duration, "video")}
                             onDeleteVideo={(videoId: string) => handleDeleteVideo(selectedAssetId, selectedAssetType, videoId)}
                             isGeneratingVideo={getAssetGeneratingTypes(selectedAssetId).some((t: any) => t.type.startsWith("video"))}
@@ -536,7 +532,7 @@ export default function ConsistencyVault() {
     );
 }
 
-function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGenerate, isGenerating, stylePrompt = "", styleNegativePrompt = "", onGenerateVideo, onDeleteVideo, isGeneratingVideo }: any) {
+function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGenerate, isGenerating, imageStylePrompt = "", imageStyleNegativePrompt = "", onGenerateVideo, onDeleteVideo, isGeneratingVideo }: any) {
     const tv = useTranslations("vault");
     const [description, setDescription] = useState(asset.description);
     const [isEditing, setIsEditing] = useState(false);
@@ -545,7 +541,7 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
 
     // Style Controls
     const [applyStyle, setApplyStyle] = useState(true);
-    const [negativePrompt, setNegativePrompt] = useState(styleNegativePrompt || "low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry");
+    const [negativePrompt, setNegativePrompt] = useState(imageStyleNegativePrompt || "low quality, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry");
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     // Video Controls
@@ -563,10 +559,10 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
 
     // Sync negative prompt if style changes
     useEffect(() => {
-        if (styleNegativePrompt && (!negativePrompt || negativePrompt.includes("low quality"))) {
-            setNegativePrompt(styleNegativePrompt);
+        if (imageStyleNegativePrompt && (!negativePrompt || negativePrompt.includes("low quality"))) {
+            setNegativePrompt(imageStyleNegativePrompt);
         }
-    }, [styleNegativePrompt]);
+    }, [imageStyleNegativePrompt]);
 
     const handleSave = () => {
         onUpdateDescription(description);
@@ -720,9 +716,9 @@ function CharacterDetailModal({ asset, type, onClose, onUpdateDescription, onGen
                                         </label>
                                     </div>
 
-                                    {stylePrompt && (
+                                    {imageStylePrompt && (
                                         <div className="text-sm text-text-muted font-mono bg-surface p-2 rounded border border-border-subtle">
-                                            <span className="text-primary font-medium">{tv("styleLabel")}</span> {stylePrompt}
+                                            <span className="text-primary font-medium">{tv("styleLabel")}</span> {imageStylePrompt}
                                         </div>
                                     )}
                                 </div>

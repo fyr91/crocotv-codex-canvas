@@ -32,12 +32,16 @@ export default function ArtDirection() {
     const [modalEditing, setModalEditing] = useState(false);
     const [modalPositive, setModalPositive] = useState("");
     const [modalNegative, setModalNegative] = useState("");
+    const [modalVideoPrompt, setModalVideoPrompt] = useState("");
+    const [modalVideoNegative, setModalVideoNegative] = useState("");
 
     // AI Recommendation modal state
     const [aiModalStyle, setAiModalStyle] = useState<StyleConfig | null>(null);
     const [aiModalEditing, setAiModalEditing] = useState(false);
     const [aiModalPositive, setAiModalPositive] = useState("");
     const [aiModalNegative, setAiModalNegative] = useState("");
+    const [aiModalVideoPrompt, setAiModalVideoPrompt] = useState("");
+    const [aiModalVideoNegative, setAiModalVideoNegative] = useState("");
 
     // Track if current selection is modified from original preset
     const [isModified, setIsModified] = useState(false);
@@ -46,6 +50,8 @@ export default function ArtDirection() {
     const [editingName, setEditingName] = useState("");
     const [editingPositive, setEditingPositive] = useState("");
     const [editingNegative, setEditingNegative] = useState("");
+    const [editingVideoPrompt, setEditingVideoPrompt] = useState("");
+    const [editingVideoNegative, setEditingVideoNegative] = useState("");
     const [isSaving, setIsSaving] = useState(false);
 
     const filteredPresets = useMemo(() => {
@@ -94,6 +100,8 @@ export default function ArtDirection() {
             setEditingName("");
             setEditingPositive("");
             setEditingNegative("");
+            setEditingVideoPrompt("");
+            setEditingVideoNegative("");
             setIsModified(false);
             setOverrideAccepted(false);
             toast.success(ta("toastResetDone"), {
@@ -131,24 +139,16 @@ export default function ArtDirection() {
         loadPresets();
     }, []);
 
-    const resolvePositivePrompt = (style: StyleConfig | null): string => {
-        if (!style) return "";
-        if (style.positive_prompt) return style.positive_prompt;
-        if (style.id && presets.length > 0) {
-            const match = presets.find(p => p.id === style.id);
-            if (match) return match.positive_prompt || "";
-        }
-        return "";
-    };
-
     useEffect(() => {
         const projectAD = currentProject?.art_direction;
         const projectStyleConfig = projectAD?.style_config ?? null;
         if (projectStyleConfig) {
             setSelectedStyle(projectStyleConfig);
             setEditingName(projectStyleConfig.name || "");
-            setEditingPositive(resolvePositivePrompt(projectStyleConfig));
-            setEditingNegative(projectStyleConfig.negative_prompt || "");
+            setEditingPositive(projectStyleConfig.image_prompt || "");
+            setEditingNegative(projectStyleConfig.image_negative_prompt || "");
+            setEditingVideoPrompt(projectStyleConfig.video_prompt || "");
+            setEditingVideoNegative(projectStyleConfig.video_negative_prompt || "");
             setCustomStyles(projectAD?.custom_styles || []);
             if (projectAD?.ai_recommendations && projectAD.ai_recommendations.length > 0) {
                 setAiRecommendations(projectAD.ai_recommendations);
@@ -156,11 +156,13 @@ export default function ArtDirection() {
         } else if (seriesBaseline) {
             setSelectedStyle(seriesBaseline);
             setEditingName(seriesBaseline.name || "");
-            setEditingPositive(resolvePositivePrompt(seriesBaseline));
-            setEditingNegative(seriesBaseline.negative_prompt || "");
+            setEditingPositive(seriesBaseline.image_prompt || "");
+            setEditingNegative(seriesBaseline.image_negative_prompt || "");
+            setEditingVideoPrompt(seriesBaseline.video_prompt || "");
+            setEditingVideoNegative(seriesBaseline.video_negative_prompt || "");
             setCustomStyles(projectAD?.custom_styles || []);
         }
-    }, [currentProject?.id, currentProject?.art_direction, seriesBaseline, presets]);
+    }, [currentProject?.id, currentProject?.art_direction, seriesBaseline]);
 
     useEffect(() => {
         if (currentProject?.art_direction?.ai_recommendations) {
@@ -201,9 +203,11 @@ export default function ArtDirection() {
         const preset = style as StylePreset;
         return {
             id: preset.id,
-            name: preset.name,
-            positive_prompt: preset.positive_prompt,
-            negative_prompt: preset.negative_prompt || "",
+            name: preset.name_zh,
+            image_prompt: preset.image_prompt,
+            image_negative_prompt: preset.image_negative_prompt || "",
+            video_prompt: preset.video_prompt,
+            video_negative_prompt: preset.video_negative_prompt || "",
             is_custom: false,
         };
     };
@@ -212,8 +216,10 @@ export default function ArtDirection() {
         const normalizedStyle = toStyleConfig(style);
         setSelectedStyle(normalizedStyle);
         setEditingName(normalizedStyle.name);
-        setEditingPositive(normalizedStyle.positive_prompt);
-        setEditingNegative(normalizedStyle.negative_prompt);
+        setEditingPositive(normalizedStyle.image_prompt);
+        setEditingNegative(normalizedStyle.image_negative_prompt);
+        setEditingVideoPrompt(normalizedStyle.video_prompt);
+        setEditingVideoNegative(normalizedStyle.video_negative_prompt);
         setIsModified(false);
     };
 
@@ -245,8 +251,10 @@ export default function ArtDirection() {
     const openPresetModal = (preset: StylePreset) => {
         setModalPreset(preset);
         setModalEditing(false);
-        setModalPositive(preset.positive_prompt);
-        setModalNegative(preset.negative_prompt);
+        setModalPositive(preset.image_prompt);
+        setModalNegative(preset.image_negative_prompt);
+        setModalVideoPrompt(preset.video_prompt);
+        setModalVideoNegative(preset.video_negative_prompt);
     };
 
     const closePresetModal = () => {
@@ -258,8 +266,10 @@ export default function ArtDirection() {
     const openAiModal = (style: StyleConfig) => {
         setAiModalStyle(style);
         setAiModalEditing(false);
-        setAiModalPositive(style.positive_prompt);
-        setAiModalNegative(style.negative_prompt);
+        setAiModalPositive(style.image_prompt);
+        setAiModalNegative(style.image_negative_prompt);
+        setAiModalVideoPrompt(style.video_prompt);
+        setAiModalVideoNegative(style.video_negative_prompt);
     };
 
     const closeAiModal = () => {
@@ -270,15 +280,19 @@ export default function ArtDirection() {
     const handleAiModalApply = () => {
         if (!aiModalStyle) return;
         const isCustomized = aiModalEditing && (
-            aiModalPositive !== aiModalStyle.positive_prompt ||
-            aiModalNegative !== aiModalStyle.negative_prompt
+            aiModalPositive !== aiModalStyle.image_prompt ||
+            aiModalNegative !== aiModalStyle.image_negative_prompt ||
+            aiModalVideoPrompt !== aiModalStyle.video_prompt ||
+            aiModalVideoNegative !== aiModalStyle.video_negative_prompt
         );
 
         const config: StyleConfig = {
             id: aiModalStyle.id,
             name: aiModalStyle.name,
-            positive_prompt: isCustomized ? aiModalPositive : aiModalStyle.positive_prompt,
-            negative_prompt: isCustomized ? aiModalNegative : aiModalStyle.negative_prompt,
+            image_prompt: isCustomized ? aiModalPositive : aiModalStyle.image_prompt,
+            image_negative_prompt: isCustomized ? aiModalNegative : aiModalStyle.image_negative_prompt,
+            video_prompt: isCustomized ? aiModalVideoPrompt : aiModalStyle.video_prompt,
+            video_negative_prompt: isCustomized ? aiModalVideoNegative : aiModalStyle.video_negative_prompt,
             is_custom: false,
         };
 
@@ -291,8 +305,10 @@ export default function ArtDirection() {
 
         setSelectedStyle(config);
         setEditingName(config.name);
-        setEditingPositive(config.positive_prompt);
-        setEditingNegative(config.negative_prompt);
+        setEditingPositive(config.image_prompt);
+        setEditingNegative(config.image_negative_prompt);
+        setEditingVideoPrompt(config.video_prompt);
+        setEditingVideoNegative(config.video_negative_prompt);
         setIsModified(isCustomized);
         closeAiModal();
     };
@@ -301,15 +317,19 @@ export default function ArtDirection() {
     const handleModalApplyStyle = () => {
         if (!modalPreset) return;
         const isCustomized = modalEditing && (
-            modalPositive !== modalPreset.positive_prompt ||
-            modalNegative !== modalPreset.negative_prompt
+            modalPositive !== modalPreset.image_prompt ||
+            modalNegative !== modalPreset.image_negative_prompt ||
+            modalVideoPrompt !== modalPreset.video_prompt ||
+            modalVideoNegative !== modalPreset.video_negative_prompt
         );
 
         const config: StyleConfig = {
             id: modalPreset.id,
-            name: modalPreset.name,
-            positive_prompt: isCustomized ? modalPositive : modalPreset.positive_prompt,
-            negative_prompt: isCustomized ? modalNegative : modalPreset.negative_prompt,
+            name: modalPreset.name_zh,
+            image_prompt: isCustomized ? modalPositive : modalPreset.image_prompt,
+            image_negative_prompt: isCustomized ? modalNegative : modalPreset.image_negative_prompt,
+            video_prompt: isCustomized ? modalVideoPrompt : modalPreset.video_prompt,
+            video_negative_prompt: isCustomized ? modalVideoNegative : modalPreset.video_negative_prompt,
             is_custom: false,
         };
 
@@ -323,8 +343,10 @@ export default function ArtDirection() {
 
         setSelectedStyle(config);
         setEditingName(config.name);
-        setEditingPositive(config.positive_prompt);
-        setEditingNegative(config.negative_prompt);
+        setEditingPositive(config.image_prompt);
+        setEditingNegative(config.image_negative_prompt);
+        setEditingVideoPrompt(config.video_prompt);
+        setEditingVideoNegative(config.video_negative_prompt);
         setIsModified(isCustomized);
         closePresetModal();
     };
@@ -334,8 +356,10 @@ export default function ArtDirection() {
         if (!selectedStyle) return;
         const original = presets.find(p => p.id === selectedStyle.id);
         if (original) {
-            setEditingPositive(original.positive_prompt);
-            setEditingNegative(original.negative_prompt);
+            setEditingPositive(original.image_prompt);
+            setEditingNegative(original.image_negative_prompt);
+            setEditingVideoPrompt(original.video_prompt);
+            setEditingVideoNegative(original.video_negative_prompt);
             setIsModified(false);
         }
     };
@@ -352,8 +376,10 @@ export default function ArtDirection() {
         const finalConfig: StyleConfig = {
             ...selectedStyle,
             name: editingName,
-            positive_prompt: editingPositive,
-            negative_prompt: editingNegative
+            image_prompt: editingPositive,
+            image_negative_prompt: editingNegative,
+            video_prompt: editingVideoPrompt,
+            video_negative_prompt: editingVideoNegative,
         };
 
         setIsSaving(true);
@@ -620,8 +646,12 @@ export default function ArtDirection() {
                         editing={aiModalEditing}
                         positivePrompt={aiModalPositive}
                         negativePrompt={aiModalNegative}
+                        videoPrompt={aiModalVideoPrompt}
+                        videoNegativePrompt={aiModalVideoNegative}
                         onPositiveChange={setAiModalPositive}
                         onNegativeChange={setAiModalNegative}
+                        onVideoPromptChange={setAiModalVideoPrompt}
+                        onVideoNegativeChange={setAiModalVideoNegative}
                         onStartEditing={() => setAiModalEditing(true)}
                         onApply={handleAiModalApply}
                         onClose={closeAiModal}
@@ -638,8 +668,12 @@ export default function ArtDirection() {
                         editing={modalEditing}
                         positivePrompt={modalPositive}
                         negativePrompt={modalNegative}
+                        videoPrompt={modalVideoPrompt}
+                        videoNegativePrompt={modalVideoNegative}
                         onPositiveChange={setModalPositive}
                         onNegativeChange={setModalNegative}
+                        onVideoPromptChange={setModalVideoPrompt}
+                        onVideoNegativeChange={setModalVideoNegative}
                         onStartEditing={() => setModalEditing(true)}
                         onApply={handleModalApplyStyle}
                         onClose={closePresetModal}
@@ -647,8 +681,10 @@ export default function ArtDirection() {
                         onSwitchPreset={(p) => {
                             setModalPreset(p);
                             setModalEditing(false);
-                            setModalPositive(p.positive_prompt);
-                            setModalNegative(p.negative_prompt);
+                            setModalPositive(p.image_prompt);
+                            setModalNegative(p.image_negative_prompt);
+                            setModalVideoPrompt(p.video_prompt);
+                            setModalVideoNegative(p.video_negative_prompt);
                         }}
                     />
                 )}
@@ -765,28 +801,35 @@ function AIRecommendationCard({ style, isSelected, onClick }: {
     );
 }
 
-function AIRecommendationModal({ style, isSelected, editing, positivePrompt, negativePrompt, onPositiveChange, onNegativeChange, onStartEditing, onApply, onClose }: {
+function AIRecommendationModal({ style, isSelected, editing, positivePrompt, negativePrompt, videoPrompt, videoNegativePrompt, onPositiveChange, onNegativeChange, onVideoPromptChange, onVideoNegativeChange, onStartEditing, onApply, onClose }: {
     style: StyleConfig;
     isSelected: boolean;
     editing: boolean;
     positivePrompt: string;
     negativePrompt: string;
+    videoPrompt: string;
+    videoNegativePrompt: string;
     onPositiveChange: (v: string) => void;
     onNegativeChange: (v: string) => void;
+    onVideoPromptChange: (v: string) => void;
+    onVideoNegativeChange: (v: string) => void;
     onStartEditing: () => void;
     onApply: () => void;
     onClose: () => void;
 }) {
     const ta = useTranslations("artDirection");
-    const keywords = style.positive_prompt
+    const tCommon = useTranslations("common");
+    const keywords = style.image_prompt
         .split(",")
         .map(s => s.trim())
         .filter(s => s.length > 0 && s.length < 40)
         .slice(0, 6);
 
     const isCustomized = editing && (
-        positivePrompt !== style.positive_prompt ||
-        negativePrompt !== style.negative_prompt
+        positivePrompt !== style.image_prompt ||
+        negativePrompt !== style.image_negative_prompt ||
+        videoPrompt !== style.video_prompt ||
+        videoNegativePrompt !== style.video_negative_prompt
     );
 
     return (
@@ -799,6 +842,9 @@ function AIRecommendationModal({ style, isSelected, editing, positivePrompt, neg
             onClick={onClose}
         >
             <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="ai-style-modal-title"
                 initial={{ opacity: 0, scale: 0.96, y: 8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -814,13 +860,13 @@ function AIRecommendationModal({ style, isSelected, editing, positivePrompt, neg
                             <span className="text-sm font-medium text-foreground">AI</span>
                         </div>
                         <div>
-                            <h2 className="text-xl font-medium text-foreground">{style.name}</h2>
+                            <h2 id="ai-style-modal-title" className="text-xl font-medium text-foreground">{style.name}</h2>
                             {style.description && (
                                 <p className="text-sm text-text-muted mt-0.5">{style.description}</p>
                             )}
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-hover-bg text-text-muted hover:text-foreground transition-colors">
+                    <button aria-label={tCommon("close")} onClick={onClose} className="p-2 rounded-lg hover:bg-hover-bg text-text-muted hover:text-foreground transition-colors">
                         <X size={18} />
                     </button>
                 </header>
@@ -851,10 +897,11 @@ function AIRecommendationModal({ style, isSelected, editing, positivePrompt, neg
 
                     {/* Right panel: prompts */}
                     <div className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-5">
+                        <p className="font-mono text-sm uppercase tracking-[0.18em] text-text-muted">{ta("imageRoute")}</p>
                         {/* Positive prompt */}
                         <div>
                             <div className="flex items-center justify-between mb-2">
-                                <p className="font-mono text-sm uppercase tracking-[0.18em] text-primary/70">{ta("positivePromptLabel")}</p>
+                                <p className="font-mono text-sm uppercase tracking-[0.18em] text-primary/70">{ta("imagePromptLabel")}</p>
                                 {!editing && (
                                     <button
                                         onClick={onStartEditing}
@@ -882,7 +929,7 @@ function AIRecommendationModal({ style, isSelected, editing, positivePrompt, neg
 
                         {/* Negative prompt */}
                         <div>
-                            <p className="font-mono text-sm uppercase tracking-[0.18em] text-status-failed-fg mb-2">{ta("negativePromptLabel")}</p>
+                            <p className="font-mono text-sm uppercase tracking-[0.18em] text-status-failed-fg mb-2">{ta("imageNegativePromptLabel")}</p>
                             {editing ? (
                                 <textarea
                                     value={negativePrompt}
@@ -896,6 +943,28 @@ function AIRecommendationModal({ style, isSelected, editing, positivePrompt, neg
                                     </p>
                                 </div>
                             )}
+                        </div>
+
+                        <div className="border-t border-glass-border pt-5">
+                            <p className="font-mono text-sm uppercase tracking-[0.18em] text-text-muted mb-4">{ta("videoRoute")}</p>
+                            <div className="space-y-4">
+                                <div>
+                                    <p className="font-mono text-sm uppercase tracking-[0.18em] text-primary/70 mb-2">{ta("videoPromptLabel")}</p>
+                                    {editing ? (
+                                        <textarea value={videoPrompt} onChange={(e) => onVideoPromptChange(e.target.value)} className="w-full h-32 rounded-lg border border-glass-border bg-elevated px-3 py-2.5 text-sm text-foreground leading-relaxed resize-none focus:outline-none focus:border-primary/50 custom-scrollbar" />
+                                    ) : (
+                                        <div className="rounded-lg border border-glass-border bg-glass px-3 py-2.5"><p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">{videoPrompt}</p></div>
+                                    )}
+                                </div>
+                                <div>
+                                    <p className="font-mono text-sm uppercase tracking-[0.18em] text-status-failed-fg mb-2">{ta("videoNegativePromptLabel")}</p>
+                                    {editing ? (
+                                        <textarea value={videoNegativePrompt} onChange={(e) => onVideoNegativeChange(e.target.value)} className="w-full h-24 rounded-lg border border-glass-border bg-elevated px-3 py-2.5 text-sm text-foreground leading-relaxed resize-none focus:outline-none focus:border-status-failed-border custom-scrollbar" />
+                                    ) : (
+                                        <div className="rounded-lg border border-glass-border bg-glass px-3 py-2.5"><p className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">{videoNegativePrompt || ta("noNegativePrompt") || "—"}</p></div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -946,7 +1015,7 @@ export function StylePresetCard({ style, isSelected, onSelect }: any) {
                 <p className="text-sm text-text-secondary mb-2">{style.description}</p>
             )}
             <div className="text-sm text-text-muted truncate">
-                {style.positive_prompt.substring(0, 50)}...
+                {style.image_prompt.substring(0, 50)}...
             </div>
         </motion.div>
     );
@@ -999,23 +1068,31 @@ function StylePresetCardV2({ style, isSelected, onClick }: {
     );
 }
 
-function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negativePrompt, onPositiveChange, onNegativeChange, onStartEditing, onApply, onClose, sameCategoryPresets, onSwitchPreset }: {
+function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negativePrompt, videoPrompt, videoNegativePrompt, onPositiveChange, onNegativeChange, onVideoPromptChange, onVideoNegativeChange, onStartEditing, onApply, onClose, sameCategoryPresets, onSwitchPreset }: {
     preset: StylePreset;
     isSelected: boolean;
     editing: boolean;
     positivePrompt: string;
     negativePrompt: string;
+    videoPrompt: string;
+    videoNegativePrompt: string;
     onPositiveChange: (v: string) => void;
     onNegativeChange: (v: string) => void;
+    onVideoPromptChange: (v: string) => void;
+    onVideoNegativeChange: (v: string) => void;
     onStartEditing: () => void;
     onApply: () => void;
     onClose: () => void;
     sameCategoryPresets: StylePreset[];
     onSwitchPreset: (p: StylePreset) => void;
 }) {
+    const ta = useTranslations("artDirection");
+    const tCommon = useTranslations("common");
     const isCustomized = editing && (
-        positivePrompt !== preset.positive_prompt ||
-        negativePrompt !== preset.negative_prompt
+        positivePrompt !== preset.image_prompt ||
+        negativePrompt !== preset.image_negative_prompt ||
+        videoPrompt !== preset.video_prompt ||
+        videoNegativePrompt !== preset.video_negative_prompt
     );
 
     return (
@@ -1028,6 +1105,9 @@ function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negati
             onClick={onClose}
         >
             <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="preset-style-modal-title"
                 initial={{ opacity: 0, scale: 0.96, y: 8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -1038,10 +1118,12 @@ function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negati
                 {/* Header */}
                 <header className="flex items-center justify-between px-6 py-4 border-b border-glass-border shrink-0">
                     <div>
-                        <h2 className="text-xl font-medium text-foreground">{preset.name_zh}</h2>
+                        <h2 id="preset-style-modal-title" className="text-xl font-medium text-foreground">{preset.name_zh}</h2>
                         <p className="text-sm text-text-muted mt-0.5">{preset.name}</p>
+                        {preset.subtitle_zh && <p className="text-sm text-text-secondary mt-1">{preset.subtitle_zh}</p>}
                     </div>
                     <button
+                        aria-label={tCommon("close")}
                         onClick={onClose}
                         className="p-2 rounded-lg hover:bg-hover-bg text-text-muted hover:text-foreground transition-colors"
                     >
@@ -1110,22 +1192,34 @@ function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negati
                             {!editing ? (
                                 <>
                                     <div>
-                                        <p className="text-sm text-text-muted mb-1.5">正向</p>
+                                        <p className="text-sm text-text-muted mb-1.5">{ta("imagePromptLabel")}</p>
                                         <p className="text-sm text-text-secondary leading-relaxed">
-                                            {preset.positive_prompt}
+                                            {preset.image_prompt}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-text-muted mb-1.5">负向</p>
+                                        <p className="text-sm text-text-muted mb-1.5">{ta("imageNegativePromptLabel")}</p>
                                         <p className="text-sm text-text-secondary leading-relaxed">
-                                            {preset.negative_prompt}
+                                            {preset.image_negative_prompt || "—"}
+                                        </p>
+                                    </div>
+                                    <div className="border-t border-glass-border pt-4">
+                                        <p className="text-sm text-text-muted mb-1.5">{ta("videoPromptLabel")}</p>
+                                        <p className="text-sm text-text-secondary leading-relaxed">
+                                            {preset.video_prompt}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-text-muted mb-1.5">{ta("videoNegativePromptLabel")}</p>
+                                        <p className="text-sm text-text-secondary leading-relaxed">
+                                            {preset.video_negative_prompt || "—"}
                                         </p>
                                     </div>
                                 </>
                             ) : (
                                 <>
                                     <div>
-                                        <p className="text-sm text-text-muted mb-1.5">正向</p>
+                                        <p className="text-sm text-text-muted mb-1.5">{ta("imagePromptLabel")}</p>
                                         <textarea
                                             value={positivePrompt}
                                             onChange={(e) => onPositiveChange(e.target.value)}
@@ -1134,13 +1228,21 @@ function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negati
                                         />
                                     </div>
                                     <div>
-                                        <p className="text-sm text-text-muted mb-1.5">负向</p>
+                                        <p className="text-sm text-text-muted mb-1.5">{ta("imageNegativePromptLabel")}</p>
                                         <textarea
                                             value={negativePrompt}
                                             onChange={(e) => onNegativeChange(e.target.value)}
                                             rows={3}
                                             className="w-full bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-foreground placeholder-text-muted focus:border-primary focus:outline-none resize-none"
                                         />
+                                    </div>
+                                    <div className="border-t border-glass-border pt-4">
+                                        <p className="text-sm text-text-muted mb-1.5">{ta("videoPromptLabel")}</p>
+                                        <textarea value={videoPrompt} onChange={(e) => onVideoPromptChange(e.target.value)} rows={5} className="w-full bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-foreground placeholder-text-muted focus:border-primary focus:outline-none resize-none" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-text-muted mb-1.5">{ta("videoNegativePromptLabel")}</p>
+                                        <textarea value={videoNegativePrompt} onChange={(e) => onVideoNegativeChange(e.target.value)} rows={3} className="w-full bg-input-bg border border-glass-border rounded-lg p-3 text-sm text-foreground placeholder-text-muted focus:border-primary focus:outline-none resize-none" />
                                     </div>
                                 </>
                             )}
