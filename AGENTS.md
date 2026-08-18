@@ -134,6 +134,28 @@ API 和 Web 服务必须绑定到本地接口。文件导入工具必须将可�
 - 视频生成使用已配置的 H3 集成。
 - 音乐生成使用 Suno 及其运行时创建的回调服务；不得要求在 `.env` 中提供回调 URL。
 
+### Ark Responses 原生结构化输出参考
+
+需要从 Volcano Engine/Ark 模型获得符合 JSON Schema 的结构化结果时，优先使用 Ark Responses API 的 `/api/v3/responses` 路径，并在请求体中通过 `text.format` 传入原生 Schema：
+
+```json
+{
+  "text": {
+    "format": {
+      "type": "json_schema",
+      "name": "structured_output",
+      "schema": {},
+      "strict": false
+    }
+  }
+}
+```
+
+- `name` 必须使用稳定且合法的 Schema 名称，`schema` 必须是完整的 JSON Schema；`strict` 应根据目标模型与 Schema 支持情况显式设置，以上示例与仓库当前实现一致。
+- 原生结构化输出与 `tools`、Function Calling 和 Web Search 是相互独立的能力。仅为获得结构化 JSON 时，不得伪造 Tool Call；只有任务确实需要调用工具时才传入 `tools`，不传即不启用 Web Search 或其他工具。
+- 响应优先读取顶层 `output_text`；不存在时，从 `output[].content[]` 中收集 `type: "output_text"` 的 `text`。
+- 外部参考：[火山方舟 Responses API 响应对象](https://www.volcengine.com/docs/82379/1783703?lang=zh)、[火山引擎开发者社区 Responses API 与 JSON Schema 实战](https://developer.volcengine.com/articles/7565184101091639338)。
+
 严禁在日志、MCP 结果、项目 JSON 或浏览器状态中暴露 API Key、回调密钥或角色访问令牌。
 
 ## 分发源码的唯一权威来源
