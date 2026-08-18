@@ -2700,10 +2700,10 @@ function CrocoCanvasPage() {
                     try {
                         const requestOptions = {
                             signal: controller.signal,
-                            onJobCreated: (generationJobId: string) => setNodes((prev) => prev.map((item) => {
-                                const imageOutputIndex = targetIds.indexOf(item.id);
-                                if (imageOutputIndex >= 0) return { ...item, metadata: { ...item.metadata, generationJobId, imageOutputIndex } };
-                                if (count > 1 && item.id === rootId) return { ...item, metadata: { ...item.metadata, generationJobId, imageOutputIndex: 0 } };
+                            onJobCreated: (generationJobId: string, outputIndex = 0) => setNodes((prev) => prev.map((item) => {
+                                const targetId = targetIds[outputIndex];
+                                if (item.id === targetId) return { ...item, metadata: { ...item.metadata, generationJobId, imageOutputIndex: outputIndex } };
+                                if (outputIndex === 0 && count > 1 && item.id === rootId) return { ...item, metadata: { ...item.metadata, generationJobId, imageOutputIndex: 0 } };
                                 return item;
                             })),
                         };
@@ -2848,9 +2848,9 @@ function CrocoCanvasPage() {
                         const results = await requestVideoGeneration(videoConfig, effectivePrompt, videoGenerationContext.referenceImages, videoGenerationContext.referenceVideos, videoGenerationContext.referenceAudios, {
                             ltxFrames: videoContextResult?.ltxFrames,
                             signal: controller.signal,
-                            onJobCreated: (generationJobId) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === rootId ? { ...item, metadata: { ...item.metadata, generationJobId, generationState: "queued" } } : item)),
-                            onStatusChange: (generationState) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === rootId ? { ...item, metadata: { ...item.metadata, generationState: generationState === "queued" ? "queued" : "running" } } : item)),
-                            onProgress: (generationProgress, generationStage) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === rootId ? { ...item, metadata: { ...item.metadata, generationProgress, generationStage } } : item)),
+                            onJobCreated: (generationJobId, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === rootId) ? { ...item, metadata: { ...item.metadata, generationJobId, generationState: "queued" } } : item)),
+                            onStatusChange: (generationState, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === rootId) ? { ...item, metadata: { ...item.metadata, generationState: generationState === "queued" ? "queued" : "running" } } : item)),
+                            onProgress: (generationProgress, generationStage, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === rootId) ? { ...item, metadata: { ...item.metadata, generationProgress, generationStage } } : item)),
                             onResult: applyDeliveredVideo,
                             onArchived: applyDeliveredVideo,
                             onReviewReady: applyStage1Review,
@@ -3339,9 +3339,9 @@ function CrocoCanvasPage() {
                     const results = await requestVideoGeneration(videoGenerationConfig, prompt, retryImages, context?.referenceVideos || [], context?.referenceAudios || [], {
                         ltxFrames: videoContextResult?.ltxFrames,
                         signal: controller.signal,
-                        onJobCreated: (generationJobId) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === node.id ? { ...item, metadata: { ...item.metadata, generationJobId, generationState: "queued" } } : item)),
-                        onStatusChange: (generationState) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === node.id ? { ...item, metadata: { ...item.metadata, generationState: generationState === "queued" ? "queued" : "running" } } : item)),
-                        onProgress: (generationProgress, generationStage) => setNodes((prev) => prev.map((item) => targetIds.includes(item.id) || item.id === node.id ? { ...item, metadata: { ...item.metadata, generationProgress, generationStage } } : item)),
+                        onJobCreated: (generationJobId, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === node.id) ? { ...item, metadata: { ...item.metadata, generationJobId, generationState: "queued" } } : item)),
+                        onStatusChange: (generationState, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === node.id) ? { ...item, metadata: { ...item.metadata, generationState: generationState === "queued" ? "queued" : "running" } } : item)),
+                        onProgress: (generationProgress, generationStage, outputIndex = 0) => setNodes((prev) => prev.map((item) => item.id === targetIds[outputIndex] || (outputIndex === 0 && item.id === node.id) ? { ...item, metadata: { ...item.metadata, generationProgress, generationStage } } : item)),
                         onResult: applyDeliveredVideo,
                         onArchived: applyDeliveredVideo,
                         onReviewReady: applyStage1Review,

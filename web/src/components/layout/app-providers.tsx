@@ -81,6 +81,21 @@ export const LOCAL_MODELS: ProviderCatalogModel[] = [
     { id: "minimax-music-3", provider_id: "gpu", capability: "music", model_key: "minimax-music-3", display_name: "MiniMax Music 3", is_default: false, config: { inputModalities: ["text"], maxDurationSeconds: 360, defaultDurationSeconds: 120, outputFormats: ["mp3", "wav"] } },
 ];
 
+type ProviderAvailability = Partial<Record<"volcengine" | "bigmodel" | "runware" | "speech" | "gpu" | "h3" | "suno", boolean>>;
+
+export function modelsForProviderAvailability(models: ProviderCatalogModel[], providers: ProviderAvailability) {
+    if (!Object.values(providers).some(Boolean)) return models;
+    return models.filter((model) => {
+        if (model.provider_id === "volcengine") return model.capability === "speech" ? providers.speech : providers.volcengine;
+        if (model.provider_id === "bigmodel") return providers.bigmodel;
+        if (model.provider_id === "runware") return providers.runware;
+        if (model.provider_id === "minimax_h3") return providers.h3;
+        if (model.provider_id === "ltx" || model.provider_id === "gpu") return providers.gpu;
+        if (model.provider_id === "suno") return providers.suno;
+        return true;
+    });
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
     useExclusiveMediaPlayback();
     const theme = useThemeStore((state) => state.theme);
@@ -88,6 +103,17 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const setProviderCatalog = useConfigStore((state) => state.setProviderCatalog);
     useEffect(() => {
         setProviderCatalog(LOCAL_MODELS);
+        let active = true;
+        void fetch("/api/status", { cache: "no-store" })
+            .then(async (response) => {
+                if (!response.ok) throw new Error("读取本地模型配置失败");
+                return response.json() as Promise<{ providers?: ProviderAvailability }>;
+            })
+            .then((status) => {
+                if (active) setProviderCatalog(modelsForProviderAvailability(LOCAL_MODELS, status.providers || {}));
+            })
+            .catch(() => undefined);
+        return () => { active = false; };
     }, [setProviderCatalog]);
     useEffect(() => {
         document.documentElement.classList.toggle("dark", theme === "dark");

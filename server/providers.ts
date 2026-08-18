@@ -196,7 +196,19 @@ async function generateMiniMaxMusic3(input: { prompt: string; params?: Record<st
   return [resource];
 }
 
-export async function generateImage(input: { prompt: string; model: string; width?: number; height?: number; seed?: number; referenceResourceIds?: string[]; signal?: AbortSignal }) {
+type ImageGenerationInput = {
+  prompt: string;
+  model: string;
+  width?: number;
+  height?: number;
+  seed?: number;
+  referenceResourceIds?: string[];
+  clientJobId?: string;
+  signal?: AbortSignal;
+  onProgress?: (progress: GpuJobProgress) => void | Promise<void>;
+};
+
+export async function generateImage(input: ImageGenerationInput) {
   if (input.model === "ernie-image-turbo") return generateErnieImage(input);
   if (!models.image.includes(input.model)) throw new Error("只支持已配置的图片模型");
   const taskUUID = randomUUID();
@@ -231,7 +243,7 @@ export async function generateImage(input: { prompt: string; model: string; widt
 
 const ERNIE_IMAGE_SIZES = new Set(["1024x1024", "848x1264", "1264x848", "768x1376", "1376x768", "896x1200", "1200x896"]);
 
-async function generateErnieImage(input: { prompt: string; model: string; width?: number; height?: number; seed?: number; referenceResourceIds?: string[]; signal?: AbortSignal }) {
+async function generateErnieImage(input: ImageGenerationInput) {
   if (input.referenceResourceIds?.length) throw new Error("ERNIE Image Turbo 当前只支持文生图，不接受参考图片");
   const width = Math.floor(Number(input.width) || 1024);
   const height = Math.floor(Number(input.height) || 1024);
@@ -243,9 +255,11 @@ async function generateErnieImage(input: { prompt: string; model: string; width?
     operation: "image.generate",
     contractVersion: "1",
     parameters,
+    clientJobId: input.clientJobId,
     signal: input.signal,
   });
-  const job = await waitForUnifiedGpuJob({ job: created, signal: input.signal });
+  await input.onProgress?.({ stage: "submitted", jobId: created.job_id, outputIndex: 0, progress: 0, label: "ERNIE Image Turbo 任务已提交" });
+  const job = await waitForUnifiedGpuJob({ job: created, signal: input.signal, onProgress: input.onProgress });
   const outputs = await listUnifiedGpuOutputs(job.job_id, input.signal);
   const output = outputs.find((item) => item.output_type === "image" && item.delivery_state === "ready");
   if (!output) throw new Error("ERNIE Image Turbo 任务成功，但没有返回图片");
@@ -280,6 +294,7 @@ export type VideoGenerationInput = {
   audioResourceIds?: string[];
   referenceStrength?: number;
   seed?: number;
+  clientJobId?: string;
   signal?: AbortSignal;
   onProgress?: (progress: H3GenerationProgress) => void | Promise<void>;
 };
@@ -314,7 +329,7 @@ export async function generateH3Video(input: Omit<VideoGenerationInput, "model">
       modelId: "minimax-h3",
       operation: "video.generate",
       contractVersion: "2",
-      clientJobId,
+      clientJobId: input.clientJobId ? `${input.clientJobId}:${outputIndex}` : clientJobId,
       parameters: request.parameters,
       inputs: request.inputs,
       signal: input.signal,
@@ -352,6 +367,7 @@ async function generateLtxVideo(input: VideoGenerationInput) {
       contractVersion: "2",
       parameters: request.parameters,
       inputs: request.inputRole && uploadedImageId ? [{ role: request.inputRole, asset_id: uploadedImageId }] : [],
+      clientJobId: input.clientJobId ? `${input.clientJobId}:${outputIndex}` : undefined,
       signal: input.signal,
     });
     await input.onProgress?.({ stage: "submitted", jobId: created.job_id, outputIndex, progress: 0, label: "LTX 2.5 任务已提交" });

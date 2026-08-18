@@ -51,10 +51,11 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, mentionRe
         onConfigChange(node.id, { model, videoInputMode, ...(providerIdForModel(model) === "ltx" || videoInputMode === "multimodal" ? {} : { composerContent: stripMediaMentions(node.metadata?.composerContent || "", videoInputMode) }) });
     };
     const changeGenerationMode = (generationMode: CanvasGenerationMode) => {
-        if (generationMode !== "video") return onConfigChange(node.id, { generationMode });
-        const videoModel = modelMatchesCapability(node.metadata?.model || "", "video") ? node.metadata?.model || "" : globalConfig.videoModel;
+        const model = generationModeModel(globalConfig, node.metadata?.model, generationMode);
+        if (generationMode !== "video") return onConfigChange(node.id, { generationMode, model });
+        const videoModel = model;
         const videoInputMode = normalizeVideoInputModeForModel(videoModel, node.metadata?.videoInputMode || globalConfig.videoInputMode);
-        onConfigChange(node.id, { generationMode, videoInputMode, ...(providerIdForModel(videoModel) === "ltx" || videoInputMode === "multimodal" ? {} : { composerContent: stripMediaMentions(node.metadata?.composerContent || "", videoInputMode) }) });
+        onConfigChange(node.id, { generationMode, model: videoModel, videoInputMode, ...(providerIdForModel(videoModel) === "ltx" || videoInputMode === "multimodal" ? {} : { composerContent: stripMediaMentions(node.metadata?.composerContent || "", videoInputMode) }) });
     };
 
     return (
@@ -170,6 +171,20 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, mentionRe
             </Button>
         </div>
     );
+}
+
+export function generationModeModel(globalConfig: AiConfig, currentModel: string | undefined, mode: CanvasGenerationMode) {
+    const matches = mode === "music"
+        ? providerCapabilityForModel(currentModel || "") === "music"
+        : mode === "audio"
+            ? providerCapabilityForModel(currentModel || "") === "speech"
+            : Boolean(currentModel && modelMatchesCapability(currentModel, mode));
+    if (matches) return currentModel || "";
+    if (mode === "image") return globalConfig.imageModel;
+    if (mode === "video") return globalConfig.videoModel;
+    if (mode === "audio") return audioModelForKind(globalConfig, "speech");
+    if (mode === "music") return audioModelForKind(globalConfig, "music");
+    return globalConfig.textModel;
 }
 
 function InputChip({ label, value, style }: { label: string; value: string; style: CSSProperties }) {
