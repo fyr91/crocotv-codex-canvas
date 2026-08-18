@@ -518,3 +518,30 @@ A separate crop was not required because both source and implementation keep the
 - [x] Preserve Studio tokens, components, and responsive modal behavior.
 
 final result: passed
+
+---
+
+# Design QA — Script Editor Entity Action in AI Tools
+
+- Source visual truth: `/var/folders/79/k_qqj6wx2sb92z55ktjwrvh40000gn/T/codex-clipboard-eb7f6a0b-7564-4daa-8d89-c79b3a13dcc8.png`
+- Implementation screenshot: `/tmp/croco-script-editor-ai-tools.jpg`
+- Side-by-side comparison: `/tmp/croco-script-editor-ai-tools-comparison.jpg`
+- State: dark theme, Script Editor open for a project that already contains entities, AI Tools menu expanded
+- Intentional difference: the standalone `更新实体` action shown in the source is removed; the same action is now the first item inside `AI 工具`.
+
+## Visual and interaction verification
+
+- The top toolbar contains one `AI 工具` button and no standalone `更新实体` button.
+- The existing AI Tools menu styling, width, spacing, typography, disabled upcoming-tool treatment, and execute affordance are preserved.
+- The first menu item dynamically reads `更新实体` when entities exist and remains enabled when the document can be analyzed.
+- Existing upcoming tools remain unchanged.
+- No paid entity extraction was triggered during verification.
+
+## Implementation checklist
+
+- [x] Remove the duplicate standalone entity action.
+- [x] Expose entity extraction/update as the first AI Tools item.
+- [x] Preserve the existing loading, disabled, confirmation, and error flow.
+- [x] Keep unrelated Script Editor actions and other Studio pages unchanged.
+
+final result: passed

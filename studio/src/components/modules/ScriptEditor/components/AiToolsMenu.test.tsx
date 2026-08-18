@@ -43,4 +43,24 @@ describe('AiToolsMenu', () => {
 
     expect(screen.getByRole('menuitem', { name: '执行提取实体' })).toBeDisabled();
   });
+
+  it('renames the extraction tool to update entities when the project already has entities', () => {
+    const onExtractEntities = vi.fn();
+    render(
+      <AiToolsMenu
+        extracting={false}
+        hasEntities
+        onExtractEntities={onExtractEntities}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI 工具' }));
+
+    expect(screen.queryByText('提取实体')).not.toBeInTheDocument();
+    const updateButton = screen.getByRole('menuitem', { name: '执行更新实体' });
+    expect(updateButton).toBeEnabled();
+
+    fireEvent.click(updateButton);
+    expect(onExtractEntities).toHaveBeenCalledOnce();
+  });
 });

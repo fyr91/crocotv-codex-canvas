@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { EditorContent } from '@tiptap/react';
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, Wand2, X } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, WifiOff, RotateCcw, X } from 'lucide-react';
 import { useEditorStore } from '@/store/editorStore';
 import { useEditorSetup } from './hooks/useEditorSetup';
 import EditorToolbar from './toolbar/EditorToolbar';
@@ -29,7 +29,6 @@ import ScriptEntityExtractionConfirm from './components/ScriptEntityExtractionCo
 import AiToolsMenu from './components/AiToolsMenu';
 import FocusModeExitButton from './components/FocusModeExitButton';
 import { apiErrorMessage } from '@/lib/apiError';
-import WorkflowActionButton from '@/components/shared/WorkflowActionButton';
 
 export interface ScriptEditorShellProps {
   mode?: 'full' | 'embedded' | 'focus';
@@ -248,28 +247,12 @@ export default function ScriptEditorShell({
           </div>
           <div className="flex items-center gap-3">
             {projectId ? (
-              <>
-                <WorkflowActionButton
-                  onClick={() => void handleExtractEntities()}
-                  disabled={documentLoading || isAnalyzing || isEditorEmpty}
-                  variant="primary"
-                  size="sm"
-                  loading={isAnalyzing}
-                  leftIcon={<Wand2 />}
-                >
-                  {isAnalyzing
-                    ? tScript('analyzingScript')
-                    : hasEntities
-                      ? tScript('updateEntities')
-                      : tScript('extractEntities')}
-                </WorkflowActionButton>
-                <AiToolsMenu
-                  extracting={isAnalyzing}
-                  extractDisabled={documentLoading || isEditorEmpty}
-                  onExtractEntities={handleExtractEntities}
-                  showExtraction={false}
-                />
-              </>
+              <AiToolsMenu
+                extracting={isAnalyzing}
+                extractDisabled={documentLoading || isEditorEmpty}
+                hasEntities={hasEntities}
+                onExtractEntities={handleExtractEntities}
+              />
             ) : null}
             <span className="text-sm text-text-muted">
               {isDirty ? t('status.unsaved') : lastSavedAt ? t('status.savedAt', { time: lastSavedAt.toLocaleTimeString() }) : ''}
