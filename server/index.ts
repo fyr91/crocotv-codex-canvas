@@ -24,6 +24,7 @@ import { suiteCompatibility } from "./version";
 import { studioApiRouter } from "./studio-api";
 import { recoverInterruptedStudioGenerations } from "./studio-workflow";
 import { openAppThemeEventStream, parseAppTheme, readAppThemePreference, updateAppThemePreference } from "./app-preferences";
+import { beginDirectGenerationProgress, directGenerationRequestId, finishDirectGenerationProgress, getDirectGenerationProgress, publishDirectGenerationProgress } from "./direct-generation-progress";
 
 await ensureStorage();
 await initializeCanvasRunJobs();
@@ -183,7 +184,24 @@ app.get("/api/characters", asyncHandler(async (_request, response) => response.j
 app.post("/api/characters/sync", asyncHandler(async (_request, response) => response.json(await syncCharacters())));
 
 app.post("/api/generate/text", asyncHandler(async (request, response) => response.json({ text: await generateText(requiredText(request.body?.prompt, "Prompt"), String(request.body?.model || ""), Array.isArray(request.body?.inputResourceIds) ? request.body.inputResourceIds : [], Array.isArray(request.body?.inputDataUrls) ? request.body.inputDataUrls : [], String(request.body?.systemPrompt || "")) })));
-app.post("/api/generate/image", asyncHandler(async (request, response) => response.json({ resource: await generateImage({ ...request.body, prompt: requiredText(request.body?.prompt, "图片 Prompt") }) })));
+app.get("/api/generate/progress/:requestId", asyncHandler(async (request, response) => response.json(getDirectGenerationProgress(param(request.params.requestId)))));
+app.post("/api/generate/image", asyncHandler(async (request, response) => {
+  const requestId = directGenerationRequestId(request.body?.clientRequestId);
+  if (requestId) beginDirectGenerationProgress(requestId);
+  try {
+    const resource = await generateImage({
+      ...request.body,
+      prompt: requiredText(request.body?.prompt, "图片 Prompt"),
+      clientJobId: requestId,
+      onProgress: requestId ? (progress) => { publishDirectGenerationProgress(requestId, progress); } : undefined,
+    });
+    if (requestId) finishDirectGenerationProgress(requestId);
+    response.json({ resource });
+  } catch (error) {
+    if (requestId) finishDirectGenerationProgress(requestId, error);
+    throw error;
+  }
+}));
 app.post("/api/generate/speech", asyncHandler(async (request, response) => {
   const projectId = String(request.body?.projectId || "").trim();
   const nodeId = String(request.body?.nodeId || "").trim();
@@ -195,27 +213,37 @@ app.post("/api/generate/speech", asyncHandler(async (request, response) => {
   response.json({ resource: await generateSpeech({ ...request.body, content: requiredText(request.body?.content, "语音正文"), voiceId: requiredText(request.body?.voiceId, "角色 Voice ID") }, onProgress) });
 }));
 app.post("/api/generate/video", asyncHandler(async (request, response) => {
+  const requestId = directGenerationRequestId(request.body?.clientRequestId);
+  if (requestId) beginDirectGenerationProgress(requestId);
   const requestedModel = String(request.body?.model || "minimax-h3").trim().toLowerCase();
   const model = requestedModel === "minimax-h3-r2v" ? "minimax-h3" : requestedModel;
   if (!models.video.includes(model)) throw new Error(`不支持的视频模型：${model}`);
   const prompt = requiredText(request.body?.prompt, "视频 Prompt");
   const duration = Number(request.body?.duration);
-  if (model === "minimax-h3") {
-    if (Array.isArray(request.body?.videoResourceIds) && request.body.videoResourceIds.length) throw new Error("MiniMax H3 暂不支持视频参考或视频编辑；请改用图片、音频参考");
-    const prepared = await prepareH3Prompt({
-      draftPrompt: prompt,
-      durationSeconds: duration,
-      inputMode: request.body?.inputMode,
-      imageResourceIds: Array.isArray(request.body?.imageResourceIds) ? request.body.imageResourceIds : [],
-      audioResourceIds: Array.isArray(request.body?.audioResourceIds) ? request.body.audioResourceIds : [],
-      resourceRoles: Array.isArray(request.body?.resourceRoles) ? request.body.resourceRoles : [],
-      optimize: request.body?.optimizePrompt !== false,
-    });
-    const resources = await generateVideo({ ...request.body, model, prompt: prepared.prompt, duration, videoResourceIds: [] });
-    return response.json({ resources, promptPreparation: prepared });
+  const onProgress = requestId ? (progress: Parameters<typeof publishDirectGenerationProgress>[1]) => { publishDirectGenerationProgress(requestId, progress); } : undefined;
+  try {
+    if (model === "minimax-h3") {
+      if (Array.isArray(request.body?.videoResourceIds) && request.body.videoResourceIds.length) throw new Error("MiniMax H3 暂不支持视频参考或视频编辑；请改用图片、音频参考");
+      const prepared = await prepareH3Prompt({
+        draftPrompt: prompt,
+        durationSeconds: duration,
+        inputMode: request.body?.inputMode,
+        imageResourceIds: Array.isArray(request.body?.imageResourceIds) ? request.body.imageResourceIds : [],
+        audioResourceIds: Array.isArray(request.body?.audioResourceIds) ? request.body.audioResourceIds : [],
+        resourceRoles: Array.isArray(request.body?.resourceRoles) ? request.body.resourceRoles : [],
+        optimize: request.body?.optimizePrompt !== false,
+      });
+      const resources = await generateVideo({ ...request.body, model, prompt: prepared.prompt, duration, videoResourceIds: [], clientJobId: requestId, onProgress });
+      if (requestId) finishDirectGenerationProgress(requestId);
+      return response.json({ resources, promptPreparation: prepared });
+    }
+    const resources = await generateVideo({ ...request.body, model, prompt, duration, size: request.body?.ratio || request.body?.size, clientJobId: requestId, onProgress });
+    if (requestId) finishDirectGenerationProgress(requestId);
+    response.json({ resources });
+  } catch (error) {
+    if (requestId) finishDirectGenerationProgress(requestId, error);
+    throw error;
   }
-  const resources = await generateVideo({ ...request.body, model, prompt, duration, size: request.body?.ratio || request.body?.size });
-  response.json({ resources });
 }));
 app.post("/api/gpu/enhancements", asyncHandler(async (request, response) => response.status(202).json({ enhancement: await createFlashVsrEnhancement(requiredText(request.body?.sourceResourceId, "源视频资源 ID")) })));
 app.get("/api/gpu/enhancements/:sourceResourceId", asyncHandler(async (request, response) => response.json({ enhancement: await getFlashVsrEnhancement(param(request.params.sourceResourceId)) })));
