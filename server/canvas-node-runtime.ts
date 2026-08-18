@@ -29,12 +29,19 @@ export type CanvasNodeRunResult = {
   error?: string;
 };
 
+type CanvasRunOperationOrigin = "canvas" | "mcp";
+
+export type CanvasNodeRuntimeDependencies = {
+  prepareH3Prompt?: typeof prepareH3Prompt;
+};
+
 export async function queueCanvasConfigNodes(input: {
   projectId: string;
   configNodeIds: string[];
   operationId: string;
   originClientId?: string;
   targetOutputNodeIds?: Record<string, string[]>;
+  operationOrigin?: CanvasRunOperationOrigin;
 }) {
   const nodeIds = normalizedConfigNodeIds(input.configNodeIds);
   const project = asProject(await readProject(input.projectId));
@@ -50,11 +57,12 @@ export async function queueCanvasConfigNodes(input: {
         generationState: "queued",
         remoteOperationActive: true,
         remoteOperationId: input.operationId,
-        remoteOperationLabel: "MCP · 排队中",
+        remoteOperationOrigin: input.operationOrigin || "mcp",
+        remoteOperationLabel: input.operationOrigin === "canvas" ? "等待生成" : "MCP · 排队中",
         errorDetails: "",
       },
     },
-  })), ...targetIds.map((nodeId): CanvasOperation => ({ op: "update_node", nodeId, patch: { metadata: { status: "loading", generationState: "queued", remoteOperationActive: true, remoteOperationId: input.operationId, remoteOperationLabel: "MCP · 等待原位重跑", errorDetails: "" } } }))], input.originClientId || "canvas-node-runtime");
+  })), ...targetIds.map((nodeId): CanvasOperation => ({ op: "update_node", nodeId, patch: { metadata: { status: "loading", generationState: "queued", remoteOperationActive: true, remoteOperationId: input.operationId, remoteOperationOrigin: input.operationOrigin || "mcp", remoteOperationLabel: "MCP · 等待原位重跑", errorDetails: "" } } }))], input.originClientId || "canvas-node-runtime");
   return { nodeIds, projectVersion: result.project.version };
 }
 
@@ -67,6 +75,8 @@ export async function runCanvasConfigNodes(input: {
   operationId?: string;
   signal?: AbortSignal;
   targetOutputNodeIds?: Record<string, string[]>;
+  operationOrigin?: CanvasRunOperationOrigin;
+  dependencies?: CanvasNodeRuntimeDependencies;
 }) {
   const nodeIds = normalizedConfigNodeIds(input.configNodeIds);
   const initial = asProject(await readProject(input.projectId));
@@ -76,13 +86,14 @@ export async function runCanvasConfigNodes(input: {
   const results = await runWithConcurrency(nodeIds, concurrency, async (configNodeId) => {
     try {
       input.signal?.throwIfAborted();
-      return await runConfigNode(input.projectId, configNodeId, input.originClientId || "canvas-node-runtime", Boolean(input.remoteOperation), input.operationId, input.signal, input.targetOutputNodeIds?.[configNodeId]);
+      return await runConfigNode(input.projectId, configNodeId, input.originClientId || "canvas-node-runtime", Boolean(input.remoteOperation), input.operationId, input.signal, input.targetOutputNodeIds?.[configNodeId], input.operationOrigin, input.dependencies);
     } catch (error) {
       const message = errorMessage(error);
+      const cancelled = Boolean(input.signal?.aborted);
       await mutateAndPublish(input.projectId, [{
         op: "update_node",
         nodeId: configNodeId,
-        patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: "生成失败", errorDetails: message } },
+        patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: cancelled ? (input.operationOrigin === "mcp" ? "MCP 运行已取消" : "生成已取消") : "生成失败", errorDetails: message } },
       }], input.originClientId || "canvas-node-runtime").catch(() => undefined);
       return { configNodeId, outputNodeIds: [], status: "error" as const, error: message };
     }
@@ -115,29 +126,21 @@ function validateTargetOutputIds(project: CanvasProject, configNodeIds: string[]
   }
 }
 
-async function runConfigNode(projectId: string, configNodeId: string, originClientId: string, remoteOperation: boolean, operationId?: string, signal?: AbortSignal, targetOutputNodeIds?: string[]): Promise<CanvasNodeRunResult> {
+async function runConfigNode(projectId: string, configNodeId: string, originClientId: string, remoteOperation: boolean, operationId?: string, signal?: AbortSignal, targetOutputNodeIds?: string[], operationOrigin?: CanvasRunOperationOrigin, dependencies: CanvasNodeRuntimeDependencies = {}): Promise<CanvasNodeRunResult> {
   const project = asProject(await readProject(projectId));
   const config = requiredConfig(project, configNodeId);
   const mode = generationMode(config);
   let inputs = resolveInputs(project, config, mode);
   const model = normalizeModel(String(config.metadata?.model || ""));
   validateModel(mode, model);
-  let h3Prompt: H3PromptPreparation | undefined;
+  const isMcpOperation = remoteOperation && operationOrigin !== "canvas";
+  const managedOperationOrigin = remoteOperation ? (isMcpOperation ? "mcp" : "canvas") : null;
+  let h3InputMode: ReturnType<typeof normalizeH3InputMode> | undefined;
   if (mode === "video" && model === "minimax-h3") {
     if (inputs.videoIds.length) throw new Error("MiniMax H3 暂不支持视频参考或视频编辑；请改用图片、音频参考");
-    const inputMode = normalizeH3InputMode(config.metadata?.videoInputMode || config.metadata?.generation_mode);
-    if (inputMode === "firstFrame" && inputs.imageIds.length < 1) throw new Error("首帧生视频需要连接一张首帧图片");
-    if (inputMode === "firstLastFrame" && inputs.imageIds.length !== 2) throw new Error("首尾帧生视频需要按首帧、尾帧顺序连接两张图片");
-    h3Prompt = await prepareH3Prompt({
-      draftPrompt: inputs.prompt,
-      durationSeconds: videoDuration(config, model),
-      inputMode,
-      imageResourceIds: inputs.imageIds,
-      audioResourceIds: inputs.audioIds,
-      resourceRoles: h3ResourceRoles(config.metadata?.resourceRoles),
-      optimize: promptOptimizationEnabled(config.metadata?.videoPromptEnhance) && promptOptimizationEnabled(config.metadata?.prompt_extend),
-    });
-    inputs = { ...inputs, prompt: h3Prompt.prompt };
+    h3InputMode = normalizeH3InputMode(config.metadata?.videoInputMode || config.metadata?.generation_mode);
+    if (h3InputMode === "firstFrame" && inputs.imageIds.length < 1) throw new Error("首帧生视频需要连接一张首帧图片");
+    if (h3InputMode === "firstLastFrame" && inputs.imageIds.length !== 2) throw new Error("首尾帧生视频需要按首帧、尾帧顺序连接两张图片");
   } else if (mode === "video" && model === "ltx-2.5") {
     if (inputs.videoIds.length || inputs.audioIds.length) throw new Error("LTX 2.5 当前只接受文字和一张图片参考");
     if (inputs.imageIds.length > 1) throw new Error("LTX 2.5 每次只接受一张首帧或 Ingredients 参考图");
@@ -148,18 +151,18 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
   const count = targetOutputNodeIds?.length || generationCount(config, mode, model);
   const outputType = mode === "audio" ? "audio" : mode;
   const outputIds = targetOutputNodeIds?.length ? [...new Set(targetOutputNodeIds)] : Array.from({ length: count }, () => randomUUID());
-  const inputSnapshot = resolvedInputSnapshot(inputs);
+  let inputSnapshot = resolvedInputSnapshot(inputs);
   for (const outputId of outputIds) {
     const existing = project.nodes.find((node) => node.id === outputId);
     if (existing && (existing.type !== outputType || String(existing.metadata?.sourceConfigNodeId || "") !== config.id)) throw new Error(`节点 ${outputId} 不能由生成模组 ${config.id} 原位重跑`);
   }
   const toneNodeId = mode === "audio" ? randomUUID() : undefined;
-  const title = outputTitle(mode, config, inputs.prompt);
+  let title = outputTitle(mode, config, inputs.prompt);
   const shotLayout = shotLayoutMetadata(config);
   const initialOperations: CanvasOperation[] = [{
     op: "update_node",
     nodeId: config.id,
-    patch: { metadata: { status: "loading", generationState: "running", remoteOperationActive: remoteOperation, remoteOperationId: remoteOperation ? operationId : null, remoteOperationLabel: remoteOperation ? "MCP 正在执行生成模组" : "正在执行生成模组", errorDetails: "", resolvedPrompt: inputs.prompt, inputSnapshot, ...(h3Prompt ? { promptDraft: h3Prompt.draftPrompt, promptOptimization: promptPreparationMetadata(h3Prompt) } : {}) } },
+    patch: { metadata: { status: "loading", generationState: "running", remoteOperationActive: remoteOperation, remoteOperationId: remoteOperation ? operationId : null, remoteOperationOrigin: managedOperationOrigin, remoteOperationLabel: isMcpOperation ? "MCP 正在执行生成模组" : "正在执行生成模组", errorDetails: "", resolvedPrompt: inputs.prompt, inputSnapshot } },
   }];
 
   if (toneNodeId) {
@@ -182,7 +185,8 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
           generationState: "running",
           remoteOperationActive: remoteOperation,
           remoteOperationId: remoteOperation ? operationId : null,
-          remoteOperationLabel: remoteOperation ? "MCP · DeepSeek 正在优化语气" : "DeepSeek 正在优化语气",
+          remoteOperationOrigin: managedOperationOrigin,
+          remoteOperationLabel: isMcpOperation ? "MCP · DeepSeek 正在优化语气" : "DeepSeek 正在优化语气",
           ...shotLayout.child(1),
         },
       },
@@ -206,11 +210,12 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
           generationState: "running",
           remoteOperationActive: remoteOperation,
           remoteOperationId: remoteOperation ? operationId : null,
+          remoteOperationOrigin: managedOperationOrigin,
           remoteOperationLabel: providerLabel(mode, model),
           sourceConfigNodeId: config.id,
           inputSnapshot,
           ...shotLayout.child(toneNodeId ? 2 + index : 1 + index),
-          ...(mode === "video" ? { seconds: String(videoDuration(config, model)), vquality: String(config.metadata?.vquality || "preview"), videoInputMode: videoInputMode(config, model, inputs), ...(h3Prompt ? { promptOptimization: promptPreparationMetadata(h3Prompt) } : {}) } : {}),
+          ...(mode === "video" ? { seconds: String(videoDuration(config, model)), vquality: String(config.metadata?.vquality || "preview"), videoInputMode: videoInputMode(config, model, inputs) } : {}),
           ...(mode === "audio" ? { audioVoice: String(config.metadata?.audioVoice || "") } : {}),
         },
       };
@@ -230,6 +235,35 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
   await mutateAndPublish(projectId, initialOperations, originClientId);
 
   try {
+    if (mode === "video" && model === "minimax-h3") {
+      signal?.throwIfAborted();
+      const h3Prompt = await (dependencies.prepareH3Prompt || prepareH3Prompt)({
+        draftPrompt: inputs.prompt,
+        durationSeconds: videoDuration(config, model),
+        inputMode: h3InputMode,
+        imageResourceIds: inputs.imageIds,
+        audioResourceIds: inputs.audioIds,
+        resourceRoles: h3ResourceRoles(config.metadata?.resourceRoles),
+        optimize: promptOptimizationEnabled(config.metadata?.videoPromptEnhance) && promptOptimizationEnabled(config.metadata?.prompt_extend),
+      });
+      signal?.throwIfAborted();
+      inputs = { ...inputs, prompt: h3Prompt.prompt };
+      inputSnapshot = resolvedInputSnapshot(inputs);
+      title = outputTitle(mode, config, inputs.prompt);
+      const promptMetadata = {
+        prompt: inputs.prompt,
+        inputSnapshot,
+        promptOptimization: promptPreparationMetadata(h3Prompt),
+      };
+      await mutateAndPublish(projectId, [
+        { op: "update_node", nodeId: config.id, patch: { metadata: { ...promptMetadata, resolvedPrompt: inputs.prompt, promptDraft: h3Prompt.draftPrompt } } },
+        ...outputIds.map((nodeId, index): CanvasOperation => ({
+          op: "update_node",
+          nodeId,
+          patch: { title: count > 1 ? `${title} ${index + 1}` : title, metadata: promptMetadata },
+        })),
+      ], originClientId);
+    }
     if (mode === "text") {
       const settled = await Promise.allSettled(outputIds.map(() => generateText(inputs.prompt, model, textResourceIdsForModel(model, inputs), [], inputs.systemPrompt, {
         thinking: textThinkingMode(config),
@@ -317,10 +351,12 @@ async function runConfigNode(projectId: string, configNodeId: string, originClie
     return { configNodeId, outputNodeIds: outputIds, ...(toneNodeId ? { toneNodeId } : {}), status: "success" };
   } catch (error) {
     const message = errorMessage(error);
+    const cancelled = Boolean(signal?.aborted);
+    const terminalLabel = cancelled ? (isMcpOperation ? "MCP 运行已取消" : "生成已取消") : "生成失败";
     await mutateAndPublish(projectId, [
-      { op: "update_node", nodeId: config.id, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: "生成失败", errorDetails: message } } },
-      ...outputIds.map((nodeId): CanvasOperation => ({ op: "update_node", nodeId, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: "生成失败", errorDetails: message } } })),
-      ...(toneNodeId ? [{ op: "update_node", nodeId: toneNodeId, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: "语气优化失败", errorDetails: message } } } as CanvasOperation] : []),
+      { op: "update_node", nodeId: config.id, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: terminalLabel, errorDetails: message } } },
+      ...outputIds.map((nodeId): CanvasOperation => ({ op: "update_node", nodeId, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: terminalLabel, errorDetails: message } } })),
+      ...(toneNodeId ? [{ op: "update_node", nodeId: toneNodeId, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: cancelled ? terminalLabel : "语气优化失败", errorDetails: message } } } as CanvasOperation] : []),
     ], originClientId).catch(() => undefined);
     return { configNodeId, outputNodeIds: outputIds, ...(toneNodeId ? { toneNodeId } : {}), status: "error", error: message };
   }
@@ -432,10 +468,10 @@ function mediaIds(nodes: CanvasNode[]) {
 
 async function finishTextOutputs(projectId: string, configNodeId: string, outputIds: string[], settled: PromiseSettledResult<string>[], originClientId: string) {
   const operations = settled.map((result, index): CanvasOperation => result.status === "fulfilled"
-    ? { op: "update_node", nodeId: outputIds[index], patch: { metadata: { content: result.value, status: "success", generationState: "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: "生成完成", errorDetails: "" } } }
-    : { op: "update_node", nodeId: outputIds[index], patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: "生成失败", errorDetails: errorMessage(result.reason) } } });
+    ? { op: "update_node", nodeId: outputIds[index], patch: { metadata: { content: result.value, status: "success", generationState: "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: "生成完成", errorDetails: "" } } }
+    : { op: "update_node", nodeId: outputIds[index], patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: "生成失败", errorDetails: errorMessage(result.reason) } } });
   const failure = settled.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
-  operations.push({ op: "update_node", nodeId: configNodeId, patch: { metadata: { status: failure ? "error" : "success", generationState: failure ? "failed" : "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: failure ? "部分结果生成失败" : "生成完成", errorDetails: failure ? errorMessage(failure.reason) : "" } } });
+  operations.push({ op: "update_node", nodeId: configNodeId, patch: { metadata: { status: failure ? "error" : "success", generationState: failure ? "failed" : "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: failure ? "部分结果生成失败" : "生成完成", errorDetails: failure ? errorMessage(failure.reason) : "" } } });
   await mutateAndPublish(projectId, operations, originClientId);
   return failure ? errorMessage(failure.reason) : undefined;
 }
@@ -443,9 +479,9 @@ async function finishTextOutputs(projectId: string, configNodeId: string, output
 async function finishResourceOutputs(projectId: string, configNodeId: string, outputIds: string[], settled: PromiseSettledResult<StoredResource>[], originClientId: string) {
   const operations = settled.map((result, index): CanvasOperation => result.status === "fulfilled"
     ? { op: "update_node", nodeId: outputIds[index], patch: { title: result.value.name.replace(/\.[^.]+$/, ""), metadata: resourceMetadata(result.value) } }
-    : { op: "update_node", nodeId: outputIds[index], patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: "生成失败", errorDetails: errorMessage(result.reason) } } });
+    : { op: "update_node", nodeId: outputIds[index], patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: "生成失败", errorDetails: errorMessage(result.reason) } } });
   const failure = settled.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
-  operations.push({ op: "update_node", nodeId: configNodeId, patch: { metadata: { status: failure ? "error" : "success", generationState: failure ? "failed" : "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: failure ? "部分结果生成失败" : "生成完成", errorDetails: failure ? errorMessage(failure.reason) : "" } } });
+  operations.push({ op: "update_node", nodeId: configNodeId, patch: { metadata: { status: failure ? "error" : "success", generationState: failure ? "failed" : "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: failure ? "部分结果生成失败" : "生成完成", errorDetails: failure ? errorMessage(failure.reason) : "" } } });
   await mutateAndPublish(projectId, operations, originClientId);
   return failure ? errorMessage(failure.reason) : undefined;
 }
@@ -454,11 +490,11 @@ async function publishSpeechProgress(projectId: string, toneNodeId: string, audi
   const operations: CanvasOperation[] = [];
   if (progress.stage === "tone") operations.push({ op: "update_node", nodeId: toneNodeId, patch: { metadata: { model: progress.toneModel, status: "loading", remoteOperationActive: remoteOperation, remoteOperationLabel: progress.label } } });
   if (progress.stage === "tone-ready") operations.push(
-    { op: "update_node", nodeId: toneNodeId, patch: { metadata: { model: progress.toneModel, content: JSON.stringify({ segments: progress.segments || [] }, null, 2), status: "success", generationState: "ready", remoteOperationActive: false, remoteOperationLabel: progress.label } } },
+    { op: "update_node", nodeId: toneNodeId, patch: { metadata: { model: progress.toneModel, content: JSON.stringify({ segments: progress.segments || [] }, null, 2), status: "success", generationState: "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: progress.label } } },
     { op: "update_node", nodeId: audioNodeId, patch: { metadata: { remoteOperationActive: remoteOperation, remoteOperationLabel: "Seed-TTS 正在准备语音" } } },
   );
   if (progress.stage === "synthesis" || progress.stage === "saving") operations.push({ op: "update_node", nodeId: audioNodeId, patch: { metadata: { remoteOperationActive: remoteOperation, remoteOperationLabel: progress.label, speechStage: progress.stage, speechSegmentCurrent: progress.current, speechSegmentTotal: progress.total } } });
-  if (progress.stage === "error") operations.push({ op: "update_node", nodeId: progress.failedStage === "tone" ? toneNodeId : audioNodeId, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationLabel: progress.label, errorDetails: progress.error || progress.label } } });
+  if (progress.stage === "error") operations.push({ op: "update_node", nodeId: progress.failedStage === "tone" ? toneNodeId : audioNodeId, patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: progress.label, errorDetails: progress.error || progress.label } } });
   if (operations.length) await mutateAndPublish(projectId, operations, originClientId);
 }
 
@@ -529,7 +565,7 @@ function withRuntimeStudioBindings(project: CanvasProject, operations: CanvasOpe
 }
 
 function resourceMetadata(resource: StoredResource) {
-  return { content: resource.url, storageKey: resource.id, mimeType: resource.mimeType, bytes: resource.size, status: "success", generationState: "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: "生成完成", errorDetails: "", ...(resource.metadata || {}) };
+  return { content: resource.url, storageKey: resource.id, mimeType: resource.mimeType, bytes: resource.size, status: "success", generationState: "ready", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: "生成完成", errorDetails: "", ...(resource.metadata || {}) };
 }
 function requiredConfig(project: CanvasProject, nodeId: string) { const node = project.nodes.find((item) => item.id === nodeId); if (!node) throw new Error(`节点不存在：${nodeId}`); if (node.type !== "config") throw new Error(`节点 ${nodeId} 不是生成模组`); return node; }
 function generationMode(node: CanvasNode): GenerationMode { const value = String(node.metadata?.generationMode || "image"); if (!["text", "image", "video", "audio", "music"].includes(value)) throw new Error(`不支持的生成模式：${value}`); return value as GenerationMode; }

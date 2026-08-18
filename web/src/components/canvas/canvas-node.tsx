@@ -451,7 +451,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 }}
             >
                 {remoteOperationActive ? (
-                    <span className="pointer-events-none absolute right-3 top-3 z-40 flex items-center gap-1.5 rounded-full border border-green-400/60 bg-green-500/15 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-green-300 shadow-[0_0_18px_rgba(34,197,94,.4)] backdrop-blur-md" title="该节点正在由 MCP 操作，完成前暂时锁定">
+                    <span className="pointer-events-none absolute right-3 top-3 z-40 flex items-center gap-1.5 rounded-full border border-green-400/60 bg-green-500/15 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-green-300 shadow-[0_0_18px_rgba(34,197,94,.4)] backdrop-blur-md" title="该节点正在执行后台任务，完成前暂时锁定">
                         <span className="size-1.5 animate-pulse rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,.95)]" />
                         {data.metadata?.remoteOperationLabel || "MCP 操作中"}
                     </span>

@@ -17,6 +17,7 @@ type CanvasRunJob = {
   result?: Awaited<ReturnType<typeof runCanvasConfigNodes>>;
   error?: string;
   targetOutputNodeIds?: Record<string, string[]>;
+  operationOrigin: "canvas" | "mcp";
 };
 
 const jobs = new Map<string, CanvasRunJob>();
@@ -27,6 +28,7 @@ const jobsPath = path.join(dataDir, "runtime", "canvas-run-jobs.json");
 export async function initializeCanvasRunJobs() {
   const stored = await readJson<CanvasRunJob[]>(jobsPath, []);
   for (const job of stored.slice(-maximumRetainedJobs)) {
+    job.operationOrigin ||= "mcp";
     if (job.status === "queued" || job.status === "running") {
       job.status = "failed";
       job.completedAt = new Date().toISOString();
@@ -43,6 +45,7 @@ export async function createCanvasRunJob(input: {
   concurrency?: number;
   originClientId: string;
   targetOutputNodeIds?: Record<string, string[]>;
+  operationOrigin?: "canvas" | "mcp";
 }) {
   const jobId = randomUUID();
   const queued = await queueCanvasConfigNodes({
@@ -51,6 +54,7 @@ export async function createCanvasRunJob(input: {
     operationId: jobId,
     originClientId: input.originClientId,
     targetOutputNodeIds: input.targetOutputNodeIds,
+    operationOrigin: input.operationOrigin || "mcp",
   });
   const requestedConcurrency = Number(input.concurrency);
   const concurrency = Math.max(1, Math.min(queued.nodeIds.length, Number.isInteger(requestedConcurrency) && requestedConcurrency > 0 ? requestedConcurrency : queued.nodeIds.length));
@@ -61,6 +65,7 @@ export async function createCanvasRunJob(input: {
     concurrency,
     status: "queued",
     createdAt: new Date().toISOString(),
+    operationOrigin: input.operationOrigin || "mcp",
     ...(input.targetOutputNodeIds ? { targetOutputNodeIds: input.targetOutputNodeIds } : {}),
   };
   jobs.set(job.id, job);
@@ -83,7 +88,7 @@ export async function createCanvasRerunJob(input: { projectId: string; outputNod
     if (!config || config.type !== "config") throw new Error(`结果节点 ${outputId} 没有可复现的生成模组`);
     (targets[configNodeId] ||= []).push(outputId);
   }
-  return createCanvasRunJob({ projectId: input.projectId, nodeIds: Object.keys(targets), concurrency: input.concurrency, originClientId: input.originClientId, targetOutputNodeIds: targets });
+  return createCanvasRunJob({ projectId: input.projectId, nodeIds: Object.keys(targets), concurrency: input.concurrency, originClientId: input.originClientId, targetOutputNodeIds: targets, operationOrigin: "mcp" });
 }
 
 export function getCanvasRunJob(jobId: string) {
@@ -104,7 +109,7 @@ export async function cancelCanvasRunJob(jobId: string) {
   const operations = (project.nodes || []).flatMap((node): CanvasOperation[] => String(node.metadata?.remoteOperationId || "") === jobId ? [{
     op: "update_node",
     nodeId: node.id,
-    patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationLabel: "MCP 运行已取消", errorDetails: "用户取消运行" } },
+    patch: { metadata: { status: "error", generationState: "failed", remoteOperationActive: false, remoteOperationId: null, remoteOperationOrigin: null, remoteOperationLabel: job.operationOrigin === "canvas" ? "生成已取消" : "MCP 运行已取消", errorDetails: "用户取消运行" } },
   }] : []);
   if (operations.length) {
     const result = await applyCanvasOperations(job.projectId, operations);
@@ -128,6 +133,7 @@ async function executeJob(job: CanvasRunJob, originClientId: string) {
       originClientId,
       remoteOperation: true,
       operationId: job.id,
+      operationOrigin: job.operationOrigin,
       signal: controller.signal,
       targetOutputNodeIds: job.targetOutputNodeIds,
     });
@@ -153,6 +159,7 @@ export async function recoverInterruptedCanvasRuns() {
         metadata: {
           remoteOperationActive: false,
           remoteOperationId: null,
+          remoteOperationOrigin: null,
           remoteOperationLabel: "服务重启，操作已中断",
           ...(node.metadata?.generationState === "queued" || node.metadata?.generationState === "running"
             ? { status: "error", generationState: "failed", errorDetails: "本地服务重启后原 MCP 操作已终止，请重新运行节点" }

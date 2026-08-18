@@ -131,7 +131,8 @@ app.post("/api/canvas/projects/:id/run-nodes", asyncHandler(async (request, resp
       projectId: param(request.params.id),
       nodeIds: Array.isArray(request.body?.nodeIds) ? request.body.nodeIds : [],
       concurrency: request.body?.concurrency == null ? undefined : Number(request.body.concurrency),
-      originClientId: originClientId || "mcp",
+      originClientId: originClientId || (request.header("x-croco-operation-origin") === "mcp" ? "mcp" : "canvas-run-job"),
+      operationOrigin: request.header("x-croco-operation-origin") === "mcp" ? "mcp" : "canvas",
     });
     return response.status(202).json(job);
   }

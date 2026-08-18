@@ -11,6 +11,7 @@ import { requestMusicGeneration, type GeneratedMusic } from "@/services/api/musi
 import { requestVideoGeneration, resumeVideoGeneration, storeGeneratedVideo, type VideoGenerationResult } from "@/services/api/video";
 import { approveLtxStage1, type LtxStage1ReviewReady } from "@/services/api/ltx-delivery-client";
 import { requestSplitGeneration, requestTextGeneration, waitForGeneration } from "@/services/api/generation-client";
+import { cancelCanvasRunJob, startCanvasRunJob, waitForCanvasRunJob } from "@/services/api/canvas-run-jobs";
 import { cancelGeneration } from "@/services/api/usage";
 import { getCloudAsset, type CloudAsset } from "@/services/api/cloud-assets";
 import { createSharedPrompt, type SharedPromptNodeType } from "@/services/api/shared-prompts";
@@ -268,6 +269,12 @@ function ConnectionCreateOption({ theme, icon, title, description, onClick }: { 
     );
 }
 
+function isCanvasManagedGeneration(node: CanvasNodeData | undefined) {
+    return node?.type === CanvasNodeType.Config
+        && node.metadata?.remoteOperationActive === true
+        && node.metadata.remoteOperationOrigin === "canvas";
+}
+
 function ReadOnlyConfigNode({ node }: { node: CanvasNodeData }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const prompt = node.metadata?.composerContent || node.metadata?.prompt || "未填写提示词";
@@ -408,6 +415,7 @@ function CrocoCanvasPage() {
     const selectionBoxRef = useRef(selectionBox);
     const pendingConnectionCreateRef = useRef(pendingConnectionCreate);
     const generationRequestsRef = useRef(new Map<string, CanvasGenerationRequest>());
+    const canvasRunJobIdsRef = useRef(new Map<string, string>());
     const workflowRunTokensRef = useRef(new Map<string, string>());
     const skipRemoteProjectSaveRef = useRef(false);
     const skipRemoteViewportSaveRef = useRef(false);
@@ -534,25 +542,35 @@ function CrocoCanvasPage() {
     const confirmStopGeneration = useCallback(
         (nodeId: string) => {
             const affectedNodeIds = generationNodeIdsForRunningId(nodeId);
+            const canvasRunNode = nodesRef.current.find((node) => node.id === nodeId);
+            const canvasRunJobId = canvasRunJobIdsRef.current.get(nodeId)
+                || (isCanvasManagedGeneration(canvasRunNode) ? canvasRunNode?.metadata?.remoteOperationId || undefined : undefined);
+            if (canvasRunJobId) nodesRef.current.forEach((node) => {
+                if (node.metadata?.remoteOperationId === canvasRunJobId) affectedNodeIds.add(node.id);
+            });
             const h3JobIds = remoteCancelableVideoJobIds(nodesRef.current, affectedNodeIds, (model) => providerIdForModel(model) === "minimax_h3");
             modal.confirm({
                 title: "停止生成？",
-                content: h3JobIds.length
-                    ? "将同时通知 MiniMax H3 GPU 停止后台生成；已经完成的结果不会被删除。"
+                content: canvasRunJobId || h3JobIds.length
+                    ? "将同时通知后台停止生成任务；已经完成的结果不会被删除。"
                     : "停止当前页面等待后，已提交的后台任务仍可能继续执行并产生费用；重新进入画布时会恢复最终结果。",
                 okText: "停止",
                 cancelText: "继续生成",
                 okButtonProps: { danger: true },
                 onOk: async () => {
                     stopGenerationByRunningId(nodeId);
-                    if (!h3JobIds.length) return;
-                    const results = await Promise.allSettled(h3JobIds.map(cancelGeneration));
+                    const cancellations = [
+                        ...(canvasRunJobId ? [cancelCanvasRunJob(canvasRunJobId)] : []),
+                        ...(!canvasRunJobId ? h3JobIds.map(cancelGeneration) : []),
+                    ];
+                    if (!cancellations.length) return;
+                    const results = await Promise.allSettled(cancellations);
                     const failures = results.filter((result) => result.status === "rejected");
                     if (failures.length) {
-                        message.error("页面等待已停止，但部分 MiniMax H3 GPU 任务取消失败；刷新后可再次停止");
+                        message.error("页面等待已停止，但部分后台任务取消失败；刷新后可再次停止");
                         return;
                     }
-                    message.success("MiniMax H3 GPU 生成已停止");
+                    message.success("生成任务已停止");
                 },
             });
         },
@@ -2524,21 +2542,27 @@ function CrocoCanvasPage() {
             }
             if (sourceNode?.type === CanvasNodeType.Config && !workflow) {
                 setRunningNodeId(nodeId);
+                const runController = startGenerationRequest(nodeId, nodeId, nodeId);
+                let canvasRunJobId = "";
                 try {
-                    const response = await fetch(`/api/canvas/projects/${encodeURIComponent(projectId)}/run-nodes`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ nodeIds: [nodeId], concurrency: 1 }),
-                    });
-                    const payload = await response.json() as { error?: string; results?: Array<{ status: "success" | "error"; outputNodeIds?: string[]; error?: string }> };
-                    if (!response.ok) throw new Error(payload.error || "生成模组运行失败");
-                    const failed = payload.results?.find((result) => result.status === "error");
+                    const submitted = await startCanvasRunJob(projectId, [nodeId], 1);
+                    canvasRunJobId = submitted.jobId;
+                    canvasRunJobIdsRef.current.set(nodeId, canvasRunJobId);
+                    if (runController.signal.aborted) {
+                        await cancelCanvasRunJob(canvasRunJobId).catch(() => undefined);
+                        return [];
+                    }
+                    const completed = await waitForCanvasRunJob(canvasRunJobId, { signal: runController.signal });
+                    if (completed.status === "failed" || completed.status === "cancelled") throw new Error(completed.error || (completed.status === "cancelled" ? "生成已取消" : "生成模组运行失败"));
+                    const failed = completed.result?.results?.find((result) => result.status === "error");
                     if (failed) throw new Error(failed.error || "生成模组运行失败");
-                    return payload.results?.flatMap((result) => result.outputNodeIds || []) || [];
+                    return completed.result?.results?.flatMap((result) => result.outputNodeIds || []) || [];
                 } catch (error) {
-                    message.error(error instanceof Error ? error.message : "生成模组运行失败");
+                    if (!runController.signal.aborted) message.error(error instanceof Error ? error.message : "生成模组运行失败");
                     return [];
                 } finally {
+                    if (canvasRunJobIdsRef.current.get(nodeId) === canvasRunJobId) canvasRunJobIdsRef.current.delete(nodeId);
+                    finishGenerationRequest(nodeId, runController);
                     setRunningNodeId(null);
                 }
             }
@@ -3616,6 +3640,8 @@ function CrocoCanvasPage() {
 
                     {renderedNodes.map((node) => {
                         const locked = isCanvasNodeLocked(node, nodes);
+                        const canvasManagedGeneration = isCanvasManagedGeneration(node);
+                        const nodeReadOnly = isReadOnly || (locked && !canvasManagedGeneration);
                         const renderDetail = overviewActive ? "outline" : canvasNodeRenderDetail(node, viewport.k, visibleNodes.length);
                         if (renderDetail !== "full") return (
                             <CanvasNodeLod
@@ -3625,7 +3651,7 @@ function CrocoCanvasPage() {
                                 selected={!isReadOnly && selectedNodeIds.has(node.id)}
                                 related={!isReadOnly && relatedHighlight.nodeIds.has(node.id)}
                                 connectionTarget={!isReadOnly && connectionTargetNodeId === node.id}
-                                readOnly={isReadOnly || locked}
+                                readOnly={nodeReadOnly}
                                 locked={locked}
                                 themeKey={colorTheme}
                                 onMouseDown={isReadOnly ? () => {} : handleNodeMouseDown}
@@ -3640,7 +3666,7 @@ function CrocoCanvasPage() {
                             key={node.id}
                             data={node}
                             locked={locked}
-                            readOnly={isReadOnly || locked}
+                            readOnly={nodeReadOnly}
                             scale={viewport.k}
                             isSelected={!isReadOnly && selectedNodeIds.has(node.id)}
                             isRelated={!isReadOnly && relatedHighlight.nodeIds.has(node.id)}
@@ -3726,10 +3752,10 @@ function CrocoCanvasPage() {
                                     onCancel={() => deleteNodes(new Set([contentNode.id]))}
                                     onConfirm={(result) => confirmVideoMiddleFrame(contentNode, result)}
                                 />
-                            ) : isReadOnly || locked ? <ReadOnlyConfigNode node={contentNode} /> : contentNode.type === CanvasNodeType.Split ? (
+                            ) : nodeReadOnly ? <ReadOnlyConfigNode node={contentNode} /> : contentNode.type === CanvasNodeType.Split ? (
                                 <CanvasSplitNodePanel node={contentNode} inputs={moduleInputsById.get(contentNode.id) || []} isRunning={runningNodeId === contentNode.id} onConfigChange={handleConfigNodeChange} onComposerToggle={() => setDialogNodeId((current) => current === contentNode.id ? null : contentNode.id)} onStop={confirmStopGeneration} onGenerate={(nodeId) => void handleSplitNode(nodeId)} />
                             ) : (
-                                <CanvasConfigNodePanel node={contentNode} isRunning={runningNodeId === contentNode.id} inputSummary={getInputSummary(moduleInputsById.get(contentNode.id) || [])} mentionReferences={mentionReferencesByNodeId.get(contentNode.id) || []} onConfigChange={handleConfigNodeChange} onComposerToggle={() => setDialogNodeId((current) => (current === contentNode.id ? null : contentNode.id))} onStop={confirmStopGeneration} onGenerate={(nodeId) => { const target = nodesRef.current.find((item) => item.id === nodeId); void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.composerContent ?? target?.metadata?.prompt ?? ""); }} />
+                                <CanvasConfigNodePanel node={contentNode} isRunning={runningNodeId === contentNode.id || isCanvasManagedGeneration(contentNode)} inputSummary={getInputSummary(moduleInputsById.get(contentNode.id) || [])} mentionReferences={mentionReferencesByNodeId.get(contentNode.id) || []} onConfigChange={handleConfigNodeChange} onComposerToggle={() => setDialogNodeId((current) => (current === contentNode.id ? null : contentNode.id))} onStop={confirmStopGeneration} onGenerate={(nodeId) => { const target = nodesRef.current.find((item) => item.id === nodeId); void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.composerContent ?? target?.metadata?.prompt ?? ""); }} />
                             )}
                             onMouseDown={isReadOnly ? () => {} : handleNodeMouseDown}
                             onHoverStart={handleCanvasNodeHoverStart}

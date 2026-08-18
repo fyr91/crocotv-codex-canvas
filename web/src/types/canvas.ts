@@ -107,6 +107,8 @@ export type CanvasNodeMetadata = {
     generationJobId?: string;
     generationState?: "queued" | "running" | "ready" | "failed" | "canceled";
     remoteOperationActive?: boolean;
+    remoteOperationId?: string | null;
+    remoteOperationOrigin?: "canvas" | "mcp" | null;
     remoteOperationLabel?: string;
     persistenceState?: "pending" | "uploading" | "saved" | "failed";
     deliveryMode?: "ltx-direct-preview-v1";
