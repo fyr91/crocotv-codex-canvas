@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Palette, Wand2, Plus, Check, ChevronRight, Lock, RotateCcw, ArrowUp, AlertTriangle, X, Image as ImageIcon, Pencil } from "lucide-react";
+import { Sparkles, Palette, Wand2, Plus, Check, Lock, RotateCcw, ArrowUp, AlertTriangle, X, Image as ImageIcon, Pencil } from "lucide-react";
 import { useProjectStore, type StyleConfig, type StylePreset, type StylePresetCategory } from "@/store/projectStore";
 import { api } from "@/lib/api";
 import StepPageHeader, { StepPill } from "@/components/shared/StepPageHeader";
@@ -43,15 +43,6 @@ export default function ArtDirection() {
     const [aiModalVideoPrompt, setAiModalVideoPrompt] = useState("");
     const [aiModalVideoNegative, setAiModalVideoNegative] = useState("");
 
-    // Track if current selection is modified from original preset
-    const [isModified, setIsModified] = useState(false);
-
-    // Editor state (kept for Apply logic)
-    const [editingName, setEditingName] = useState("");
-    const [editingPositive, setEditingPositive] = useState("");
-    const [editingNegative, setEditingNegative] = useState("");
-    const [editingVideoPrompt, setEditingVideoPrompt] = useState("");
-    const [editingVideoNegative, setEditingVideoNegative] = useState("");
     const [isSaving, setIsSaving] = useState(false);
 
     const filteredPresets = useMemo(() => {
@@ -64,10 +55,8 @@ export default function ArtDirection() {
     const [seriesBaselineLoading, setSeriesBaselineLoading] = useState(false);
     const [bannerBusy, setBannerBusy] = useState(false);
     const [pendingOverrideStyle, setPendingOverrideStyle] = useState<StyleConfig | null>(null);
-    const [overrideAccepted, setOverrideAccepted] = useState(false);
 
     useEffect(() => {
-        setOverrideAccepted(false);
         setPendingOverrideStyle(null);
         const seriesId = currentProject?.series_id;
         if (!seriesId) {
@@ -88,7 +77,6 @@ export default function ArtDirection() {
     const isInherit = inSeries && !!seriesBaseline && !projectStyle;
     const isOverridden = inSeries && !!seriesBaseline && !!projectStyle;
     const canPromote = inSeries && !seriesBaseline && !!projectStyle;
-    const isPreview = isInherit && overrideAccepted;
 
     const handleResetToSeries = async () => {
         if (!currentProject?.id) return;
@@ -97,13 +85,6 @@ export default function ArtDirection() {
             const fresh = await api.clearProjectArtDirection(currentProject.id);
             updateProject(currentProject.id, fresh);
             setSelectedStyle(null);
-            setEditingName("");
-            setEditingPositive("");
-            setEditingNegative("");
-            setEditingVideoPrompt("");
-            setEditingVideoNegative("");
-            setIsModified(false);
-            setOverrideAccepted(false);
             toast.success(ta("toastResetDone"), {
                 projectId: currentProject.id,
                 projectTitle: currentProject.title,
@@ -144,22 +125,15 @@ export default function ArtDirection() {
         const projectStyleConfig = projectAD?.style_config ?? null;
         if (projectStyleConfig) {
             setSelectedStyle(projectStyleConfig);
-            setEditingName(projectStyleConfig.name || "");
-            setEditingPositive(projectStyleConfig.image_prompt || "");
-            setEditingNegative(projectStyleConfig.image_negative_prompt || "");
-            setEditingVideoPrompt(projectStyleConfig.video_prompt || "");
-            setEditingVideoNegative(projectStyleConfig.video_negative_prompt || "");
             setCustomStyles(projectAD?.custom_styles || []);
             if (projectAD?.ai_recommendations && projectAD.ai_recommendations.length > 0) {
                 setAiRecommendations(projectAD.ai_recommendations);
             }
         } else if (seriesBaseline) {
             setSelectedStyle(seriesBaseline);
-            setEditingName(seriesBaseline.name || "");
-            setEditingPositive(seriesBaseline.image_prompt || "");
-            setEditingNegative(seriesBaseline.image_negative_prompt || "");
-            setEditingVideoPrompt(seriesBaseline.video_prompt || "");
-            setEditingVideoNegative(seriesBaseline.video_negative_prompt || "");
+            setCustomStyles(projectAD?.custom_styles || []);
+        } else {
+            setSelectedStyle(null);
             setCustomStyles(projectAD?.custom_styles || []);
         }
     }, [currentProject?.id, currentProject?.art_direction, seriesBaseline]);
@@ -215,34 +189,60 @@ export default function ArtDirection() {
     const applyStyleToState = (style: StyleConfig | StylePreset) => {
         const normalizedStyle = toStyleConfig(style);
         setSelectedStyle(normalizedStyle);
-        setEditingName(normalizedStyle.name);
-        setEditingPositive(normalizedStyle.image_prompt);
-        setEditingNegative(normalizedStyle.image_negative_prompt);
-        setEditingVideoPrompt(normalizedStyle.video_prompt);
-        setEditingVideoNegative(normalizedStyle.video_negative_prompt);
-        setIsModified(false);
+    };
+
+    const persistStyle = async (style: StyleConfig): Promise<boolean> => {
+        if (!currentProject) return false;
+        setIsSaving(true);
+        try {
+            const updated = await api.saveArtDirection(
+                currentProject.id,
+                style.id,
+                style,
+                customStyles,
+                aiRecommendations,
+            );
+            updateProject(currentProject.id, updated);
+            applyStyleToState(style);
+            toast.success(ta("styleApplied"), {
+                projectId: currentProject.id,
+                projectTitle: currentProject.title,
+                body: ta("styleAppliedBody", { name: style.name }),
+            });
+            return true;
+        } catch (error) {
+            console.error("Failed to save art direction:", error);
+            toast.error(ta("saveFailedShort"), {
+                projectId: currentProject.id,
+                projectTitle: currentProject.title,
+            });
+            return false;
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const requestStyleApplication = async (style: StyleConfig | StylePreset): Promise<"saved" | "pending" | "failed"> => {
+        const normalizedStyle = toStyleConfig(style);
+        const isSeriesBaseline = isInherit && seriesBaseline && normalizedStyle.id === seriesBaseline.id;
+        if (isInherit && !isSeriesBaseline) {
+            setPendingOverrideStyle(normalizedStyle);
+            return "pending";
+        }
+        if (isSeriesBaseline) {
+            applyStyleToState(normalizedStyle);
+            return "saved";
+        }
+        return await persistStyle(normalizedStyle) ? "saved" : "failed";
     };
 
     const handleSelectStyle = (style: StyleConfig | StylePreset) => {
-        const normalizedStyle = toStyleConfig(style);
-        const isSeriesBaseline = isInherit && seriesBaseline && normalizedStyle.id === seriesBaseline.id;
-        if (isInherit && !overrideAccepted && !isSeriesBaseline) {
-            setPendingOverrideStyle(normalizedStyle);
-            return;
-        }
-        applyStyleToState(normalizedStyle);
+        void requestStyleApplication(style);
     };
 
-    const confirmOverridePreview = () => {
+    const confirmOverride = async () => {
         if (!pendingOverrideStyle) return;
-        setOverrideAccepted(true);
-        applyStyleToState(pendingOverrideStyle);
-        toast.info(ta("toastOverridePreviewing", { name: pendingOverrideStyle.name }), {
-            projectId: currentProject?.id,
-            projectTitle: currentProject?.title,
-            body: ta("toastOverridePreviewingBody"),
-        });
-        setPendingOverrideStyle(null);
+        if (await persistStyle(pendingOverrideStyle)) setPendingOverrideStyle(null);
     };
 
     const cancelOverrideConfirm = () => setPendingOverrideStyle(null);
@@ -277,7 +277,7 @@ export default function ArtDirection() {
         setAiModalEditing(false);
     };
 
-    const handleAiModalApply = () => {
+    const handleAiModalApply = async () => {
         if (!aiModalStyle) return;
         const isCustomized = aiModalEditing && (
             aiModalPositive !== aiModalStyle.image_prompt ||
@@ -296,25 +296,12 @@ export default function ArtDirection() {
             is_custom: false,
         };
 
-        const isSeriesBaseline = isInherit && seriesBaseline && config.id === seriesBaseline.id;
-        if (isInherit && !overrideAccepted && !isSeriesBaseline) {
-            setPendingOverrideStyle(config);
-            closeAiModal();
-            return;
-        }
-
-        setSelectedStyle(config);
-        setEditingName(config.name);
-        setEditingPositive(config.image_prompt);
-        setEditingNegative(config.image_negative_prompt);
-        setEditingVideoPrompt(config.video_prompt);
-        setEditingVideoNegative(config.video_negative_prompt);
-        setIsModified(isCustomized);
-        closeAiModal();
+        const result = await requestStyleApplication(config);
+        if (result !== "failed") closeAiModal();
     };
 
     // Modal: use this style (original or customized)
-    const handleModalApplyStyle = () => {
+    const handleModalApplyStyle = async () => {
         if (!modalPreset) return;
         const isCustomized = modalEditing && (
             modalPositive !== modalPreset.image_prompt ||
@@ -333,80 +320,8 @@ export default function ArtDirection() {
             is_custom: false,
         };
 
-        // Go through override check if in series inherit mode
-        const isSeriesBaseline = isInherit && seriesBaseline && config.id === seriesBaseline.id;
-        if (isInherit && !overrideAccepted && !isSeriesBaseline) {
-            setPendingOverrideStyle(config);
-            closePresetModal();
-            return;
-        }
-
-        setSelectedStyle(config);
-        setEditingName(config.name);
-        setEditingPositive(config.image_prompt);
-        setEditingNegative(config.image_negative_prompt);
-        setEditingVideoPrompt(config.video_prompt);
-        setEditingVideoNegative(config.video_negative_prompt);
-        setIsModified(isCustomized);
-        closePresetModal();
-    };
-
-    // Restore to original preset prompts
-    const handleRestoreOriginal = () => {
-        if (!selectedStyle) return;
-        const original = presets.find(p => p.id === selectedStyle.id);
-        if (original) {
-            setEditingPositive(original.image_prompt);
-            setEditingNegative(original.image_negative_prompt);
-            setEditingVideoPrompt(original.video_prompt);
-            setEditingVideoNegative(original.video_negative_prompt);
-            setIsModified(false);
-        }
-    };
-
-    const handleApply = async () => {
-        if (!currentProject || !selectedStyle) {
-            toast.warning(ta("selectStyleFirst"), {
-                projectId: currentProject?.id,
-                projectTitle: currentProject?.title,
-            });
-            return;
-        }
-
-        const finalConfig: StyleConfig = {
-            ...selectedStyle,
-            name: editingName,
-            image_prompt: editingPositive,
-            image_negative_prompt: editingNegative,
-            video_prompt: editingVideoPrompt,
-            video_negative_prompt: editingVideoNegative,
-        };
-
-        setIsSaving(true);
-        try {
-            const updated = await api.saveArtDirection(
-                currentProject.id,
-                finalConfig.id,
-                finalConfig,
-                customStyles,
-                aiRecommendations
-            );
-            updateProject(currentProject.id, updated);
-            setOverrideAccepted(false);
-            toast.success(ta("styleApplied"), {
-                projectId: currentProject.id,
-                projectTitle: currentProject.title,
-                body: ta("styleAppliedBody", { name: finalConfig.name }),
-            });
-        } catch (error) {
-            console.error("Failed to save art direction:", error);
-            toast.error(ta("saveFailedShort"), {
-                projectId: currentProject?.id,
-                projectTitle: currentProject?.title,
-            });
-        } finally {
-            setIsSaving(false);
-        }
+        const result = await requestStyleApplication(config);
+        if (result !== "failed") closePresetModal();
     };
 
     return (
@@ -426,7 +341,7 @@ export default function ArtDirection() {
                 {/* Series inherit/override banners */}
                 {inSeries && !seriesBaselineLoading && (
                     <>
-                        {isInherit && !overrideAccepted && (
+                        {isInherit && (
                             <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3">
                                 <Lock size={16} className="text-primary shrink-0" />
                                 <div className="flex-1 min-w-0">
@@ -436,28 +351,6 @@ export default function ArtDirection() {
                                     </p>
                                     <p className="text-sm text-text-muted mt-0.5">{ta("inheritHint")}</p>
                                 </div>
-                            </div>
-                        )}
-                        {isPreview && (
-                            <div className="flex items-center gap-3 rounded-lg border border-status-processing-border bg-status-processing-bg px-4 py-3">
-                                <AlertTriangle size={16} className="text-status-processing-fg shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm text-foreground">
-                                        <span className="text-status-processing-fg">{ta("previewBannerTitle")}</span>{" "}
-                                        <span className="font-medium">{selectedStyle?.name ?? "—"}</span>
-                                    </p>
-                                    <p className="text-sm text-text-muted mt-0.5">{ta("previewBannerHint")}</p>
-                                </div>
-                                <WorkflowActionButton
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                        setOverrideAccepted(false);
-                                        if (seriesBaseline) applyStyleToState(seriesBaseline);
-                                    }}
-                                >
-                                    {ta("cancelOverride")}
-                                </WorkflowActionButton>
                             </div>
                         )}
                         {isOverridden && (
@@ -601,42 +494,6 @@ export default function ArtDirection() {
                 )}
             </div>
 
-            {/* Bottom sticky bar */}
-            <div className="shrink-0 border-t border-glass-border bg-surface/95 backdrop-blur-md px-8 py-3 flex items-center justify-end gap-3">
-                {selectedStyle ? (
-                    <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm uppercase tracking-[0.18em] text-text-muted">
-                            <span className="text-foreground">{selectedStyle.name}</span>
-                            {isModified && (
-                                <>
-                                    <span className="mx-1.5 text-status-processing-fg">·</span>
-                                    <span className="text-status-processing-fg">已修改</span>
-                                    <button
-                                        onClick={handleRestoreOriginal}
-                                        className="ml-2 text-sm text-text-muted hover:text-foreground underline"
-                                    >
-                                        还原
-                                    </button>
-                                </>
-                            )}
-                        </span>
-                    </div>
-                ) : (
-                    <span className="font-mono text-sm uppercase tracking-[0.18em] text-text-muted">
-                        {ta("selectStyleArrow")}
-                    </span>
-                )}
-                <WorkflowActionButton
-                    variant="primary"
-                    loading={isSaving}
-                    rightIcon={<ChevronRight />}
-                    onClick={handleApply}
-                    disabled={!selectedStyle}
-                >
-                    {isSaving ? ta("saving") : ta("applyAndContinue")}
-                </WorkflowActionButton>
-            </div>
-
             {/* AI Recommendation Detail Modal */}
             <AnimatePresence>
                 {aiModalStyle && (
@@ -655,6 +512,7 @@ export default function ArtDirection() {
                         onStartEditing={() => setAiModalEditing(true)}
                         onApply={handleAiModalApply}
                         onClose={closeAiModal}
+                        isApplying={isSaving}
                     />
                 )}
             </AnimatePresence>
@@ -677,6 +535,7 @@ export default function ArtDirection() {
                         onStartEditing={() => setModalEditing(true)}
                         onApply={handleModalApplyStyle}
                         onClose={closePresetModal}
+                        isApplying={isSaving}
                         sameCategoryPresets={presets.filter(p => p.category === modalPreset.category && p.id !== modalPreset.id)}
                         onSwitchPreset={(p) => {
                             setModalPreset(p);
@@ -731,7 +590,7 @@ export default function ArtDirection() {
                             <WorkflowActionButton variant="ghost" size="sm" onClick={cancelOverrideConfirm}>
                                 {ta("overrideCancelBtn")}
                             </WorkflowActionButton>
-                            <WorkflowActionButton variant="primary" size="sm" onClick={confirmOverridePreview} leftIcon={<Check />}>
+                            <WorkflowActionButton variant="primary" size="sm" loading={isSaving} onClick={confirmOverride} leftIcon={<Check />}>
                                 {ta("overrideConfirmBtn")}
                             </WorkflowActionButton>
                         </footer>
@@ -801,7 +660,7 @@ function AIRecommendationCard({ style, isSelected, onClick }: {
     );
 }
 
-function AIRecommendationModal({ style, isSelected, editing, positivePrompt, negativePrompt, videoPrompt, videoNegativePrompt, onPositiveChange, onNegativeChange, onVideoPromptChange, onVideoNegativeChange, onStartEditing, onApply, onClose }: {
+function AIRecommendationModal({ style, isSelected, editing, positivePrompt, negativePrompt, videoPrompt, videoNegativePrompt, onPositiveChange, onNegativeChange, onVideoPromptChange, onVideoNegativeChange, onStartEditing, onApply, onClose, isApplying }: {
     style: StyleConfig;
     isSelected: boolean;
     editing: boolean;
@@ -816,6 +675,7 @@ function AIRecommendationModal({ style, isSelected, editing, positivePrompt, neg
     onStartEditing: () => void;
     onApply: () => void;
     onClose: () => void;
+    isApplying: boolean;
 }) {
     const ta = useTranslations("artDirection");
     const tCommon = useTranslations("common");
@@ -983,6 +843,7 @@ function AIRecommendationModal({ style, isSelected, editing, positivePrompt, neg
                         <WorkflowActionButton
                             variant="primary"
                             size="sm"
+                            loading={isApplying}
                             leftIcon={isSelected ? <Check /> : undefined}
                             onClick={onApply}
                         >
@@ -1068,7 +929,7 @@ function StylePresetCardV2({ style, isSelected, onClick }: {
     );
 }
 
-function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negativePrompt, videoPrompt, videoNegativePrompt, onPositiveChange, onNegativeChange, onVideoPromptChange, onVideoNegativeChange, onStartEditing, onApply, onClose, sameCategoryPresets, onSwitchPreset }: {
+function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negativePrompt, videoPrompt, videoNegativePrompt, onPositiveChange, onNegativeChange, onVideoPromptChange, onVideoNegativeChange, onStartEditing, onApply, onClose, isApplying, sameCategoryPresets, onSwitchPreset }: {
     preset: StylePreset;
     isSelected: boolean;
     editing: boolean;
@@ -1083,6 +944,7 @@ function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negati
     onStartEditing: () => void;
     onApply: () => void;
     onClose: () => void;
+    isApplying: boolean;
     sameCategoryPresets: StylePreset[];
     onSwitchPreset: (p: StylePreset) => void;
 }) {
@@ -1297,6 +1159,7 @@ function PresetDetailModal({ preset, isSelected, editing, positivePrompt, negati
                     </WorkflowActionButton>
                     <WorkflowActionButton
                         variant="primary"
+                        loading={isApplying}
                         leftIcon={<Check />}
                         onClick={onApply}
                     >

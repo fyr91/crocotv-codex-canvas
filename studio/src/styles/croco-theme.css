@@ -492,3 +492,8 @@ button[class~="bg-primary"]:disabled {
   color: var(--color-button-secondary) !important;
   box-shadow: none;
 }
+
+/* Pipeline completion is a cross-theme selection signal, not a brand accent. */
+.pipeline-step-complete {
+  color: var(--color-selection-indicator);
+}

@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo } from "react";
 import { Palette, Layout, Film, BookOpen, Users, Video, Settings, MessageSquareCode, Clapperboard } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useProjectStore } from "@/store/projectStore";
+import { areCastAssetsComplete, isScriptStepComplete } from "@/lib/projectStepCompletion";
+import { useEditorStore } from "@/store/editorStore";
 import PipelineSidebar from "@/components/layout/PipelineSidebar";
 import EpisodeMiniList from "@/components/layout/EpisodeMiniList";
 import type { BreadcrumbSegment } from "@/components/layout/BreadcrumbBar";
@@ -63,6 +65,7 @@ export default function ProjectClient({ id, breadcrumbSegments }: { id: string; 
 
     const selectProject = useProjectStore((state) => state.selectProject);
     const currentProject = useProjectStore((state) => state.currentProject);
+    const scriptDirty = useEditorStore((state) => state.isDirty);
 
     // R2V v2 Phase 6 — content_mode lives on the parent series; fetch on
     // mount when project has series_id, default to "scripted" otherwise.
@@ -108,20 +111,26 @@ export default function ProjectClient({ id, breadcrumbSegments }: { id: string; 
         // (no navigation behavior change).
         const frames = currentProject?.frames ?? [];
         const chars = currentProject?.characters ?? [];
+        const scenes = currentProject?.scenes ?? [];
+        const props = currentProject?.props ?? [];
         const bound = chars.filter(c => c.voice_id).length;
         const frameCount = frames.length;
         const hasArt = !!currentProject?.art_direction;
         const hasMerged = !!currentProject?.merged_video_url;
+        const scriptReady = isScriptStepComplete(currentProject?.entity_extraction_stale, scriptDirty);
+        const castReady = areCastAssetsComplete(chars, scenes, props);
         const statusFor = (id: string): { status?: "ready" | "idle" | "gated"; statusLabel?: string } => {
             switch (id) {
+                case "script":
+                    return scriptReady ? { status: "ready", statusLabel: tp("railScriptReady") } : { status: "idle" };
                 case "art_direction":
                     return hasArt ? { status: "ready", statusLabel: tp("railArtReady") } : { status: "idle" };
                 case "cast":
-                    return chars.length > 0
+                    return castReady
                         ? (bound > 0
                             ? { status: "ready", statusLabel: tp("railCastBound", { n: chars.length, m: bound }) }
                             : { status: "ready", statusLabel: tp("railCast", { n: chars.length }) })
-                        : { status: "idle" };
+                        : { status: "idle", statusLabel: chars.length > 0 ? tp("railCast", { n: chars.length }) : undefined };
                 case "storyboard_r2v":
                 case "storyboard":
                     return frameCount > 0 ? { status: "ready", statusLabel: tp("railShots", { n: frameCount }) } : { status: "idle" };
@@ -134,7 +143,7 @@ export default function ProjectClient({ id, breadcrumbSegments }: { id: string; 
             }
         };
         return base.map((s, index) => ({ ...s, label: `${index + 1}. ${tp(s.labelKey as any)}`, ...statusFor(s.id) }));
-    }, [currentProject, seriesContentMode, tp]);
+    }, [currentProject, scriptDirty, seriesContentMode, tp]);
 
     const handleBackToHome = () => {
         window.location.hash = '';

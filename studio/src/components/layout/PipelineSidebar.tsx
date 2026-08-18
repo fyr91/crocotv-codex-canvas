@@ -166,12 +166,12 @@ export default function PipelineSidebar({ activeStep, onStepChange, steps, bread
 
                             {/* right rail: 3-state dot (ready/warn/idle), done check,
                                 gated lock, or active chevron — mock .rdot/.rcheck/.rlock */}
-                            {isActive ? (
+                            {step.status === "ready" ? (
+                                <Check size={16} strokeWidth={2.6} className="pipeline-step-complete ml-auto shrink-0" aria-label={tp("doneTooltip")} />
+                            ) : isActive ? (
                                 <ChevronRight size={16} className="ml-auto shrink-0 opacity-50" />
                             ) : step.status === "gated" ? (
                                 <Lock size={13} className="ml-auto shrink-0 text-text-muted/50" aria-label={tp("gatedTooltip")} />
-                            ) : step.status === "ready" ? (
-                                <Check size={16} strokeWidth={2.6} className="ml-auto shrink-0 text-primary" aria-label={tp("doneTooltip")} />
                             ) : step.status ? (
                                 <span
                                     aria-hidden="true"

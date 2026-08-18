@@ -9,7 +9,6 @@ import { useEditorSetup } from './hooks/useEditorSetup';
 import EditorToolbar from './toolbar/EditorToolbar';
 import { usePasteHandler } from './hooks/usePasteHandler';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { useContinuityCheck } from './hooks/useContinuityCheck';
 import { useSceneFolding } from './hooks/useSceneFolding';
 import { useViewMode } from './hooks/useViewMode';
 import { useOfflineCache } from './hooks/useOfflineCache';
@@ -17,7 +16,6 @@ import { useAutoSave } from './hooks/useAutoSave';
 import { useDerivation } from './hooks/useDerivation';
 import { PasteHintBar } from './components/PasteHintBar';
 import { ShortcutHelpPanel } from './components/ShortcutHelpPanel';
-import { ContinuityIndicator } from './components/ContinuityIndicator';
 import RightPanelContainer from './panels';
 import ReadModeOverlay from './components/ReadModeOverlay';
 import PipelineLinkDialog from './dialogs/PipelineLinkDialog';
@@ -45,7 +43,6 @@ export default function ScriptEditorShell({
   const { editor, isReady } = useEditorSetup({ content: initialContent });
   const { showHint, analysis, applyFormatting, dismissHint } = usePasteHandler(editor);
   const { showShortcutHelp, closeShortcutHelp } = useKeyboardShortcuts(editor);
-  const continuityReport = useContinuityCheck(editor);
   useSceneFolding(editor);
   const { mode: viewMode, setMode: setViewMode, isReadOnly, showToolbar, showSidebars } = useViewMode();
   const { hasNewerLocal, restoreFromLocal, dismissLocalRestore, isOffline } = useOfflineCache(projectId, editor);
@@ -345,8 +342,6 @@ export default function ScriptEditorShell({
                   ? t('status.savedAt', { time: lastSavedAt.toLocaleTimeString() })
                   : t('status.ready')}
           </span>
-          <span className="text-foreground/20">|</span>
-          <ContinuityIndicator report={continuityReport} />
         </div>
       )}
 

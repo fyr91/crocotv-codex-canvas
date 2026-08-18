@@ -69,6 +69,9 @@ export interface Character {
     headshot_image_url?: string;
 
     // New Asset Containers
+    // Generic Studio generation output. This is the canonical container used
+    // by the current character/scene/prop generation runtime.
+    image_asset?: ImageAsset;
     // reference_sheet is the canonical character asset (new schema);
     // full_body_asset is legacy, kept only as a read fallback.
     reference_sheet?: AssetUnit;
